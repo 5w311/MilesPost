@@ -456,7 +456,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v2.4.3</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v2.4.4</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -635,16 +635,31 @@ function attachPlaceSuggest(input, listEl, onPick){
     });
     show(listEl, true);
   };
+  /* Autocomplete (types=city) is the primary source: every result slot is a city, so
+     same-named cities in other states all show up (autosuggest mixes streets and
+     businesses into the ranking and localizes hard — typing "cypress" near Texas
+     surfaced Cypress, TX but never Cypress, CA). Autocomplete takes no position
+     bias; ranking is by prominence. If the call fails for any reason, fall back to
+     the proven autosuggest request so suggestions degrade rather than vanish. */
   const fetchNow = (q, myToken) => {
-    const at = placeBias ? "&at="+placeBias.latitude+","+placeBias.longitude : "";
-    const url = "https://autosuggest.search.hereapi.com/v1/autosuggest?q="+encodeURIComponent(q)
-      + at + "&in=countryCode:USA&limit=20&apikey="+HERE_API_KEY;
+    // A newer keystroke fired since this request went out — a late, out-of-order
+    // response must not clobber a fresher (still-typing) state.
+    const done = j => { if(myToken===token && j) render(formatPlaceSuggestions(j.items, 8)); };
+    const fallback = () => {
+      const at = placeBias ? "&at="+placeBias.latitude+","+placeBias.longitude : "";
+      const url = "https://autosuggest.search.hereapi.com/v1/autosuggest?q="+encodeURIComponent(q)
+        + at + "&in=countryCode:USA&limit=20&apikey="+HERE_API_KEY;
+      fetch(url)
+        .then(res => res.ok ? res.json() : null)
+        .then(done)
+        .catch(()=>{});   // offline/failed: the dropdown just doesn't appear
+    };
+    const url = "https://autocomplete.search.hereapi.com/v1/autocomplete?q="+encodeURIComponent(q)
+      + "&types=city&in=countryCode:USA&limit=20&apikey="+HERE_API_KEY;
     fetch(url)
-      .then(res => res.ok ? res.json() : null)
-      // A newer keystroke fired since this request went out — a late, out-of-order
-      // response must not clobber a fresher (still-typing) state.
-      .then(j => { if(myToken===token && j) render(formatPlaceSuggestions(j.items)); })
-      .catch(()=>{});   // offline/failed: the dropdown just doesn't appear
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(done)
+      .catch(fallback);
   };
   input.addEventListener("input", () => {
     primeBias();

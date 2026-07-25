@@ -311,11 +311,11 @@ try {
   await keepPage.close();
 
   // ---- City suggestions (destIn/origIn/rsIn share one mechanism — test destIn as the
-  // representative case). Mocked HERE Autosuggest response mirrors what this account's
-  // plan actually returns: a locality item with only a flat address.label — no
-  // structured city/stateCode fields (confirmed via an on-device diagnostic build) —
-  // mixed with a non-locality result, proving both the label-parsing fallback and the
-  // resultType filter run through end-to-end, not just in the pure-function tests.
+  // representative case). The primary source is HERE Autocomplete (types=city), which
+  // returns cities only — including same-named cities in different states. Mocked items
+  // mirror what this account's plan actually returns: locality items with only a flat
+  // address.label — no structured city/stateCode fields (confirmed via an on-device
+  // diagnostic build) — proving the label-parsing fallback runs through end-to-end.
   const suggestPage = await browser.newPage();
   const suggestErrors = [];
   suggestPage.on("pageerror", e => suggestErrors.push("pageerror: " + e.message));
@@ -323,12 +323,12 @@ try {
     const realFetch = window.fetch.bind(window);
     window.fetch = (url, ...rest) => {
       const u = String(url);
-      if (u.includes("autosuggest.search.hereapi.com"))
+      if (u.includes("autocomplete.search.hereapi.com"))
         return Promise.resolve(new Response(JSON.stringify({ items: [
           { resultType: "locality", title: "Nashville, TN, United States",
             address: { label: "Nashville, TN, United States" } },
-          { resultType: "place", title: "Nashville Zoo",
-            address: { label: "Nashville Zoo, Nashville, TN, United States" } },
+          { resultType: "locality", title: "Nashville, GA, United States",
+            address: { label: "Nashville, GA, United States" } },
         ]})));
       return realFetch(url, ...rest);
     };
@@ -342,8 +342,8 @@ try {
   if (!(await suggestPage.isVisible("#destSuggest")))
     fail("suggestion dropdown should appear after typing 3+ characters");
   const suggestButtons = await suggestPage.locator("#destSuggest button").allTextContents();
-  if (JSON.stringify(suggestButtons) !== JSON.stringify(["Nashville, TN"]))
-    fail(`suggestion list should show only the deduped locality result, got ${JSON.stringify(suggestButtons)}`);
+  if (JSON.stringify(suggestButtons) !== JSON.stringify(["Nashville, TN", "Nashville, GA"]))
+    fail(`suggestion list should show both same-named cities, got ${JSON.stringify(suggestButtons)}`);
   await suggestPage.click("#destSuggest button");
   await suggestPage.waitForTimeout(150);
   if (await suggestPage.isVisible("#destSuggest")) fail("clicking a suggestion should close the dropdown");
@@ -358,6 +358,37 @@ try {
     fail(`destChip should show the resolved destination, got ${JSON.stringify(chipText)}`);
   if (suggestErrors.length) fail("suggest page errors: " + JSON.stringify(suggestErrors, null, 2));
   await suggestPage.close();
+
+  // ---- Suggestion fallback: if the Autocomplete endpoint fails (plan limits, outage),
+  // the old Autosuggest call must silently take over so suggestions degrade, not vanish.
+  const fbPage = await browser.newPage();
+  const fbErrors = [];
+  fbPage.on("pageerror", e => fbErrors.push("pageerror: " + e.message));
+  await fbPage.addInitScript(() => {
+    const realFetch = window.fetch.bind(window);
+    window.fetch = (url, ...rest) => {
+      const u = String(url);
+      if (u.includes("autocomplete.search.hereapi.com"))
+        return Promise.resolve(new Response("nope", { status: 500 }));
+      if (u.includes("autosuggest.search.hereapi.com"))
+        return Promise.resolve(new Response(JSON.stringify({ items: [
+          { resultType: "locality", title: "Nashville, TN, United States",
+            address: { label: "Nashville, TN, United States" } },
+          { resultType: "place", title: "Nashville Zoo",
+            address: { label: "Nashville Zoo, Nashville, TN, United States" } },
+        ]})));
+      return realFetch(url, ...rest);
+    };
+  });
+  await fbPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await fbPage.fill("#destIn", "Nash");
+  try{ await fbPage.waitForSelector("#destSuggest button", { timeout: 5000 }); }
+  catch{ fail("suggestions should fall back to autosuggest when autocomplete fails"); }
+  const fbButtons = await fbPage.locator("#destSuggest button").allTextContents();
+  if (JSON.stringify(fbButtons) !== JSON.stringify(["Nashville, TN"]))
+    fail(`fallback list should show the filtered autosuggest locality, got ${JSON.stringify(fbButtons)}`);
+  if (fbErrors.length) fail("fallback page errors: " + JSON.stringify(fbErrors, null, 2));
+  await fbPage.close();
 
   // ---- Help modal: shared by all four "?" buttons. Light smoke — one button proves the
   // mechanism (open with real content, panel-tap doesn't dismiss, backdrop-tap does).
@@ -378,7 +409,7 @@ try {
   if (await page.isVisible("#helpBackdrop")) fail("tapping the backdrop should close the help modal");
 
   if (!process.exitCode)
-    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one, city suggestions filter/dedupe and resolve on pick, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
+    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
 } finally {
   await browser.close();
   server.close();
