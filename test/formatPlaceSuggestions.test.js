@@ -90,4 +90,56 @@ describe("formatPlaceSuggestions", () => {
     ];
     expect(formatPlaceSuggestions(items)).toEqual(["Austin, TX"]);
   });
+
+  it("parses labels whose state segment carries a ZIP code", () => {
+    // localityType "postalCode" results label like "City, ST 12345, United States"
+    const items = [
+      { resultType: "locality", address: { label: "Chattanooga, TN 37402, United States" } },
+      { resultType: "locality", address: { label: "Laredo, TX 78040-1234, United States" } },
+    ];
+    expect(formatPlaceSuggestions(items)).toEqual(["Chattanooga, TN", "Laredo, TX"]);
+  });
+
+  it("still rejects a second segment that is neither 'ST' nor 'ST zip'", () => {
+    const items = [
+      { resultType: "locality", address: { label: "Springfield, Greene County, MO, United States" } },
+    ];
+    expect(formatPlaceSuggestions(items)).toEqual([]);
+  });
+
+  it("caps output at 5 distinct cities by default (caller requests 20 from HERE)", () => {
+    const items = Array.from({ length: 12 }, (_, i) => ({
+      resultType: "locality",
+      address: { city: "City" + i, stateCode: "TX" },
+    }));
+    expect(formatPlaceSuggestions(items)).toEqual([
+      "City0, TX", "City1, TX", "City2, TX", "City3, TX", "City4, TX",
+    ]);
+  });
+
+  it("counts only kept cities toward the cap — dupes and non-cities don't use slots", () => {
+    const items = [
+      { resultType: "street", address: { city: "Nope", stateCode: "TX" } },
+      { resultType: "locality", address: { city: "Austin", stateCode: "TX" } },
+      { resultType: "locality", address: { city: "Austin", stateCode: "TX" } },  // dupe
+      { resultType: "place", address: { label: "Some Biz" } },
+      { resultType: "locality", address: { city: "Dallas", stateCode: "TX" } },
+      { resultType: "locality", address: { city: "Houston", stateCode: "TX" } },
+      { resultType: "locality", address: { city: "El Paso", stateCode: "TX" } },
+      { resultType: "locality", address: { city: "Laredo", stateCode: "TX" } },
+      { resultType: "locality", address: { city: "Waco", stateCode: "TX" } },    // 6th distinct — cut
+    ];
+    expect(formatPlaceSuggestions(items)).toEqual([
+      "Austin, TX", "Dallas, TX", "Houston, TX", "El Paso, TX", "Laredo, TX",
+    ]);
+  });
+
+  it("honors an explicit max override", () => {
+    const items = [
+      { resultType: "locality", address: { city: "Dallas", stateCode: "TX" } },
+      { resultType: "locality", address: { city: "Fort Worth", stateCode: "TX" } },
+      { resultType: "locality", address: { city: "Arlington", stateCode: "TX" } },
+    ];
+    expect(formatPlaceSuggestions(items, 2)).toEqual(["Dallas, TX", "Fort Worth, TX"]);
+  });
 });

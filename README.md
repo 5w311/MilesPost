@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v2.4.2**
+**Current version: v2.4.3**
 
 ## Files
 
@@ -51,6 +51,16 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v2.4.3
+
+- **City suggestions now find far more cities — including small towns.** The app was
+  asking HERE for only 5 autosuggest results, and cities compete with streets and
+  businesses in that ranking, so all but the biggest cities got crowded out (a typical
+  query returned just 1–2 usable cities). It now requests 20 results and shows the top
+  5 cities from them. Labels that carry a ZIP code (e.g. "Chattanooga, TN 37402") are
+  also parsed now, so postal-code localities resolve to their city instead of being
+  dropped.
 
 ### v2.4.2
 

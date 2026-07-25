@@ -456,7 +456,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v2.4.2</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v2.4.3</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -638,7 +638,7 @@ function attachPlaceSuggest(input, listEl, onPick){
   const fetchNow = (q, myToken) => {
     const at = placeBias ? "&at="+placeBias.latitude+","+placeBias.longitude : "";
     const url = "https://autosuggest.search.hereapi.com/v1/autosuggest?q="+encodeURIComponent(q)
-      + at + "&in=countryCode:USA&limit=5&apikey="+HERE_API_KEY;
+      + at + "&in=countryCode:USA&limit=20&apikey="+HERE_API_KEY;
     fetch(url)
       .then(res => res.ok ? res.json() : null)
       // A newer keystroke fired since this request went out — a late, out-of-order
