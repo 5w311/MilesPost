@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v2.4.3**
+**Current version: v2.4.4**
 
 ## Files
 
@@ -51,6 +51,16 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v2.4.4
+
+- **Same-named cities in other states now show up.** Suggestions switched from HERE
+  Autosuggest to HERE **Autocomplete restricted to cities** (`types=city`) — every
+  result slot is a city, so typing "cypress" now offers Cypress, TX *and* Cypress, CA
+  instead of only the nearby one (autosuggest mixed streets and businesses into the
+  ranking and localized hard). The dropdown now shows up to 8 suggestions (it scrolls).
+  If the autocomplete call ever fails, the previous autosuggest request silently takes
+  over, so suggestions degrade rather than vanish.
 
 ### v2.4.3
 
