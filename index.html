@@ -940,6 +940,11 @@ $("nowBtn").onclick = ()=>{ $("depart").value = toWall(new Date(), E.originTz); 
 $("tuneToggle").onclick = ()=>{
   const on = $("tuneGrid").classList.contains("hide");
   show($("tuneGrid"), on); show($("swapBox"), on);
+  // The LIVE CTA steps aside while tuning is open, so the fields sit directly under the
+  // toggle that revealed them instead of being split off below the button. Only this
+  // handler touches the button's visibility — renderLiveBtn() sets text/disabled only,
+  // so a fetch that finishes while it's hidden still comes back in the right state.
+  show($("liveBtn"), !on);
   $("tuneToggle").textContent = on ? "− HIDE TUNING" : "+ TUNE TO YOUR TRUCK";
 };
 

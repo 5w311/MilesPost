@@ -73,8 +73,12 @@ worker cached it on first load.
   link text sharing a row with the tuning toggle. It reuses the same `.primary` class as
   ADD ALARM TO CALENDAR, so the pill shape, sheen and dimmed disabled state all come for
   free. "+ TUNE TO YOUR TRUCK" moved to its own line, centered, just above the button —
-  still a plain link. Markup and spacing only — the button's id, its click handler, and
-  the "UPDATING LIVE…" pending swap are untouched.
+  still a plain link. The button's id, its click handler, and the "UPDATING LIVE…" pending
+  swap are untouched.
+- **Opening the tuning panel stands the LIVE button down** until you close it again, so the
+  tuning fields sit directly under the toggle that revealed them instead of being split off
+  below a full-width button. A live fetch that finishes while the button is hidden still
+  comes back in the right state.
 
 ### v3.0
 

@@ -221,6 +221,20 @@ try {
   await livePage.click("#tabQuick");
   await livePage.waitForTimeout(100);
   if (await livePage.isVisible("#liveLine")) fail("LIVE line must not show on the Estimated tab");
+  // Opening the tuning grid stands the LIVE CTA down, so the fields sit directly under the
+  // toggle that revealed them; closing it must bring the button back. A one-way hide here
+  // would strand the driver with no way to refresh a live ETA.
+  await livePage.click("#tabTuned");
+  await livePage.waitForTimeout(100);
+  if (!(await livePage.isVisible("#liveBtn"))) fail("LIVE button should be visible with tuning closed");
+  await livePage.click("#tuneToggle");
+  await livePage.waitForTimeout(150);
+  if (!(await livePage.isVisible("#tuneGrid"))) fail("tuning grid should open");
+  if (await livePage.isVisible("#liveBtn")) fail("LIVE button should be hidden while tuning is open");
+  await livePage.click("#tuneToggle");
+  await livePage.waitForTimeout(150);
+  if (await livePage.isVisible("#tuneGrid")) fail("tuning grid should close again");
+  if (!(await livePage.isVisible("#liveBtn"))) fail("LIVE button must come back when tuning closes");
   if (liveErrors.length) fail("live page errors: " + JSON.stringify(liveErrors, null, 2));
   await livePage.close();
 
@@ -416,7 +430,7 @@ try {
   if (await page.isVisible("#helpBackdrop")) fail("tapping the backdrop should close the help modal");
 
   if (!process.exitCode)
-    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
+    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
 } finally {
   await browser.close();
   server.close();
