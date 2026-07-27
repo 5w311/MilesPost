@@ -72,9 +72,9 @@ worker cached it on first load.
 - **UPDATE LIVE ETA is now a full-width amber pill button** instead of small underlined
   link text sharing a row with the tuning toggle. It reuses the same `.primary` class as
   ADD ALARM TO CALENDAR, so the pill shape, sheen and dimmed disabled state all come for
-  free. "+ TUNE TO YOUR TRUCK" moved to its own line just below it, still a plain link,
-  still right next to the tuning grid it opens. Markup and spacing only — the button's
-  id, its click handler, and the "UPDATING LIVE…" pending swap are untouched.
+  free. "+ TUNE TO YOUR TRUCK" moved to its own line, centered, just above the button —
+  still a plain link. Markup and spacing only — the button's id, its click handler, and
+  the "UPDATING LIVE…" pending swap are untouched.
 
 ### v3.0
 
