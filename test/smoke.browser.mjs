@@ -344,6 +344,13 @@ try {
   const suggestButtons = await suggestPage.locator("#destSuggest button").allTextContents();
   if (JSON.stringify(suggestButtons) !== JSON.stringify(["Nashville, TN", "Nashville, GA"]))
     fail(`suggestion list should show both same-named cities, got ${JSON.stringify(suggestButtons)}`);
+  // The dropdown must OVERLAY the fields below it, not push them around. This also guards
+  // the stylesheet itself: a CSS syntax error upstream silently drops the .suggest rule,
+  // and every behavioural assertion here still passes while the layout is wrecked.
+  const suggestPos = await suggestPage.locator("#destSuggest")
+    .evaluate(el => getComputedStyle(el).position);
+  if (suggestPos !== "absolute")
+    fail(`#destSuggest must be absolutely positioned (CSS may have failed to parse), got ${suggestPos}`);
   await suggestPage.click("#destSuggest button");
   await suggestPage.waitForTimeout(150);
   if (await suggestPage.isVisible("#destSuggest")) fail("clicking a suggestion should close the dropdown");

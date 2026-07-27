@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v2.4.4**
+**Current version: v3.0**
 
 ## Files
 
@@ -51,6 +51,39 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.0
+
+- **New visual direction: Liquid Glass, applied in three deliberate tiers.** Floating
+  translucent chrome, pill shapes, and a soft specular hairline on surface edges — but
+  *not* everywhere. This app gets read one-handed, at a glance, in a moving truck and
+  sometimes in direct sun, so the glass is tiered by what a surface is for:
+  - **Chrome** (tab rows, sub-tabs, presets, the day/night switch, the help modal's
+    backdrop) gets the real material: blur, saturation, translucency. It's navigation,
+    not data.
+  - **Solid pill buttons** (SET, CLEAR, BROKE THE 34, UPDATE LIVE ETA, the "?" circles)
+    get the pill shape and a subtle sheen but stay fully **opaque**. A translucent SET
+    button floating over other content is exactly the ambiguity a high-stakes one-handed
+    tap can't afford.
+  - **Data surfaces** (every card, the help sheet, the city dropdown) stay near-opaque
+    with no blur. Contrast beats material on anything carrying a number.
+  - **Inputs and selects** are untouched apart from the new corner radius — no blur, no
+    translucency, ever, where real numbers get typed.
+- One radius scale (`--r-sm` / `--r-card` / `--r-sheet` / `--r-pill`) replaces the old
+  scattered values, and new RGB-triplet tokens let a translucent background be written
+  once and stay correct in both themes.
+- **Restrained motion:** 200ms tab/preset transitions, a small scale on button press, a
+  quick fade-and-rise on the help sheet. All of it disabled under
+  `prefers-reduced-motion`, and the glass falls back to near-opaque with no blur under
+  `prefers-reduced-transparency`.
+- Status signals are untouched: the Arrival/Legal-at accent border still switches amber →
+  green exactly as before, and DOT / Fuel / Swap keep their existing colours (their
+  swatches just became rounded pill chips instead of squares).
+- Contrast was re-checked in both themes after the tint change — body text 15:1 (night) /
+  18:1 (day), the amber readout 9.7:1 / 5.8:1, the green "legal" state 5.0:1 in day. The
+  day theme's amber gradient tops out at 5.05:1 on white, still clear of 4.5:1 in glare.
+- **"Estimated ETA" is now "Simple ETA"** — the old name expanded to "Estimated Estimated
+  Time of Arrival." Label only; nothing under the hood changed.
 
 ### v2.4.4
 
@@ -240,7 +273,7 @@ Renamed from Team ETA. The old name only described half of what the app does.
 
 ### v1.1.1
 
-- **Tabs:** *Estimated ETA* (fixed `miles ÷ 50`) and *Tuned Model ETA*. The ÷50 is hardcoded.
+- **Tabs:** *Simple ETA* (fixed `miles ÷ 50`) and *Tuned Model ETA*. The ÷50 is hardcoded.
 - **Swaps and fuel stops modeled separately.** They were lumped into one mileage-based stop,
   which was wrong: fuel is on the odometer, a swap is on the clock. Arrival is now solved
   iteratively, because the number of swaps depends on when you arrive and when you arrive
