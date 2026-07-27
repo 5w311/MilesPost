@@ -1,6 +1,6 @@
 {
   "name": "milespost",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "private": true,
   "description": "Team-driver ETA and 34-hour reset PWA. Runs offline.",
   "type": "module",

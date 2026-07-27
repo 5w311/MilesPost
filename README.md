@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.0**
+**Current version: v3.0.1**
 
 ## Files
 
@@ -51,6 +51,24 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.0.1
+
+- **The tier-1 glass chrome now actually reads as glass.** Two changes, and the second one
+  was the real cause:
+  - Pushed the material further: fill `.55` → `.38`, blur 18px → 22px, saturate 160% →
+    180%, and the pane border up to `.14` so its edge stays defined as the fill thins out.
+    The specular hairline came up a touch to match (`.42` night / `.24` day).
+  - **Gave the blur something to bend.** The canvas was a single flat colour, and
+    `backdrop-filter` over a flat surface has nothing to diffract — it just reads as a
+    tint no matter how transparent it gets. There's now a barely-perceptible radial
+    gradient behind everything, built from each theme's own `--panel` / `--line`, so the
+    chrome picks up real gradation as you scroll past it.
+- The opaque base layer is unchanged, so the app still can't show a host page through:
+  `body::before` keeps painting solid `--asphalt`, and the gradient sits on top of it,
+  where every transparent stop reveals only that base.
+- Tab and preset labels were re-measured against the thinner glass from real rendered
+  pixels, not arithmetic: **5.35:1** night and **5.80:1** day, both clear of 4.5:1.
 
 ### v3.0
 

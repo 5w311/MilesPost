@@ -33,7 +33,7 @@
     --on-solid:#0B0E10; --shadow:none;
     /* RGB triplets of the tokens glass surfaces composite against, so a translucent
        background can be written once and stay theme-correct in both themes. */
-    --asphalt-rgb:11,14,16;   --panel-rgb:20,24,28;
+    --asphalt-rgb:11,14,16;   --panel-rgb:20,24,28;  --line-rgb:43,51,58;
     --amber-rgb:255,176,32;   --ink-rgb:231,237,242;
     /* Top stop of the active-pill gradient. Lighter than --amber, so contrast against
        the near-black --on-solid text only goes up (10.2:1 flat, higher lifted). */
@@ -41,7 +41,7 @@
     /* Specular sheen on solid pills, and the strength of the 1px surface hairline.
        On a dark panel a light hairline reads as light catching an edge. */
     --sheen:rgba(var(--ink-rgb),.25);
-    --spec-a:.35;
+    --spec-a:.42;
   }
   /* Day: cool ground, warm amber. Amber must darken to #A8490A to clear 4.5:1 on white
      AND on the page — raw #FFB020 on white is 1.8:1, invisible in the glare you'd need
@@ -55,7 +55,7 @@
     --bar-off:#D5DADE; --rest:#B9C1C8; --warn-bg:rgba(168,73,10,.07);
     --on-solid:#FFFFFF;
     --shadow:0 1px 3px rgba(15,20,25,.10), 0 1px 2px rgba(15,20,25,.06);
-    --asphalt-rgb:242,244,247; --panel-rgb:255,255,255;
+    --asphalt-rgb:242,244,247; --panel-rgb:255,255,255; --line-rgb:203,209,214;
     --amber-rgb:168,73,10;     --ink-rgb:15,20,25;
     /* Only a slight lift here: white text on the gradient's lightest stop still has to
        clear 4.5:1 in glare. #B45210 is 5.05:1 on white; a brighter lift drops under 4.5. */
@@ -63,7 +63,7 @@
     /* Day ink is near-black, so the sheen/hairline are dark, not light — a dark hairline
        on white reads as an edge, not a highlight, so it's softened rather than matched. */
     --sheen:rgba(var(--ink-rgb),.06);
-    --spec-a:.18;
+    --spec-a:.24;
   }
   :root{
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -74,7 +74,9 @@
     --r-sheet:24px;   /* help sheet's top corners */
     --r-pill:999px;   /* pill rows and solid pill buttons */
   }
-  body,.card,input,select,button,.stamp{
+  /* body::before is in this list because it now paints the canvas — without it, toggling
+     day/night snaps the background instead of crossfading with everything else. */
+  body,body::before,.card,input,select,button,.stamp{
     transition:background-color .2s ease, color .2s ease, border-color .2s ease}
   /* Restrained motion — this is a utility read at 70mph, not a showcase. A press
      confirms itself with a small scale, nothing else moves. */
@@ -93,14 +95,29 @@
   }
 
   *{box-sizing:border-box}
-  html,body{margin:0;background-color:var(--asphalt);color:var(--ink);font-family:var(--sans);
+  /* No background-color on body on purpose. body::before is a fixed, z-index:-1 layer, so
+     it paints BEHIND body's own background — an opaque body background hides it entirely,
+     which is why the canvas gradient has to live on the layer that is actually visible.
+     :root already carries an opaque themed background-color (see both theme blocks), so
+     html still paints the base colour and nothing here can show a host page through. */
+  html,body{margin:0;color:var(--ink);font-family:var(--sans);
     -webkit-text-size-adjust:100%}
   /* A host page (app preview, in-app browser) can force html/body transparent and let its
      own dark canvas show through. Paint the background on a layer this app owns. */
   body{min-height:100vh; min-height:100dvh; position:relative;
     padding:16px calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom))
     calc(16px + env(safe-area-inset-left)); padding-top:calc(16px + env(safe-area-inset-top))}
+  /* background-color stays the fully opaque base — the guarantee above depends on it.
+     The gradient is a background-IMAGE layered on top of that base, so every
+     "transparent" stop in it reveals only --asphalt underneath, never the host page.
+     Its job is to give the tier-1 blur some tonal gradation to bend: on a perfectly
+     flat canvas, backdrop-filter has nothing to diffract and the chrome reads as a
+     flat tint no matter how far its opacity drops. Built from each theme's own
+     --panel/--line, so it follows the theme rather than being hand-picked per mode. */
   body::before{content:"";position:fixed;inset:0;background-color:var(--asphalt);
+    background-image:
+      radial-gradient(120% 90% at 15% -10%, rgba(var(--panel-rgb),.55) 0%, transparent 55%),
+      radial-gradient(100% 70% at 100% 0%, rgba(var(--line-rgb),.28) 0%, transparent 50%);
     z-index:-1;pointer-events:none}
   .wrap{max-width:470px;margin:0 auto}
 
@@ -228,13 +245,14 @@
      instead of a washed-out one; the @supports block layers the real material on top. */
   .tabs,.subtabs,.presets,.switch{
     background:rgba(var(--panel-rgb),.92);
-    border:1px solid rgba(var(--ink-rgb),.08);
+    /* Edge carries more of the pane's definition now that the fill is thinner. */
+    border:1px solid rgba(var(--ink-rgb),.14);
     border-radius:var(--r-pill)}
   @supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
     .tabs,.subtabs,.presets,.switch{
-      background:rgba(var(--panel-rgb),.55);
-      -webkit-backdrop-filter:blur(18px) saturate(160%);
-      backdrop-filter:blur(18px) saturate(160%)}
+      background:rgba(var(--panel-rgb),.38);
+      -webkit-backdrop-filter:blur(22px) saturate(180%);
+      backdrop-filter:blur(22px) saturate(180%)}
   }
   /* One shared pill-row treatment: the row is the glass surface, each button a pill
      inside it. Padding insets the pills so the row reads as a single track. */
@@ -581,7 +599,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.0</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.0.1</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
