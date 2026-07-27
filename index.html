@@ -31,6 +31,17 @@
     --good:#4FD18B; --late:#FF5D52; --ink:#E7EDF2; --mute:#7C8B96;
     --bar-off:#232A30; --rest:#3A444C; --warn-bg:rgba(255,176,32,.06);
     --on-solid:#0B0E10; --shadow:none;
+    /* RGB triplets of the tokens glass surfaces composite against, so a translucent
+       background can be written once and stay theme-correct in both themes. */
+    --asphalt-rgb:11,14,16;   --panel-rgb:20,24,28;  --line-rgb:43,51,58;
+    --amber-rgb:255,176,32;   --ink-rgb:231,237,242;
+    /* Top stop of the active-pill gradient. Lighter than --amber, so contrast against
+       the near-black --on-solid text only goes up (10.2:1 flat, higher lifted). */
+    --amber-lift:#FFC451;
+    /* Specular sheen on solid pills, and the strength of the 1px surface hairline.
+       On a dark panel a light hairline reads as light catching an edge. */
+    --sheen:rgba(var(--ink-rgb),.25);
+    --spec-a:.42;
   }
   /* Day: cool ground, warm amber. Amber must darken to #A8490A to clear 4.5:1 on white
      AND on the page — raw #FFB020 on white is 1.8:1, invisible in the glare you'd need
@@ -44,24 +55,69 @@
     --bar-off:#D5DADE; --rest:#B9C1C8; --warn-bg:rgba(168,73,10,.07);
     --on-solid:#FFFFFF;
     --shadow:0 1px 3px rgba(15,20,25,.10), 0 1px 2px rgba(15,20,25,.06);
+    --asphalt-rgb:242,244,247; --panel-rgb:255,255,255; --line-rgb:203,209,214;
+    --amber-rgb:168,73,10;     --ink-rgb:15,20,25;
+    /* Only a slight lift here: white text on the gradient's lightest stop still has to
+       clear 4.5:1 in glare. #B45210 is 5.05:1 on white; a brighter lift drops under 4.5. */
+    --amber-lift:#B45210;
+    /* Day ink is near-black, so the sheen/hairline are dark, not light — a dark hairline
+       on white reads as an edge, not a highlight, so it's softened rather than matched. */
+    --sheen:rgba(var(--ink-rgb),.06);
+    --spec-a:.24;
   }
   :root{
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* One radius scale for the whole app. */
+    --r-sm:10px;      /* inputs, selects, plain buttons */
+    --r-card:20px;    /* data surfaces */
+    --r-sheet:24px;   /* help sheet's top corners */
+    --r-pill:999px;   /* pill rows and solid pill buttons */
   }
-  body,.card,input,select,button,.stamp{
+  /* body::before is in this list because it now paints the canvas — without it, toggling
+     day/night snaps the background instead of crossfading with everything else. */
+  body,body::before,.card,input,select,button,.stamp{
     transition:background-color .2s ease, color .2s ease, border-color .2s ease}
-  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+  /* Restrained motion — this is a utility read at 70mph, not a showcase. A press
+     confirms itself with a small scale, nothing else moves. */
+  button{transition:background-color .2s ease, color .2s ease, border-color .2s ease,
+    transform .12s ease}
+  .primary:active,.go:active,.ghost:active,.danger:active,.muted:active,
+  .tabs button:active,.subtabs button:active,.presets button:active{transform:scale(.97)}
+  @keyframes helpFade{from{opacity:0} to{opacity:1}}
+  @keyframes helpRise{from{transform:translateY(12px)} to{transform:translateY(0)}}
+  .helpBackdrop:not(.hide){animation:helpFade .18s ease}
+  .helpBackdrop:not(.hide) .helpPanel{animation:helpRise .22s ease}
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important; animation:none !important}
+    .primary:active,.go:active,.ghost:active,.danger:active,.muted:active,
+    .tabs button:active,.subtabs button:active,.presets button:active{transform:none}
+  }
 
   *{box-sizing:border-box}
-  html,body{margin:0;background-color:var(--asphalt);color:var(--ink);font-family:var(--sans);
+  /* No background-color on body on purpose. body::before is a fixed, z-index:-1 layer, so
+     it paints BEHIND body's own background — an opaque body background hides it entirely,
+     which is why the canvas gradient has to live on the layer that is actually visible.
+     :root already carries an opaque themed background-color (see both theme blocks), so
+     html still paints the base colour and nothing here can show a host page through. */
+  html,body{margin:0;color:var(--ink);font-family:var(--sans);
     -webkit-text-size-adjust:100%}
   /* A host page (app preview, in-app browser) can force html/body transparent and let its
      own dark canvas show through. Paint the background on a layer this app owns. */
   body{min-height:100vh; min-height:100dvh; position:relative;
     padding:16px calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom))
     calc(16px + env(safe-area-inset-left)); padding-top:calc(16px + env(safe-area-inset-top))}
+  /* background-color stays the fully opaque base — the guarantee above depends on it.
+     The gradient is a background-IMAGE layered on top of that base, so every
+     "transparent" stop in it reveals only --asphalt underneath, never the host page.
+     Its job is to give the tier-1 blur some tonal gradation to bend: on a perfectly
+     flat canvas, backdrop-filter has nothing to diffract and the chrome reads as a
+     flat tint no matter how far its opacity drops. Built from each theme's own
+     --panel/--line, so it follows the theme rather than being hand-picked per mode. */
   body::before{content:"";position:fixed;inset:0;background-color:var(--asphalt);
+    background-image:
+      radial-gradient(120% 90% at 15% -10%, rgba(var(--panel-rgb),.55) 0%, transparent 55%),
+      radial-gradient(100% 70% at 100% 0%, rgba(var(--line-rgb),.28) 0%, transparent 50%);
     z-index:-1;pointer-events:none}
   .wrap{max-width:470px;margin:0 auto}
 
@@ -72,8 +128,9 @@
   .tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--mute)}
   @media (max-width:430px){ .tag{display:none} }
 
-  .switch{width:52px;height:28px;flex:none;padding:0;border-radius:999px;
-    border:1px solid var(--line);background:var(--panel);position:relative;box-shadow:var(--shadow)}
+  /* Surface (background/border) comes from the shared tier-1 glass rule below. */
+  .switch{width:52px;height:28px;flex:none;padding:0;border-radius:var(--r-pill);
+    position:relative;box-shadow:var(--shadow)}
   .switch .knob{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;
     background:var(--amber);transition:transform .2s ease, background-color .2s ease;
     display:flex;align-items:center;justify-content:center}
@@ -84,8 +141,22 @@
   [data-theme="day"] .switch .moon{display:none}
   [data-theme="day"] .switch .sun{display:block}
 
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
-    padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
+  /* Tier 2 — data surfaces. Near-opaque on purpose: this is what the driver actually
+     reads, in sun, one-handed. Same compositing language as the glass chrome, but
+     contrast wins over material. No blur here, ever.
+     position:relative carries the specular hairline. Deliberately NOT overflow:hidden —
+     the city-suggestion dropdown is absolutely positioned inside a card and has to be
+     able to hang past its bottom edge. The hairline is inset 12% from both sides, well
+     clear of the corner radius, so it needs no clipping. */
+  .card{background:rgba(var(--panel-rgb),.96);border:1px solid var(--line);
+    border-radius:var(--r-card);padding:16px;margin-bottom:14px;box-shadow:var(--shadow);
+    position:relative}
+  /* The signature detail: a 1px hairline near the top edge, fading in from the sides. */
+  .card::before{content:"";position:absolute;top:0;left:12%;right:12%;height:1px;
+    pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgba(var(--ink-rgb),var(--spec-a)),transparent)}
+  /* Status accent — amber while running, green once legal. Functional signal, untouched
+     by the re-skin; the hairline layers with it rather than replacing it. */
   .readout{border-top:2px solid var(--amber);padding:18px}
   .readout.done{border-top-color:var(--good)}
 
@@ -98,20 +169,26 @@
   .lbl-row .lbl{margin-bottom:0}
   .help-btn{width:44px;height:44px;padding:0;border:none;background:transparent;
     display:inline-flex;align-items:center;justify-content:center;flex:none;cursor:pointer}
-  .help-btn span{width:22px;height:22px;border-radius:50%;border:1px solid var(--line);
+  .help-btn span{width:22px;height:22px;border-radius:var(--r-pill);border:1px solid var(--line);
     display:flex;align-items:center;justify-content:center;font-family:var(--mono);
-    font-size:11px;color:var(--mute);line-height:1}
+    font-size:11px;color:var(--mute);line-height:1;
+    box-shadow:inset 0 1px 0 var(--sheen)}
   .help-btn:hover span,.help-btn:focus-visible span,.help-btn:active span{
     border-color:var(--amber);color:var(--amber)}
 
   /* One shared help modal, reused by all four "?" buttons — bottom sheet, no close
      button; dismiss only by tapping the dimmed backdrop (or Escape). */
+  /* Tier 1 — the dimming layer is chrome, so it gets the blur. */
   .helpBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;
     display:flex;align-items:flex-end;justify-content:center}
   [data-theme="day"] .helpBackdrop{background:rgba(15,20,25,.35)}
-  .helpPanel{background:var(--panel);border:1px solid var(--line);border-bottom:none;
-    border-radius:14px 14px 0 0;box-shadow:var(--shadow);width:100%;max-width:470px;
-    max-height:80vh;overflow-y:auto;
+  /* Tier 2 — the sheet's own body is dense reading text, so it stays near-opaque.
+     No hairline: this is a scroll container, and an absolutely positioned hairline
+     would scroll away from the edge it's meant to describe. */
+  .helpPanel{background:rgba(var(--panel-rgb),.96);border:1px solid var(--line);
+    border-bottom:none;
+    border-radius:var(--r-sheet) var(--r-sheet) 0 0;box-shadow:var(--shadow);
+    width:100%;max-width:470px;max-height:80vh;overflow-y:auto;
     padding:20px calc(20px + env(safe-area-inset-right))
       calc(14px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left))}
   .helpPanel .lbl{margin-bottom:10px}
@@ -123,8 +200,9 @@
   .helpHint{text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:.06em;
     color:var(--mute);margin-top:10px}
 
+  /* Tier 3 — where real numbers get typed. Material unchanged; new radius only. */
   input,select{width:100%;background:var(--asphalt);color:var(--ink);border:1px solid var(--line);
-    border-radius:6px;padding:11px 12px;font-family:var(--mono);font-size:16px;outline:none;
+    border-radius:var(--r-sm);padding:11px 12px;font-family:var(--mono);font-size:16px;outline:none;
     -webkit-appearance:none;appearance:none}
   input[type=number]::-webkit-inner-spin-button{display:none}
   :focus-visible{box-shadow:0 0 0 2px var(--amber)}
@@ -136,7 +214,8 @@
   .suffix{position:absolute;right:12px;top:12px;font-family:var(--mono);font-size:12px;
     color:var(--mute);pointer-events:none}
 
-  button{font-family:var(--mono);cursor:pointer;border-radius:6px;border:1px solid var(--line);
+  button{font-family:var(--mono);cursor:pointer;border-radius:var(--r-sm);
+    border:1px solid var(--line);
     background:transparent;color:var(--mute);font-size:12px;letter-spacing:.08em}
   .go{background:var(--reefer);color:var(--on-solid);border:none;padding:0 16px}
   .ghost{color:var(--reefer);border-color:var(--reefer);padding:0 14px}
@@ -150,16 +229,52 @@
   .danger.armed{background:var(--late);color:var(--on-solid);border-color:var(--late)}
   .muted.armed{background:var(--mute);color:var(--on-solid);border-color:var(--mute)}
   .danger:disabled,.muted:disabled{opacity:.3;cursor:default}
+  /* Tier 1b — solid pill buttons. These are the high-stakes one-handed taps (SET, CLEAR,
+     BROKE THE 34, UPDATE LIVE ETA), so they get the pill shape and the sheen but stay
+     fully OPAQUE: no blur, no translucency. A floating translucent SET button over
+     other content is exactly the ambiguity this app can't afford. Every colour
+     assignment above is kept as-is; only shape and sheen change here. */
+  .primary,.go,.ghost,.danger,.muted{border-radius:var(--r-pill);
+    box-shadow:inset 0 1px 0 var(--sheen)}
   .link{background:none;border:none;color:var(--reefer);font-size:11px;padding:0;
     text-decoration:underline;font-family:var(--mono)}
 
+  /* ===================== Tier 1 — floating glass chrome =====================
+     Navigation and controls only, never data. The solid rgba(...,.92) background is
+     declared first so an engine without backdrop-filter still renders a legible panel
+     instead of a washed-out one; the @supports block layers the real material on top. */
+  .tabs,.subtabs,.presets,.switch{
+    background:rgba(var(--panel-rgb),.92);
+    /* Edge carries more of the pane's definition now that the fill is thinner. */
+    border:1px solid rgba(var(--ink-rgb),.14);
+    border-radius:var(--r-pill)}
+  @supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+    .tabs,.subtabs,.presets,.switch{
+      background:rgba(var(--panel-rgb),.38);
+      -webkit-backdrop-filter:blur(22px) saturate(180%);
+      backdrop-filter:blur(22px) saturate(180%)}
+  }
+  /* One shared pill-row treatment: the row is the glass surface, each button a pill
+     inside it. Padding insets the pills so the row reads as a single track. */
+  .tabs,.subtabs,.presets{display:flex;gap:4px;padding:4px;position:relative}
+  .tabs button,.subtabs button,.presets button{
+    border-radius:var(--r-pill);border-color:transparent;background:transparent}
+  .tabs::before,.subtabs::before,.presets::before{
+    content:"";position:absolute;top:0;left:12%;right:12%;height:1px;pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgba(var(--ink-rgb),var(--spec-a)),transparent)}
+
   /* primary nav: two tools. filled when active. */
-  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs{margin-bottom:10px}
   .tabs button{flex:1;padding:11px 0;font-size:11px;letter-spacing:.12em}
-  .tabs button[aria-selected=true]{background:var(--amber);color:var(--on-solid);
-    border-color:var(--amber)}
-  /* secondary nav: two views of one calculation. outlined, visibly subordinate. */
-  .subtabs{display:flex;gap:6px;margin-bottom:14px}
+  /* Active pill carries the same amber sheen as the primary button — a gradient fill
+     rather than the old flat amber. Colour role and aria-driven logic are unchanged. */
+  .tabs button[aria-selected=true]{
+    background:linear-gradient(180deg,var(--amber-lift),var(--amber));
+    color:var(--on-solid);border-color:transparent;
+    box-shadow:inset 0 1px 0 var(--sheen)}
+  /* secondary nav: two views of one calculation. outlined, visibly subordinate — kept
+     that way on purpose, so it never competes with the primary tabs for the eye. */
+  .subtabs{margin-bottom:14px}
   .subtabs button{flex:1;padding:8px 0;font-size:10px;letter-spacing:.08em}
   .subtabs button[aria-selected=true]{color:var(--amber);border-color:var(--amber)}
 
@@ -184,10 +299,14 @@
     color:var(--mute);margin-top:6px;letter-spacing:.08em}
   /* Colour key for the strip notches — swatches pull the same vars as the strip,
      so they track both themes automatically. */
-  .stripkey{display:flex;justify-content:center;gap:14px;font-family:var(--mono);font-size:10px;
-    color:var(--mute);margin-top:8px;letter-spacing:.08em}
-  .stripkey span{display:inline-flex;align-items:center;gap:5px}
-  .stripkey i{width:8px;height:8px;border-radius:2px;flex:none}
+  .stripkey{display:flex;justify-content:center;gap:8px;font-family:var(--mono);font-size:10px;
+    color:var(--mute);margin-top:8px;letter-spacing:.08em;flex-wrap:wrap}
+  /* Small solid pill chips (not blurred — they sit on a tier-2 card). Colour dot +
+     label. The three colour assignments are the strip's own vars, unchanged. */
+  .stripkey span{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;
+    border-radius:var(--r-pill);background:rgba(var(--ink-rgb),.06);
+    border:1px solid rgba(var(--ink-rgb),.08)}
+  .stripkey i{width:8px;height:8px;border-radius:50%;flex:none}
   .stripkey i.dot{background:var(--good)}
   .stripkey i.fuel{background:var(--amber-dim)}
   .stripkey i.swap{background:var(--reefer)}
@@ -215,9 +334,15 @@
   .err{font-family:var(--mono);font-size:11px;color:var(--late);margin-top:8px}
 
   /* City-suggestion dropdown, shared shape for destIn/origIn/rsIn. Positioned under
-     whichever .row wraps its input (that row gets position:relative inline). */
+     whichever .row wraps its input (that row gets position:relative inline).
+     Tier 2 surface: a list of names being read and tapped, so near-opaque, not glass.
+     No hairline — it scrolls, and the hairline would scroll off the edge it describes.
+     Radius sits between --r-sm and --r-card: full --r-card is too round for a row list.
+     Fully opaque, unlike the other tier-2 surfaces: this is the only one that floats over
+     other CONTENT rather than the flat page background, so even 4% translucency ghosts the
+     fields behind it through the city names. Contrast is the priority for tier 2. */
   .suggest{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;
-    background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
     box-shadow:var(--shadow);max-height:220px;overflow-y:auto}
   .suggest button{display:block;width:100%;text-align:left;padding:11px 12px;
     border:none;border-radius:0;background:transparent;color:var(--ink);
@@ -225,11 +350,13 @@
   .suggest button+button{border-top:1px solid var(--line)}
   .suggest button:hover,.suggest button:focus-visible{background:var(--asphalt)}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-  .presets{display:flex;gap:6px;margin-bottom:12px}
+  .presets{margin-bottom:12px}
   .presets button{flex:1;padding:9px 0;font-size:11px;text-transform:uppercase;
     letter-spacing:.08em}
-  .presets button[aria-selected=true]{background:var(--amber);color:var(--on-solid);
-    border-color:var(--amber)}
+  .presets button[aria-selected=true]{
+    background:linear-gradient(180deg,var(--amber-lift),var(--amber));
+    color:var(--on-solid);border-color:transparent;
+    box-shadow:inset 0 1px 0 var(--sheen)}
 
   .warn{border:1px solid var(--amber-dim);background:var(--warn-bg);border-radius:6px;
     padding:12px;margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--mute);
@@ -244,6 +371,22 @@
   .foot p + p{margin-top:.9em}          /* subtle one-line separation between stacked lines */
   /* Safari ignores text-align on a <select> face; text-align-last centers it there. */
   select.centered{text-align:center;text-align-last:center}
+
+  /* The modal's dimming layer is tier-1 chrome, so it blurs what's behind it. Its own
+     dim colour is kept — that's what makes the sheet readable, blur alone wouldn't. */
+  @supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+    .helpBackdrop{-webkit-backdrop-filter:blur(18px) saturate(160%);
+      backdrop-filter:blur(18px) saturate(160%)}
+  }
+  /* Anyone who has asked their OS to cut transparency gets the tier-2 treatment
+     everywhere: near-opaque, no blur. Unsupported browsers simply skip this block. */
+  @media (prefers-reduced-transparency: reduce){
+    .tabs,.subtabs,.presets,.switch{
+      background:rgba(var(--panel-rgb),.96);
+      -webkit-backdrop-filter:none;backdrop-filter:none}
+    .helpBackdrop{-webkit-backdrop-filter:none;backdrop-filter:none}
+    .card,.helpPanel,.suggest{background:var(--panel)}
+  }
   .hide{display:none !important}
 </style>
 </head>
@@ -276,7 +419,7 @@
   <!-- ============================ ETA ============================ -->
   <div id="viewEta">
     <div class="subtabs" role="tablist">
-      <button id="tabQuick" role="tab" aria-selected="true">ESTIMATED ETA</button>
+      <button id="tabQuick" role="tab" aria-selected="true">SIMPLE ETA</button>
       <button id="tabTuned" role="tab" aria-selected="false">TUNED MODEL ETA</button>
     </div>
 
@@ -362,8 +505,11 @@
       </div>
       <div class="presets" id="presets"></div>
       <div class="note" id="runNote" style="margin-top:0"></div>
-      <button class="link" id="liveBtn" style="margin-top:12px;margin-right:16px">UPDATE LIVE ETA</button>
-      <button class="link" id="tuneToggle" style="margin-top:12px">+ TUNE TO YOUR TRUCK</button>
+      <!-- Centered settings link above the full-width primary CTA. display:block + auto
+           side margins centers the button itself (it stays shrink-to-fit). -->
+      <button class="link" id="tuneToggle"
+              style="display:block;margin:14px auto 0">+ TUNE TO YOUR TRUCK</button>
+      <button class="primary" id="liveBtn" style="margin-top:12px">UPDATE LIVE ETA</button>
       <div class="grid hide" id="tuneGrid">
         <div><div class="lbl">Cruise</div><div class="fieldwrap"><input id="mph" type="number" inputmode="decimal"><span class="suffix">mph</span></div></div>
         <div><div class="lbl">Fuel every</div><div class="fieldwrap"><input id="fuelEvery" type="number" inputmode="decimal"><span class="suffix">mi</span></div></div>
@@ -456,7 +602,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v2.4.4</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.0.1</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -519,7 +665,7 @@ document.addEventListener("keydown", e=>{
 });
 
 const HELP = {
-  etaQuick:{ title:"Estimated ETA", body:
+  etaQuick:{ title:"Simple ETA", body:
     "<p>This assumes dispatch's number: your load's miles divided by a flat 50 mph, "+
     "nonstop. No stops, no traffic, no truck-legal routing — just a fast, rough guess.</p>"+
     "<ul><li>Good for sanity-checking dispatch's own ETA.</li>"+
@@ -794,6 +940,11 @@ $("nowBtn").onclick = ()=>{ $("depart").value = toWall(new Date(), E.originTz); 
 $("tuneToggle").onclick = ()=>{
   const on = $("tuneGrid").classList.contains("hide");
   show($("tuneGrid"), on); show($("swapBox"), on);
+  // The LIVE CTA steps aside while tuning is open, so the fields sit directly under the
+  // toggle that revealed them instead of being split off below the button. Only this
+  // handler touches the button's visibility — renderLiveBtn() sets text/disabled only,
+  // so a fetch that finishes while it's hidden still comes back in the right state.
+  show($("liveBtn"), !on);
   $("tuneToggle").textContent = on ? "− HIDE TUNING" : "+ TUNE TO YOUR TRUCK";
 };
 
