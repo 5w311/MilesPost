@@ -505,7 +505,9 @@
       </div>
       <div class="presets" id="presets"></div>
       <div class="note" id="runNote" style="margin-top:0"></div>
-      <button class="link" id="liveBtn" style="margin-top:12px;margin-right:16px">UPDATE LIVE ETA</button>
+      <!-- Full-width primary CTA. .primary is already width:100%, so tuneToggle below it
+           wraps onto its own line; it stays next to the #tuneGrid it opens. -->
+      <button class="primary" id="liveBtn" style="margin-top:14px">UPDATE LIVE ETA</button>
       <button class="link" id="tuneToggle" style="margin-top:12px">+ TUNE TO YOUR TRUCK</button>
       <div class="grid hide" id="tuneGrid">
         <div><div class="lbl">Cruise</div><div class="fieldwrap"><input id="mph" type="number" inputmode="decimal"><span class="suffix">mph</span></div></div>
