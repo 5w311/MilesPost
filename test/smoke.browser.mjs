@@ -280,8 +280,10 @@ try {
           { items: [{ position: { lat: 36.1627, lng: -86.7816 } }] })));
       if (u.includes("router.hereapi.com"))
         return Promise.resolve(new Response(JSON.stringify(
-          // 6h drive, 20min of it traffic, 400 mi (643,738 m)
-          { routes: [{ sections: [{ summary: { duration: 21600, baseDuration: 20400, length: 643738 } }] }] })));
+          // 6h drive, 20min of it traffic, 400 mi (643,738 m). Length is overridable via
+          // window.__routeMeters so a test can simulate re-quoting a different destination.
+          { routes: [{ sections: [{ summary: { duration: 21600, baseDuration: 20400,
+            length: window.__routeMeters || 643738 } }] }] })));
       return realFetch(url, ...rest);
     };
   });
@@ -312,6 +314,18 @@ try {
   });
   if (milesBox.inline !== "" || milesBox.computed === "none" || !milesBox.visible)
     fail(`miles field must be left visible after the repaint, got ${JSON.stringify(milesBox)}`);
+  // Re-quoting for a different destination must REFRESH a mileage we filled in ourselves —
+  // a blank-only guard can't tell its own number from a typed one, and used to strand the
+  // previous city's distance in the field. (The typed-mileage case is covered separately
+  // below and must still be left alone.)
+  await autofillPage.evaluate(() => { window.__routeMeters = 1207008; });   // 750 mi
+  await autofillPage.fill("#destIn", "Laredo TX");
+  await autofillPage.click("#destSet");
+  await autofillPage.click("#liveBtn");
+  await autofillPage.waitForTimeout(300);
+  const requoted = await autofillPage.inputValue("#miles");
+  if (requoted !== "750")
+    fail(`re-quoting a new destination should refresh our own autofilled mileage, got ${JSON.stringify(requoted)}`);
   if (autofillErrors.length) fail("autofill page errors: " + JSON.stringify(autofillErrors, null, 2));
   await autofillPage.close();
 
@@ -449,7 +463,7 @@ try {
   if (await page.isVisible("#helpBackdrop")) fail("tapping the backdrop should close the help modal");
 
   if (!process.exitCode)
-    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
+    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one, live re-quote refreshes its own autofilled miles, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
 } finally {
   await browser.close();
   server.close();
