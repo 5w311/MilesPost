@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.0.4**
+**Current version: v3.1**
 
 ## Files
 
@@ -51,6 +51,39 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.1
+
+- **Small "×" clear buttons on Miles Remaining and Destination Town** — visible only once
+  a field has content, tucked next to the "mi" suffix and the SET button respectively.
+  Factored into two shared functions (`clearMilesField()` / `clearDestField()`) that the
+  big CLEAR button now uses too, instead of three near-duplicate copies of the same logic.
+- **Fix: CLEAR no longer leaves a stale LIVE quote behind.** `clearDestField()` now nulls
+  `LIVE.res`/`at`/`note`/`trafficS` along with the destination — a live quote is tied to
+  the destination it was solved for, so clearing that destination invalidates the quote.
+  The bug wasn't that the LIVE line stayed visible right after CLEAR (miles going to 0
+  already hides it) — it's that the *stale route data* survived, ready to reattach itself
+  as a fresh-looking "LIVE" line the moment a **new**, never-quoted destination was
+  entered afterwards. Tuning (preset, tuned values, swap schedule) is untouched by CLEAR,
+  exactly as before.
+- **OVERRIDE toggle**, next to UPDATE LIVE ETA: when on, a live quote always overwrites
+  the mileage field, even a number you typed yourself. Off by default — with it off,
+  behavior is byte-for-byte what it's always been (autofill only, never touch a typed
+  number). Persisted like tuning, so it's remembered across sessions. Same `.switch` pill
+  as the day/night toggle, driven by its own on/off state rather than the page theme.
+  - Fixed a real bug surfaced while building this: the day-theme CSS rule that positions
+    the day/night switch's knob was written against `.switch` generally, not that one
+    switch specifically — so under day theme, *every* `.switch` pill's knob would've been
+    forced to the right regardless of its own state. Caught before shipping by inspecting
+    the override toggle's actual computed style, not just eyeballing a screenshot (a
+    screenshot misread at a glance in the other direction, too — worth a second look
+    rather than trusting either the code or the image alone).
+- **The LIVE line finally reads as something that matters.** It used to be identical, tiny
+  muted text to every other secondary readout line — easy to miss entirely. "LIVE" is now
+  its own small reefer-filled badge, and the rest of the line (time, miles, traffic delta)
+  is bumped up from the old baseline (12px/400/muted → 13px/600/ink) without turning into
+  a second arrival number competing with the real one above it. Its own CSS class, not an
+  extension of `.sub`, so etaYours/etaShift stay exactly as plain as they've always been.
 
 ### v3.0.4
 

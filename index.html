@@ -134,12 +134,22 @@
   .switch .knob{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;
     background:var(--amber);transition:transform .2s ease, background-color .2s ease;
     display:flex;align-items:center;justify-content:center}
-  [data-theme="day"] .switch .knob{transform:translateX(24px)}
+  /* Scoped to themeBtn specifically (not .switch generally) — a bare ".switch .knob"
+     here would push EVERY .switch pill's knob right under day theme regardless of that
+     switch's own state, which is exactly wrong for the independent override toggle below.
+     themeBtn's own aria-checked is also kept in sync with data-theme by applyTheme(), so
+     the generic .switch[aria-checked="true"] rule further down agrees with this one. */
+  [data-theme="day"] #themeBtn .knob{transform:translateX(24px)}
   .switch svg{width:13px;height:13px;display:block}
   .switch .moon{fill:var(--on-solid)}
   .switch .sun{fill:none;stroke:var(--on-solid);stroke-width:2.1;stroke-linecap:round;display:none}
   [data-theme="day"] .switch .moon{display:none}
   [data-theme="day"] .switch .sun{display:block}
+  /* Generic: any .switch pill (not just the day/night one) travels its knob off its own
+     aria-checked, so a second toggle (the LIVE override below) gets the identical pill
+     behavior without being wired to the page theme. themeBtn already keeps aria-checked
+     in sync with data-theme, so this is additive there, not a change to it. */
+  .switch[aria-checked="true"] .knob{transform:translateX(24px)}
 
   /* Tier 2 — data surfaces. Near-opaque on purpose: this is what the driver actually
      reads, in sun, one-handed. Same compositing language as the glass chrome, but
@@ -213,6 +223,15 @@
   .fieldwrap{position:relative}
   .suffix{position:absolute;right:12px;top:12px;font-family:var(--mono);font-size:12px;
     color:var(--mute);pointer-events:none}
+  /* Small "×" clear button overlaid on a field, shown only once it has content (toggled
+     the same way the rest of the app shows/hides — see clearMilesField/clearDestField).
+     Subtle by design: --mute at rest, doesn't compete with the suffix label or SET. */
+  .fieldClear{position:absolute;top:50%;transform:translateY(-50%);width:20px;height:20px;
+    padding:0;border:none;background:transparent;color:var(--mute);font-size:16px;
+    line-height:1;display:flex;align-items:center;justify-content:center}
+  .fieldClear:hover,.fieldClear:focus-visible{color:var(--ink)}
+  #milesClear{right:32px}         /* sits left of the "mi" suffix, clear of its text */
+  #destClear{right:8px}           /* no suffix on this field, so it can sit at the edge */
 
   button{font-family:var(--mono);cursor:pointer;border-radius:var(--r-sm);
     border:1px solid var(--line);
@@ -285,6 +304,18 @@
   .sub{font-family:var(--mono);font-size:12px;color:var(--mute);margin-top:12px;
     padding-top:12px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
   .sub b{color:var(--ink);font-weight:400}
+  /* LIVE line: its own class (not .sub) so this doesn't touch etaYours/etaShift, which
+     stay exactly as plain/muted as every other secondary readout line. Keeps .sub's
+     divider/spacing, but the content reads as "this matters" rather than one more
+     identical-looking line: a distinct reefer-filled "LIVE" badge, and the rest of the
+     line bumped up in size/weight/color from the .sub baseline. */
+  .liveLine{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);
+    font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+  .liveBadge{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:600;
+    letter-spacing:.06em;color:var(--on-solid);background:var(--reefer);
+    border-radius:var(--r-pill);padding:2px 8px;line-height:1.4}
+  .liveText{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink)}
+  .liveText b{font-weight:600}
   .note{font-family:var(--mono);font-size:12px;color:var(--mute);line-height:1.7;margin-top:14px}
 
   /* ETA run strip: drive legs split by stops */
@@ -432,7 +463,7 @@
       <div class="day" id="etaDay">Enter miles and a departure time.</div>
       <div class="sub hide" id="etaYours"></div>
       <div class="sub hide" id="etaShift"></div>
-      <div class="sub hide" id="liveLine"></div>
+      <div class="liveLine hide" id="liveLine"></div>
       <div class="note hide" id="liveNote"></div>
       <div class="note hide" id="quickNote"></div>
       <div class="strip hide" id="strip"></div>
@@ -454,6 +485,7 @@
         <label for="miles">Miles remaining</label>
         <div class="fieldwrap">
           <input id="miles" type="number" inputmode="decimal">
+          <button type="button" class="fieldClear hide" id="milesClear" aria-label="Clear miles">×</button>
           <span class="suffix">mi</span>
         </div>
       </div>
@@ -461,7 +493,10 @@
       <div class="group">
         <label for="destIn">Destination town</label>
         <div class="row" style="position:relative">
-          <input id="destIn" placeholder="e.g. Laredo, TX" autocomplete="off">
+          <div class="fieldwrap" style="flex:1">
+            <input id="destIn" placeholder="e.g. Laredo, TX" autocomplete="off">
+            <button type="button" class="fieldClear hide" id="destClear" aria-label="Clear destination">×</button>
+          </div>
           <button class="go" id="destSet">SET</button>
           <div class="suggest hide" id="destSuggest"></div>
         </div>
@@ -509,6 +544,15 @@
            side margins centers the button itself (it stays shrink-to-fit). -->
       <button class="link" id="tuneToggle"
               style="display:block;margin:14px auto 0">+ TUNE TO YOUR TRUCK</button>
+      <div class="lbl-row" style="margin-top:14px;margin-bottom:0">
+        <div class="lbl" style="margin-bottom:0">Override</div>
+        <button class="switch" id="overrideBtn" role="switch" aria-checked="false"
+                aria-label="Always overwrite mileage with the live route distance">
+          <i class="knob"></i>
+        </button>
+      </div>
+      <div class="note" style="margin-top:4px">When on, Update Live ETA always overwrites
+        the mileage — even a number you typed.</div>
       <button class="primary" id="liveBtn" style="margin-top:12px">UPDATE LIVE ETA</button>
       <div class="grid hide" id="tuneGrid">
         <div><div class="lbl">Cruise</div><div class="fieldwrap"><input id="mph" type="number" inputmode="decimal"><span class="suffix">mph</span></div></div>
@@ -602,7 +646,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.0.4</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.1</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -750,12 +794,17 @@ const loadJSON = (...keys) => {
 const E = {
   mode:"quick", preset:"Realistic", p:{...PRESETS.Realistic},
   swap:{...SWAP_DEFAULT, times:[...SWAP_DEFAULT.times]},
-  originTz:deviceTz(), originName:"Your device", destTz:null, destName:""
+  originTz:deviceTz(), originName:"Your device", destTz:null, destName:"",
+  // Opt-in: when true, UPDATE LIVE ETA always overwrites miles, even a number the driver
+  // typed. Default false — the safe, existing behavior (autofill only, never clobber a
+  // typed number) is unchanged unless the driver turns this on. Persisted like tuning.
+  liveOverride:false
 };
 (()=>{
   const s = loadJSON("milespost.eta", "teamEta");
   if(!s) return;
   E.mode = s.mode ?? E.mode;
+  E.liveOverride = s.liveOverride ?? E.liveOverride;
   if(s.swap && Array.isArray(s.swap.times)) E.swap = s.swap;
   if(s.pv === PRESET_VERSION){ E.preset = s.preset ?? E.preset; E.p = s.p ?? E.p; }
 })();
@@ -777,6 +826,27 @@ const LIVE = { at:null, res:null, trafficS:0, note:"", pending:false, tried:fals
      field still reads exactly what we wrote, it's ours to replace; the moment it reads
      anything else the driver has taken it over and we never touch it again. */
   autoMiles:null };
+
+/* Shared clearing helpers — used by the small per-field "×" buttons AND by the big CLEAR
+   button below, so all three sites clear exactly the same way instead of three copies of
+   the same few lines drifting apart. */
+function clearMilesField(){
+  $("miles").value = "";
+  LIVE.autoMiles = null;          // nothing of ours left in the field to claim ownership of
+  $("miles").dispatchEvent(new Event("input", {bubbles:true}));
+  repaintField($("miles"));       // same Mobile Safari repaint fix as the live autofill
+  renderEta();
+}
+function clearDestField(){
+  E.destTz = null; E.destName = "";
+  $("destIn").value = "";
+  show($("destMeta"), false); show($("destErr"), false); show($("destPick"), false);
+  show($("destSuggest"), false);
+  // A live quote is tied to the destination it was solved for — clearing the destination
+  // is what should invalidate it, not clearing miles (miles has its own clear above).
+  LIVE.res = null; LIVE.at = null; LIVE.trafficS = 0; LIVE.note = "";
+  renderEta();
+}
 
 const geoPos = () => new Promise((ok, no) => {
   if(!navigator.geolocation) return no(new Error("geolocation unavailable"));
@@ -924,13 +994,16 @@ async function updateLive(){
     // when it still holds a number we put there ourselves — so re-quoting for a new
     // destination refreshes the mileage instead of stranding the old city's. A mileage the
     // driver typed is never touched (dispatch's number is often contractual and differs
-    // from the real road distance on purpose). Checked here, at write-time, so a number
-    // typed mid-fetch is never clobbered either.
+    // from the real road distance on purpose) — UNLESS the driver has opted into
+    // E.liveOverride, in which case live always wins, even over something they typed.
+    // Checked here, at write-time, so a number typed mid-fetch is never clobbered either
+    // (unless override is on, in which case that's the whole point).
     // The dispatch keeps the field's own listeners honest for a programmatic fill; the
     // repaint is what actually gets Mobile Safari to show the number without a tap.
     // See repaintField() for why the event alone was never going to be enough.
     const milesEl = $("miles"), curMiles = milesEl.value;
-    if(!(Number(curMiles) > 0) || (LIVE.autoMiles !== null && curMiles === LIVE.autoMiles)){
+    if(E.liveOverride || !(Number(curMiles) > 0)
+       || (LIVE.autoMiles !== null && curMiles === LIVE.autoMiles)){
       LIVE.autoMiles = String(Math.round(LIVE.res.miles));
       milesEl.value = LIVE.autoMiles;
       milesEl.dispatchEvent(new Event("input", {bubbles:true}));
@@ -958,7 +1031,8 @@ const renderLiveBtn = () => {
 $("liveBtn").onclick = () => updateLive();
 
 const saveEta = () => { try{ localStorage.setItem("milespost.eta",
-  JSON.stringify({pv:PRESET_VERSION, mode:E.mode, preset:E.preset, p:E.p, swap:E.swap}));
+  JSON.stringify({pv:PRESET_VERSION, mode:E.mode, preset:E.preset, p:E.p, swap:E.swap,
+    liveOverride:E.liveOverride}));
 }catch{} };
 
 ZONE_LIST.forEach(z=>{
@@ -999,6 +1073,7 @@ $("swapTz").addEventListener("change", e=>{ E.swap.tz=e.target.value; saveEta();
 
 ["miles","appt","depart"].forEach(id => $(id).addEventListener("input", renderEta));
 $("nowBtn").onclick = ()=>{ $("depart").value = toWall(new Date(), E.originTz); renderEta(); };
+$("milesClear").onclick = clearMilesField;
 $("tuneToggle").onclick = ()=>{
   const on = $("tuneGrid").classList.contains("hide");
   show($("tuneGrid"), on); show($("swapBox"), on);
@@ -1009,6 +1084,14 @@ $("tuneToggle").onclick = ()=>{
   show($("liveBtn"), !on);
   $("tuneToggle").textContent = on ? "− HIDE TUNING" : "+ TUNE TO YOUR TRUCK";
 };
+
+// Same .switch pill as the day/night toggle, driven by its own aria-checked (see the
+// generic .switch[aria-checked="true"] CSS rule) rather than the page theme. Left visible
+// regardless of whether tuning is open — it's unrelated to tuning and always relevant
+// whenever the driver might tap UPDATE LIVE ETA.
+const renderOverrideBtn = () => $("overrideBtn").setAttribute("aria-checked", String(E.liveOverride));
+$("overrideBtn").onclick = () => { E.liveOverride = !E.liveOverride; renderOverrideBtn(); saveEta(); };
+renderOverrideBtn();
 
 const doDest = ()=>{
   const raw = $("destIn").value.trim();
@@ -1024,9 +1107,13 @@ const doDest = ()=>{
 };
 $("destSet").onclick = doDest;
 $("destIn").addEventListener("keydown", e=>{ if(e.key==="Enter") doDest(); });
+// Same pattern as miles/appt/depart: renderEta() on every keystroke so #destClear's
+// visibility (tied to $("destIn").value in renderEta) tracks typing live, not just SET.
+$("destIn").addEventListener("input", renderEta);
 $("destPick").onchange = e=>{ E.destTz=e.target.value; E.destName="";
   show($("destErr"),false); show($("destPick"),false); renderEta(); };
 attachPlaceSuggest($("destIn"), $("destSuggest"), doDest);
+$("destClear").onclick = clearDestField;
 
 $("origToggle").onclick = ()=>{
   const on = $("origEdit").classList.contains("hide");
@@ -1072,6 +1159,12 @@ $("tabTuned").onclick = ()=>setEtaMode("tuned");
 
 function renderEta(){
   const showTz = E.destTz || E.originTz;
+  // Small per-field "×" buttons: visible only once their own field has content. Driven
+  // from here (rather than a one-off listener per button) so every path that can change
+  // either field — typing, a suggestion pick, autofill, either clear button, or the big
+  // CLEAR — stays in sync automatically, since all of them already call renderEta().
+  show($("milesClear"), $("miles").value !== "");
+  show($("destClear"), $("destIn").value !== "");
   $("origChip").textContent = E.originName + " · " + tzTag(E.originTz);
   show($("destMeta"), !!E.destName);
   if(E.destName) $("destChip").textContent = E.destName + " · " + tzTag(E.destTz);
@@ -1128,10 +1221,12 @@ function renderEta(){
     const liveOn = liveFresh(LIVE.at, Date.now()) && LIVE.res;
     if(liveOn){
       show($("liveLine"), true); show($("liveNote"), true);
-      $("liveLine").innerHTML = "LIVE · <b>"+clockOf(LIVE.res.liveEta, showTz)+"</b> "
+      $("liveLine").innerHTML = "<span class=\"liveBadge\">LIVE</span> "
+        + "<span class=\"liveText\">· <b>"+clockOf(LIVE.res.liveEta, showTz)+"</b> "
         + dayOf(LIVE.res.liveEta, showTz)
         + " · "+Math.round(LIVE.res.miles)+" mi truck route"
-        + (LIVE.trafficS >= 300 ? " · traffic +"+Math.round(LIVE.trafficS/60)+"m" : "");
+        + (LIVE.trafficS >= 300 ? " · traffic +"+Math.round(LIVE.trafficS/60)+"m" : "")
+        + "</span>";
       $("liveNote").textContent = "Traffic is right-now conditions — it mainly shapes the "
         + "next few hours. The truck-legal routing applies to the whole run.";
     } else if(LIVE.note){
@@ -1283,11 +1378,13 @@ const clearGuard = twoTap($("rsClear"), "CLEAR TIMER", "TAP AGAIN TO CLEAR", rsC
 // and departure resets to now — same as first launch. Presets, tuning, the swap schedule,
 // origin timezone, and theme are standing setup and are left untouched.
 const etaClearAll = ()=>{
-  $("miles").value = "";
-  LIVE.autoMiles = null;          // nothing of ours left in the field to claim ownership of
-  E.destTz = null; E.destName = "";
-  $("destIn").value = "";
-  show($("destMeta"), false); show($("destErr"), false); show($("destPick"), false);
+  // Same two shared functions the per-field "×" buttons use — this also fixes a real bug
+  // for free: clearDestField() nulls LIVE.res/at/note/trafficS, so a fresh-looking LIVE
+  // line can no longer linger on screen for a destination that's no longer set. Tuning
+  // (E.p/E.swap/E.preset) and the live-override flag are untouched, on purpose — this
+  // clears the load, not the truck.
+  clearMilesField();
+  clearDestField();
   $("appt").value = "";
   $("depart").value = toWall(new Date(), E.originTz);
   renderEta();
