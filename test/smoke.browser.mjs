@@ -75,9 +75,15 @@ try {
   await page.dispatchEvent("#miles", "input");
   await page.dispatchEvent("#depart", "input");
   await page.waitForTimeout(150);
+  // Every clock in the app carries its own tz suffix now (etaClock/rsClock via a smaller
+  // "big-tz" span) — HH:MM followed by a space and a timezone code, not bare HH:MM alone.
   const etaClock = (await page.textContent("#etaClock"))?.trim();
-  if (!/^\d{2}:\d{2}$/.test(etaClock || "") || etaClock === "--:--")
-    fail(`expected a computed arrival clock, got ${JSON.stringify(etaClock)}`);
+  if (!/^\d{2}:\d{2} \S+$/.test(etaClock || "") || etaClock === "--:--")
+    fail(`expected a computed arrival clock with its own tz suffix, got ${JSON.stringify(etaClock)}`);
+  // Simple ETA's "Tuned model says HH:MM (...)" comparison line needed its own tz code too.
+  const quickNoteText = (await page.textContent("#quickNote")) || "";
+  if (!/Tuned model says \d{2}:\d{2} [A-Z]{2,6} \(/.test(quickNoteText))
+    fail(`quickNote's tuned-model time should carry its own tz code, got ${JSON.stringify(quickNoteText)}`);
 
   // The "who's driving on arrival" line: hidden on Estimated (default), shown on Tuned.
   if (await page.isVisible("#etaShift"))
@@ -133,8 +139,16 @@ try {
   await page.waitForTimeout(100);
   if (await page.isVisible("#rsInputCard"))
     fail("shutdown input should collapse once a chosen date is committed with SET");
-  if (((await page.textContent("#rsClock"))?.trim()) === "--:--")
+  const rsClockText = (await page.textContent("#rsClock"))?.trim() || "";
+  if (rsClockText === "--:--")
     fail("committing a shutdown should show the computed legal time");
+  if (!/^\d{2}:\d{2} \S+$/.test(rsClockText))
+    fail(`rsClock should carry its own tz suffix, got ${JSON.stringify(rsClockText)}`);
+  // A future (planned-ahead) shutdown shows the "Clock starts in ... · HH:MM Day" preview —
+  // that preview time needed its own tz code too.
+  const rsCountText = (await page.textContent("#rsCount")) || "";
+  if (!/Clock starts in .+ · \d{2}:\d{2} [A-Z]{2,6} /.test(rsCountText))
+    fail(`rsCount's pending-preview time should carry its own tz code, got ${JSON.stringify(rsCountText)}`);
   await page.click("#rsClear");                  // arm
   await page.click("#rsClear");                  // confirm CLEAR TIMER
   await page.waitForTimeout(100);
@@ -196,14 +210,14 @@ try {
   await livePage.fill("#miles", "400");
   await livePage.dispatchEvent("#miles", "input");
   await livePage.fill("#destIn", "Nashville TN");
-  await livePage.click("#destSet");
+  await livePage.press("#destIn", "Enter");
   await livePage.click("#tabTuned");
   await livePage.click("#liveBtn");
   await livePage.waitForTimeout(300);
   if (!(await livePage.isVisible("#liveLine")))
     fail("LIVE line should render after a successful mocked HERE fetch");
   const liveText = (await livePage.textContent("#liveLine"))?.trim() || "";
-  if (!/^LIVE · \d{2}:\d{2}/.test(liveText))
+  if (!/^LIVE \d{2}:\d{2}/.test(liveText))
     fail(`LIVE line should lead with an arrival clock, got ${JSON.stringify(liveText)}`);
   if (!liveText.includes("400 mi")) fail(`LIVE line should show the route miles, got ${JSON.stringify(liveText)}`);
   if (!liveText.includes("traffic +20m")) fail(`LIVE line should show the traffic cost, got ${JSON.stringify(liveText)}`);
@@ -231,7 +245,11 @@ try {
   // Turn override on before opening tuning, so hiding the row can be checked against
   // actually losing the driver's choice — a hide that also resets E.liveOverride would
   // be a worse bug than the row simply staying on screen.
+  if ((await livePage.textContent("#overrideState"))?.trim() !== "OFF")
+    fail("override indicator should read OFF before it's ever been toggled");
   await livePage.click("#overrideBtn");
+  if ((await livePage.textContent("#overrideState"))?.trim() !== "ON")
+    fail("override indicator should flip to ON as soon as the switch is toggled");
   await livePage.click("#tuneToggle");
   await livePage.waitForTimeout(150);
   if (!(await livePage.isVisible("#tuneGrid"))) fail("tuning grid should open");
@@ -261,7 +279,7 @@ try {
   await deniedPage.fill("#miles", "400");
   await deniedPage.dispatchEvent("#miles", "input");
   await deniedPage.fill("#destIn", "Nashville TN");
-  await deniedPage.click("#destSet");
+  await deniedPage.press("#destIn", "Enter");
   await deniedPage.click("#tabTuned");
   await deniedPage.click("#liveBtn");
   await deniedPage.waitForTimeout(300);
@@ -271,7 +289,7 @@ try {
   if (!/live unavailable/.test(noteText))
     fail(`denied path should show the unobtrusive fallback note, got ${JSON.stringify(noteText)}`);
   const tunedClock = (await deniedPage.textContent("#etaClock"))?.trim();
-  if (!/^\d{2}:\d{2}$/.test(tunedClock || "") || tunedClock === "--:--")
+  if (!/^\d{2}:\d{2} \S+$/.test(tunedClock || "") || tunedClock === "--:--")
     fail("tuned readout must stay intact when live is unavailable");
   if (deniedErrors.length) fail("denied page errors: " + JSON.stringify(deniedErrors, null, 2));
   await deniedPage.close();
@@ -305,7 +323,7 @@ try {
   await mockHere(autofillPage);
   await autofillPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await autofillPage.fill("#destIn", "Nashville TN");
-  await autofillPage.click("#destSet");
+  await autofillPage.press("#destIn", "Enter");
   await autofillPage.click("#tabTuned");
   await autofillPage.click("#liveBtn");
   await autofillPage.waitForTimeout(300);
@@ -329,7 +347,7 @@ try {
   // below and must still be left alone.)
   await autofillPage.evaluate(() => { window.__routeMeters = 1207008; });   // 750 mi
   await autofillPage.fill("#destIn", "Laredo TX");
-  await autofillPage.click("#destSet");
+  await autofillPage.press("#destIn", "Enter");
   await autofillPage.click("#liveBtn");
   await autofillPage.waitForTimeout(300);
   const requoted = await autofillPage.inputValue("#miles");
@@ -348,7 +366,7 @@ try {
   await keepPage.fill("#miles", "250");
   await keepPage.dispatchEvent("#miles", "input");
   await keepPage.fill("#destIn", "Nashville TN");
-  await keepPage.click("#destSet");
+  await keepPage.press("#destIn", "Enter");
   await keepPage.click("#tabTuned");
   await keepPage.click("#liveBtn");
   await keepPage.waitForTimeout(300);
@@ -357,6 +375,50 @@ try {
     fail(`a typed mileage must survive a live fetch untouched, got ${JSON.stringify(keptMiles)}`);
   if (keepErrors.length) fail("keep-miles page errors: " + JSON.stringify(keepErrors, null, 2));
   await keepPage.close();
+
+  // LIVE line timezone: the leading clock is destination-local (same tz the main arrival
+  // number uses) already, by virtue of using showTz — nothing to change there. What's new
+  // is a muted "your clock" addendum, mirroring etaYours, when the driver's own origin tz
+  // differs from the destination's. Force a real tz mismatch via a fresh context (device
+  // clock in LA, destination in Nashville/Central) rather than trusting the code reads
+  // right without ever actually observing two different clocks.
+  const tzCtx = await browser.newContext({ timezoneId: "America/Los_Angeles" });
+  const tzPage = await tzCtx.newPage();
+  const tzErrors = [];
+  tzPage.on("pageerror", e => tzErrors.push("pageerror: " + e.message));
+  await mockHere(tzPage);
+  await tzPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await tzPage.fill("#destIn", "Nashville TN");
+  await tzPage.press("#destIn", "Enter");
+  await tzPage.click("#tabTuned");
+  await tzPage.click("#liveBtn");
+  await tzPage.waitForTimeout(300);
+  const mismatchLine = (await tzPage.textContent("#liveLine"))?.trim() || "";
+  if (!/your clock$/.test(mismatchLine))
+    fail(`LIVE line should append a your-clock addendum when origin/destination tz differ, got ${JSON.stringify(mismatchLine)}`);
+  if (!mismatchLine.includes("PDT") && !mismatchLine.includes("PST"))
+    fail(`your-clock addendum should be in the origin's (Pacific) tz, got ${JSON.stringify(mismatchLine)}`);
+  if (tzErrors.length) fail("tz-mismatch page errors: " + JSON.stringify(tzErrors, null, 2));
+  await tzCtx.close();
+
+  // Same-tz case: no addendum should appear at all — a driver whose origin and
+  // destination share a timezone doesn't need to be told their own clock twice.
+  const sameTzCtx = await browser.newContext({ timezoneId: "America/Los_Angeles" });
+  const sameTzPage = await sameTzCtx.newPage();
+  const sameTzErrors = [];
+  sameTzPage.on("pageerror", e => sameTzErrors.push("pageerror: " + e.message));
+  await mockHere(sameTzPage);
+  await sameTzPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await sameTzPage.fill("#destIn", "Los Angeles CA");
+  await sameTzPage.press("#destIn", "Enter");
+  await sameTzPage.click("#tabTuned");
+  await sameTzPage.click("#liveBtn");
+  await sameTzPage.waitForTimeout(300);
+  const sameTzLine = (await sameTzPage.textContent("#liveLine"))?.trim() || "";
+  if (/your clock$/.test(sameTzLine))
+    fail(`LIVE line should NOT show a your-clock addendum when origin and destination share a tz, got ${JSON.stringify(sameTzLine)}`);
+  if (sameTzErrors.length) fail("same-tz page errors: " + JSON.stringify(sameTzErrors, null, 2));
+  await sameTzCtx.close();
 
   // Override ON: the driver has opted in, so live now wins even over a typed mileage —
   // the exact opposite of the keepPage case above, which is the default (override off).
@@ -368,7 +430,7 @@ try {
   await overridePage.fill("#miles", "250");
   await overridePage.dispatchEvent("#miles", "input");
   await overridePage.fill("#destIn", "Nashville TN");
-  await overridePage.click("#destSet");
+  await overridePage.press("#destIn", "Enter");
   await overridePage.click("#tabTuned");
   await overridePage.click("#overrideBtn");
   await overridePage.click("#liveBtn");
@@ -396,7 +458,7 @@ try {
   await mockHere(clearLivePage);
   await clearLivePage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await clearLivePage.fill("#destIn", "Nashville TN");
-  await clearLivePage.click("#destSet");
+  await clearLivePage.press("#destIn", "Enter");
   await clearLivePage.click("#tabTuned");
   await clearLivePage.locator("#presets button").nth(2).click();   // Push — distinct from the default Realistic
   await clearLivePage.click("#liveBtn");
@@ -417,7 +479,7 @@ try {
   // stale LIVE.res — set miles directly (bypassing UPDATE LIVE ETA) so only a leftover
   // LIVE.res/at could possibly make the line reappear.
   await clearLivePage.fill("#destIn", "Laredo TX");
-  await clearLivePage.click("#destSet");
+  await clearLivePage.press("#destIn", "Enter");
   await clearLivePage.fill("#miles", "900");
   await clearLivePage.dispatchEvent("#miles", "input");
   await clearLivePage.waitForTimeout(150);
@@ -443,7 +505,7 @@ try {
   await milesClearPage.fill("#miles", "500");
   await milesClearPage.dispatchEvent("#miles", "input");
   await milesClearPage.fill("#destIn", "Nashville TN");
-  await milesClearPage.click("#destSet");
+  await milesClearPage.press("#destIn", "Enter");
   await milesClearPage.waitForTimeout(100);
   if (!(await milesClearPage.isVisible("#milesClear")))
     fail("#milesClear should be visible once miles has content");
@@ -467,7 +529,7 @@ try {
   await destClearPage.fill("#miles", "500");
   await destClearPage.dispatchEvent("#miles", "input");
   await destClearPage.fill("#destIn", "Nashville TN");
-  await destClearPage.click("#destSet");
+  await destClearPage.press("#destIn", "Enter");
   await destClearPage.waitForTimeout(100);
   if (!(await destClearPage.isVisible("#destClear")))
     fail("#destClear should be visible once destIn has content");
