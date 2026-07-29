@@ -602,7 +602,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.0.3</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.0.4</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -770,7 +770,13 @@ const TRUCK = { height:412, width:259, length:2195, grossWeight:36287, axleCount
 
 /* A live quote is a snapshot: solved once at fetch time, shown only while liveFresh says
    it's recent. Never persisted — a stale route is worse than none. */
-const LIVE = { at:null, res:null, trafficS:0, note:"", pending:false, tried:false };
+const LIVE = { at:null, res:null, trafficS:0, note:"", pending:false, tried:false,
+  /* The exact mileage this app last auto-filled, as a string. A blank-only guard can't
+     tell a number the driver typed from one we wrote ourselves, so re-quoting after
+     changing the destination used to leave the old city's mileage sitting there. If the
+     field still reads exactly what we wrote, it's ours to replace; the moment it reads
+     anything else the driver has taken it over and we never touch it again. */
+  autoMiles:null };
 
 const geoPos = () => new Promise((ok, no) => {
   if(!navigator.geolocation) return no(new Error("geolocation unavailable"));
@@ -914,16 +920,21 @@ async function updateLive(){
 
     const startMs = Date.now();             // live means from where the truck sits right now
     LIVE.res = solveEtaLive({ driveSeconds:duration, meters:length, p:E.p, swap:E.swap, startMs });
-    // Convenience only: fill miles from the real road distance if the driver hasn't typed
-    // one. Checked here, at write-time, so a number typed mid-fetch is never clobbered —
-    // and never once a real (or dispatch) mileage is already in the field.
+    // Convenience only: fill miles from the real road distance when the field is blank, or
+    // when it still holds a number we put there ourselves — so re-quoting for a new
+    // destination refreshes the mileage instead of stranding the old city's. A mileage the
+    // driver typed is never touched (dispatch's number is often contractual and differs
+    // from the real road distance on purpose). Checked here, at write-time, so a number
+    // typed mid-fetch is never clobbered either.
     // The dispatch keeps the field's own listeners honest for a programmatic fill; the
     // repaint is what actually gets Mobile Safari to show the number without a tap.
     // See repaintField() for why the event alone was never going to be enough.
-    if(!(Number($("miles").value) > 0)){
-      $("miles").value = Math.round(LIVE.res.miles);
-      $("miles").dispatchEvent(new Event("input", {bubbles:true}));
-      repaintField($("miles"));
+    const milesEl = $("miles"), curMiles = milesEl.value;
+    if(!(Number(curMiles) > 0) || (LIVE.autoMiles !== null && curMiles === LIVE.autoMiles)){
+      LIVE.autoMiles = String(Math.round(LIVE.res.miles));
+      milesEl.value = LIVE.autoMiles;
+      milesEl.dispatchEvent(new Event("input", {bubbles:true}));
+      repaintField(milesEl);
     }
     LIVE.trafficS = base ? Math.max(0, duration - base) : 0;
     LIVE.at = startMs; LIVE.note = "";
@@ -1273,6 +1284,7 @@ const clearGuard = twoTap($("rsClear"), "CLEAR TIMER", "TAP AGAIN TO CLEAR", rsC
 // origin timezone, and theme are standing setup and are left untouched.
 const etaClearAll = ()=>{
   $("miles").value = "";
+  LIVE.autoMiles = null;          // nothing of ours left in the field to claim ownership of
   E.destTz = null; E.destName = "";
   $("destIn").value = "";
   show($("destMeta"), false); show($("destErr"), false); show($("destPick"), false);

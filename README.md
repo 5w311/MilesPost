@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.0.3**
+**Current version: v3.0.4**
 
 ## Files
 
@@ -51,6 +51,19 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.0.4
+
+- **Fix: re-quoting a live ETA for a different city left the old city's mileage in the
+  field.** The autofill guard was blank-only, which can't tell a number the driver typed
+  from one the app filled in itself — so once a mileage was there for any reason, every
+  later quote refused to touch it. The first city worked; the second silently kept the
+  first one's distance.
+- The app now remembers the exact mileage it last wrote. If the field still reads exactly
+  that, it's the app's own number and a new quote replaces it. The moment it reads
+  anything else, the driver has taken the field over and it's never touched again — so
+  **dispatch's contractual number is still safe**, which is the whole reason the guard
+  existed. CLEAR drops the record along with the value.
 
 ### v3.0.3
 
