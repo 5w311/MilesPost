@@ -227,14 +227,23 @@ try {
   await livePage.click("#tabTuned");
   await livePage.waitForTimeout(100);
   if (!(await livePage.isVisible("#liveBtn"))) fail("LIVE button should be visible with tuning closed");
+  if (!(await livePage.isVisible("#overrideRow"))) fail("override row should be visible with tuning closed");
+  // Turn override on before opening tuning, so hiding the row can be checked against
+  // actually losing the driver's choice — a hide that also resets E.liveOverride would
+  // be a worse bug than the row simply staying on screen.
+  await livePage.click("#overrideBtn");
   await livePage.click("#tuneToggle");
   await livePage.waitForTimeout(150);
   if (!(await livePage.isVisible("#tuneGrid"))) fail("tuning grid should open");
   if (await livePage.isVisible("#liveBtn")) fail("LIVE button should be hidden while tuning is open");
+  if (await livePage.isVisible("#overrideRow")) fail("override row should be hidden while tuning is open");
   await livePage.click("#tuneToggle");
   await livePage.waitForTimeout(150);
   if (await livePage.isVisible("#tuneGrid")) fail("tuning grid should close again");
   if (!(await livePage.isVisible("#liveBtn"))) fail("LIVE button must come back when tuning closes");
+  if (!(await livePage.isVisible("#overrideRow"))) fail("override row must come back when tuning closes");
+  if ((await livePage.getAttribute("#overrideBtn", "aria-checked")) !== "true")
+    fail("override state must survive being hidden behind tuning, not reset");
   if (liveErrors.length) fail("live page errors: " + JSON.stringify(liveErrors, null, 2));
   await livePage.close();
 
@@ -585,6 +594,19 @@ try {
   await page.click("#helpBackdrop", { position: { x: 5, y: 5 } });  // tap the backdrop itself
   await page.waitForTimeout(100);
   if (await page.isVisible("#helpBackdrop")) fail("tapping the backdrop should close the help modal");
+
+  // overrideHelp is new — confirm ITS specific wiring (not just that some help button
+  // works), since a copy-paste of the shared pattern is exactly where a wrong HELP key
+  // would slip through unnoticed. #tabTuned lives inside #viewEta, hidden while the main
+  // page is on the Reset view (see the comment above) — switch back first.
+  await page.click("#tabEta"); await page.click("#tabTuned"); await page.waitForTimeout(100);
+  await page.click("#overrideHelp");
+  await page.waitForTimeout(100);
+  if ((await page.textContent("#helpTitle"))?.trim() !== "Override")
+    fail(`overrideHelp should open the Override help entry, got ${JSON.stringify((await page.textContent("#helpTitle"))?.trim())}`);
+  await page.click("#helpBackdrop", { position: { x: 5, y: 5 } });
+  await page.waitForTimeout(100);
+  if (await page.isVisible("#helpBackdrop")) fail("tapping the backdrop should close the override help modal");
 
   if (!process.exitCode)
     console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one (override off) but always overwrites when override is on, live re-quote refreshes its own autofilled miles, CLEAR invalidates a stale LIVE quote without touching tuning, per-field × buttons clear independently, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);

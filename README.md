@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.1**
+**Current version: v3.1.1**
 
 ## Files
 
@@ -51,6 +51,15 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.1.1
+
+- **The OVERRIDE row now hides along with UPDATE LIVE ETA while tuning is open** — it used
+  to stay behind, sitting oddly between the tuning toggle and the now-hidden button.
+  Hiding it doesn't touch `E.liveOverride` or the switch's own on/off state; it reappears
+  exactly as it was left.
+- **Moved the OVERRIDE explanation into a "?" help button**, next to the label — matching
+  every other help entry in the app — instead of always-on caption text under the switch.
 
 ### v3.1
 

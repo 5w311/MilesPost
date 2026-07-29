@@ -544,15 +544,18 @@
            side margins centers the button itself (it stays shrink-to-fit). -->
       <button class="link" id="tuneToggle"
               style="display:block;margin:14px auto 0">+ TUNE TO YOUR TRUCK</button>
-      <div class="lbl-row" style="margin-top:14px;margin-bottom:0">
-        <div class="lbl" style="margin-bottom:0">Override</div>
-        <button class="switch" id="overrideBtn" role="switch" aria-checked="false"
-                aria-label="Always overwrite mileage with the live route distance">
-          <i class="knob"></i>
-        </button>
+      <div id="overrideRow">
+        <div class="lbl-row" style="margin-top:14px;margin-bottom:0">
+          <div style="display:flex;align-items:center;gap:2px">
+            <div class="lbl" style="margin-bottom:0">Override</div>
+            <button class="help-btn" id="overrideHelp" aria-label="What is this?" type="button"><span>?</span></button>
+          </div>
+          <button class="switch" id="overrideBtn" role="switch" aria-checked="false"
+                  aria-label="Always overwrite mileage with the live route distance">
+            <i class="knob"></i>
+          </button>
+        </div>
       </div>
-      <div class="note" style="margin-top:4px">When on, Update Live ETA always overwrites
-        the mileage — even a number you typed.</div>
       <button class="primary" id="liveBtn" style="margin-top:12px">UPDATE LIVE ETA</button>
       <div class="grid hide" id="tuneGrid">
         <div><div class="lbl">Cruise</div><div class="fieldwrap"><input id="mph" type="number" inputmode="decimal"><span class="suffix">mph</span></div></div>
@@ -646,7 +649,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.1</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.1.1</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -762,6 +765,13 @@ const HELP = {
     "preset, or dial in your own cruise speed, fuel stops, swap length, and DOT break timing.</p>"+
     "<ul><li>DOT break has a 30-minute floor — the legal minimum, so it won't let you go lower.</li>"+
     "<li>Changing a preset only touches the pace math — your swap schedule and theme stay put.</li></ul>" },
+  override:{ title:"Override", body:
+    "<p>By default, \"Update Live ETA\" only fills in miles when the field is blank, or still "+
+    "holds a number the app filled in itself — a mileage you typed (dispatch's number, say) "+
+    "is never touched.</p>"+
+    "<ul><li>Turn this on and \"Update Live ETA\" always overwrites miles with the real "+
+    "road distance, even one you typed yourself.</li>"+
+    "<li>Off by default, and remembered across sessions once you change it.</li></ul>" },
   reset:{ title:"Legal At", body:
     "<p>This tracks your 34-hour restart. Set the moment you shut down, and this shows the "+
     "exact time you're legal to run again — 34 real hours later, DST accounted for.</p>"+
@@ -777,6 +787,7 @@ $("etaHelp").onclick = ()=>{
 };
 $("loadHelp").onclick = ()=> openHelp(HELP.load.title, HELP.load.body);
 $("runHelp").onclick = ()=> openHelp(HELP.run.title, HELP.run.body);
+$("overrideHelp").onclick = ()=> openHelp(HELP.override.title, HELP.override.body);
 $("rsHelp").onclick = ()=> openHelp(HELP.reset.title, HELP.reset.body);
 
 // Old keys are read once so a rename never costs the driver their settings.
@@ -1077,11 +1088,14 @@ $("milesClear").onclick = clearMilesField;
 $("tuneToggle").onclick = ()=>{
   const on = $("tuneGrid").classList.contains("hide");
   show($("tuneGrid"), on); show($("swapBox"), on);
-  // The LIVE CTA steps aside while tuning is open, so the fields sit directly under the
-  // toggle that revealed them instead of being split off below the button. Only this
-  // handler touches the button's visibility — renderLiveBtn() sets text/disabled only,
-  // so a fetch that finishes while it's hidden still comes back in the right state.
+  // The LIVE CTA (and the override row above it) step aside while tuning is open, so the
+  // fields sit directly under the toggle that revealed them instead of being split off
+  // below the button. Only this handler touches liveBtn's visibility — renderLiveBtn()
+  // sets text/disabled only, so a fetch that finishes while it's hidden still comes back
+  // in the right state. Hiding overrideRow doesn't touch E.liveOverride or overrideBtn's
+  // aria-checked — it's still there, just off-screen, and reappears exactly as it was.
   show($("liveBtn"), !on);
+  show($("overrideRow"), !on);
   $("tuneToggle").textContent = on ? "− HIDE TUNING" : "+ TUNE TO YOUR TRUCK";
 };
 
