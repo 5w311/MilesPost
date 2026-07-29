@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.0.2**
+**Current version: v3.0.3**
 
 ## Files
 
@@ -51,6 +51,28 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.0.3
+
+- **Actually fix the live mileage autofill not appearing until the field is tapped.**
+  v3.0.2's fix was aimed at the wrong thing: it dispatched a synthetic `input` event,
+  but an event is a JS-level notification to listeners and never touches rendering, so
+  it could not have fixed a paint bug. Confirmed still broken on-device at v3.0.2.
+- The screen recording pinned it down: the arrival clock, LIVE line and run strip all
+  updated in the same pass — and `renderEta()` only computes an arrival at all when
+  `Number($("miles").value) > 0`. So the value was genuinely in the DOM; only the
+  `<input>`'s own rendered text was stale. That rules out a general compositing problem
+  and points squarely at WebKit's input renderer.
+- New `repaintField()` forces the element's renderer to be torn down and rebuilt: drop
+  it out of layout, read a layout property to force a synchronous reflow, restore it.
+  All in one task, so the browser never paints the intermediate state — no flicker.
+  It skips focused fields (`display:none` would blur them and drop the keyboard
+  mid-type) and restores scroll position (removing the field shortens the document for
+  the duration of the reflow, which could otherwise clamp a scroll near the bottom).
+- The repaint itself can't be observed from Chromium, so it needs on-device
+  confirmation. What *is* covered by the smoke suite: the field is left visible
+  afterwards — if the restore is ever dropped, the field vanishes outright, which would
+  be far worse than the original bug.
 
 ### v3.0.2
 

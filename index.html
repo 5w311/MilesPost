@@ -602,7 +602,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.0.2</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.0.3</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -645,6 +645,34 @@ applyTheme(theme);
 
 const $ = id => document.getElementById(id);
 const show = (el,on) => el.classList.toggle("hide", !on);
+
+/* Mobile Safari can leave an <input>'s RENDERED TEXT stale after a programmatic .value
+   write while the field is unfocused. The value itself is correct — everything computed
+   from it (the arrival clock, the run strip) updates right away — but the box still looks
+   empty until the driver taps in and WebKit finally syncs the display.
+
+   v3.0.2 tried dispatching a synthetic "input" event here. That was the wrong lever: an
+   event is a JS-level notification to listeners and never touches rendering, so it could
+   not have fixed a paint bug. Confirmed still broken on-device at v3.0.2.
+
+   What does force it is tearing the element's renderer down and rebuilding it: drop it
+   out of layout, read a layout property to force a synchronous reflow, then restore.
+   All three run in one task, so the browser never paints the intermediate state and
+   there's no flicker.
+
+   Two guards. Focused fields are skipped, because display:none blurs them — that would
+   drop the keyboard out from under someone mid-type. And scroll position is restored,
+   since removing the field shortens the document for the duration of the reflow, which
+   could otherwise clamp a scroll near the bottom of the page. */
+const repaintField = el => {
+  if(document.activeElement === el) return;
+  const y = window.scrollY;
+  const prev = el.style.display;
+  el.style.display = "none";
+  void el.offsetHeight;            // the read is what forces the reflow — don't drop it
+  el.style.display = prev;
+  if(window.scrollY !== y) window.scrollTo(0, y);
+};
 const inFrame = (()=>{ try{ return window.self !== window.top; } catch { return true; } })();
 
 /* ======================= help modal ======================= */
@@ -777,9 +805,10 @@ function attachPlaceSuggest(input, listEl, onPick){
     if(!items.length){ hideList(); return; }
     listEl.innerHTML = items.map(s => "<button>"+s+"</button>").join("");
     [...listEl.children].forEach((btn,i) => {
-      // Same WebKit repaint fix as the LIVE ETA mileage autofill: a bare .value assignment
-      // on a field the user isn't necessarily focused in doesn't always repaint until a
-      // real event lands. Preventive here — not reported broken, but the exact same shape.
+      // Same programmatic-fill shape as the LIVE ETA mileage autofill, so it gets the same
+      // treatment: dispatch for the field's own listeners, repaintField for the display.
+      // Preventive — this one has never been reported blank, and repaintField no-ops while
+      // the field still holds focus, which is the common case right after a tap.
       // The dispatch also re-triggers this input's OWN debounced-suggestion listener
       // below (it's the same element, so bubbling isn't even what causes it) — that
       // schedules a fresh fetch for the just-picked "City, ST" text, which would
@@ -790,6 +819,7 @@ function attachPlaceSuggest(input, listEl, onPick){
         input.value = items[i];
         input.dispatchEvent(new Event("input", {bubbles:true}));
         clearTimeout(timer); token++;
+        repaintField(input);
         hideList(); onPick();
       };
     });
@@ -887,13 +917,13 @@ async function updateLive(){
     // Convenience only: fill miles from the real road distance if the driver hasn't typed
     // one. Checked here, at write-time, so a number typed mid-fetch is never clobbered —
     // and never once a real (or dispatch) mileage is already in the field.
-    // A bare .value assignment on an unfocused field doesn't always get Mobile Safari to
-    // repaint the visible text until the element receives real interaction — the data is
-    // correct underneath, but the driver sees nothing until they tap in. Dispatching a
-    // genuine input event forces WebKit to reconcile the display with the actual value.
+    // The dispatch keeps the field's own listeners honest for a programmatic fill; the
+    // repaint is what actually gets Mobile Safari to show the number without a tap.
+    // See repaintField() for why the event alone was never going to be enough.
     if(!(Number($("miles").value) > 0)){
       $("miles").value = Math.round(LIVE.res.miles);
       $("miles").dispatchEvent(new Event("input", {bubbles:true}));
+      repaintField($("miles"));
     }
     LIVE.trafficS = base ? Math.max(0, duration - base) : 0;
     LIVE.at = startMs; LIVE.note = "";
