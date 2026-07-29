@@ -377,6 +377,14 @@ try {
   const chipText = (await suggestPage.textContent("#destChip"))?.trim() || "";
   if (!chipText.includes("Nashville, TN"))
     fail(`destChip should show the resolved destination, got ${JSON.stringify(chipText)}`);
+  // Picking a suggestion dispatches a synthetic "input" event on the field (a WebKit
+  // repaint fix), which is the SAME event the field's own debounced-suggestion listener
+  // is watching — that listener schedules a fresh fetch for the just-picked text, which
+  // would silently reopen this exact dropdown ~300ms later if not cancelled. Outlive the
+  // debounce and confirm it stays shut.
+  await suggestPage.waitForTimeout(350);
+  if (await suggestPage.isVisible("#destSuggest"))
+    fail("dropdown must not reopen after the debounce window from picking a suggestion");
   if (suggestErrors.length) fail("suggest page errors: " + JSON.stringify(suggestErrors, null, 2));
   await suggestPage.close();
 

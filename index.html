@@ -602,7 +602,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.0.1</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.0.2</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -777,7 +777,21 @@ function attachPlaceSuggest(input, listEl, onPick){
     if(!items.length){ hideList(); return; }
     listEl.innerHTML = items.map(s => "<button>"+s+"</button>").join("");
     [...listEl.children].forEach((btn,i) => {
-      btn.onclick = () => { input.value = items[i]; hideList(); onPick(); };
+      // Same WebKit repaint fix as the LIVE ETA mileage autofill: a bare .value assignment
+      // on a field the user isn't necessarily focused in doesn't always repaint until a
+      // real event lands. Preventive here — not reported broken, but the exact same shape.
+      // The dispatch also re-triggers this input's OWN debounced-suggestion listener
+      // below (it's the same element, so bubbling isn't even what causes it) — that
+      // schedules a fresh fetch for the just-picked "City, ST" text, which would
+      // silently reopen this exact dropdown ~300ms after hideList() runs. Cancel that
+      // scheduled fetch and invalidate its token immediately after, so a response that's
+      // already in flight can't render into a dropdown we've already dismissed.
+      btn.onclick = () => {
+        input.value = items[i];
+        input.dispatchEvent(new Event("input", {bubbles:true}));
+        clearTimeout(timer); token++;
+        hideList(); onPick();
+      };
     });
     show(listEl, true);
   };
@@ -873,7 +887,14 @@ async function updateLive(){
     // Convenience only: fill miles from the real road distance if the driver hasn't typed
     // one. Checked here, at write-time, so a number typed mid-fetch is never clobbered —
     // and never once a real (or dispatch) mileage is already in the field.
-    if(!(Number($("miles").value) > 0)) $("miles").value = Math.round(LIVE.res.miles);
+    // A bare .value assignment on an unfocused field doesn't always get Mobile Safari to
+    // repaint the visible text until the element receives real interaction — the data is
+    // correct underneath, but the driver sees nothing until they tap in. Dispatching a
+    // genuine input event forces WebKit to reconcile the display with the actual value.
+    if(!(Number($("miles").value) > 0)){
+      $("miles").value = Math.round(LIVE.res.miles);
+      $("miles").dispatchEvent(new Event("input", {bubbles:true}));
+    }
     LIVE.trafficS = base ? Math.max(0, duration - base) : 0;
     LIVE.at = startMs; LIVE.note = "";
     setTimeout(renderEta, LIVE_MAX_AGE_MS + 1000);   // drop the line once the quote goes stale

@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.0.1**
+**Current version: v3.0.2**
 
 ## Files
 
@@ -51,6 +51,26 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.0.2
+
+- **Fix: the live mileage autofill didn't visibly appear until you tapped the field.**
+  Mobile Safari doesn't always repaint an input's text after a bare JS `.value`
+  assignment while it's unfocused — the number was correct underneath the whole time,
+  tapping in just forced a repaint that revealed it. `updateLive()` now dispatches a
+  real `input` event right after setting the value, which forces WebKit to reconcile
+  the display. Applied the same fix preventively to the city-suggestion tap-to-select
+  handler (same shape, never reported broken).
+- That second fix uncovered a real bug while it was being verified: dispatching the
+  event re-triggers the field's own debounced-suggestion listener, which was about to
+  silently reopen the dropdown ~300ms after picking, showing fresh results for the
+  city name you'd just chosen. The picker now cancels that scheduled fetch and
+  invalidates its in-flight token in the same handler, so a pick closes the dropdown
+  and keeps it closed.
+- This is a WebKit rendering-timing quirk that Chromium (what the automated suite runs
+  in) won't reliably reproduce either way — verify the mileage fix on an actual iPhone.
+  The suggestion regression, being a real DOM/timing bug rather than a paint quirk, has
+  smoke coverage instead.
 
 ### v3.0.1
 
