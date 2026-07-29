@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.1.2**
+**Current version: v3.1.3**
 
 ## Files
 
@@ -51,6 +51,14 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.1.3
+
+- **Dropped the timezone off the Arrival header** — "Arrival · Gresham, OR" instead of
+  "Arrival · Gresham, OR · PDT". The big clock right below it already carries its own tz
+  suffix, so the header no longer repeats it.
+- **"your clock" is now "current device timezone"** everywhere it appeared — the main
+  readout's secondary time and the LIVE line's own device-clock addendum.
 
 ### v3.1.2
 

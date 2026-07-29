@@ -378,10 +378,10 @@ try {
 
   // LIVE line timezone: the leading clock is destination-local (same tz the main arrival
   // number uses) already, by virtue of using showTz — nothing to change there. What's new
-  // is a muted "your clock" addendum, mirroring etaYours, when the driver's own origin tz
-  // differs from the destination's. Force a real tz mismatch via a fresh context (device
-  // clock in LA, destination in Nashville/Central) rather than trusting the code reads
-  // right without ever actually observing two different clocks.
+  // is a muted "current device timezone" addendum, mirroring etaYours, when the driver's
+  // own origin tz differs from the destination's. Force a real tz mismatch via a fresh
+  // context (device clock in LA, destination in Nashville/Central) rather than trusting
+  // the code reads right without ever actually observing two different clocks.
   const tzCtx = await browser.newContext({ timezoneId: "America/Los_Angeles" });
   const tzPage = await tzCtx.newPage();
   const tzErrors = [];
@@ -394,10 +394,10 @@ try {
   await tzPage.click("#liveBtn");
   await tzPage.waitForTimeout(300);
   const mismatchLine = (await tzPage.textContent("#liveLine"))?.trim() || "";
-  if (!/your clock$/.test(mismatchLine))
-    fail(`LIVE line should append a your-clock addendum when origin/destination tz differ, got ${JSON.stringify(mismatchLine)}`);
+  if (!/current device timezone$/.test(mismatchLine))
+    fail(`LIVE line should append a current-device-timezone addendum when origin/destination tz differ, got ${JSON.stringify(mismatchLine)}`);
   if (!mismatchLine.includes("PDT") && !mismatchLine.includes("PST"))
-    fail(`your-clock addendum should be in the origin's (Pacific) tz, got ${JSON.stringify(mismatchLine)}`);
+    fail(`current-device-timezone addendum should be in the origin's (Pacific) tz, got ${JSON.stringify(mismatchLine)}`);
   if (tzErrors.length) fail("tz-mismatch page errors: " + JSON.stringify(tzErrors, null, 2));
   await tzCtx.close();
 
@@ -415,8 +415,8 @@ try {
   await sameTzPage.click("#liveBtn");
   await sameTzPage.waitForTimeout(300);
   const sameTzLine = (await sameTzPage.textContent("#liveLine"))?.trim() || "";
-  if (/your clock$/.test(sameTzLine))
-    fail(`LIVE line should NOT show a your-clock addendum when origin and destination share a tz, got ${JSON.stringify(sameTzLine)}`);
+  if (/current device timezone$/.test(sameTzLine))
+    fail(`LIVE line should NOT show a current-device-timezone addendum when origin and destination share a tz, got ${JSON.stringify(sameTzLine)}`);
   if (sameTzErrors.length) fail("same-tz page errors: " + JSON.stringify(sameTzErrors, null, 2));
   await sameTzCtx.close();
 

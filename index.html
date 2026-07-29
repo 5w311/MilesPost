@@ -661,7 +661,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.1.2</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.1.3</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -1208,8 +1208,8 @@ function renderEta(){
   if(E.destName) $("destChip").textContent = E.destName + " · " + tzTag(E.destTz);
   $("apptLbl").textContent = "Appointment · " + tzTag(showTz) + " (optional)";
   $("etaLabel").textContent = "Arrival · " + (E.destName
-    ? E.destName + " · " + tzTag(E.destTz)
-    : E.destTz ? "Destination · " + tzTag(E.destTz)
+    ? E.destName
+    : E.destTz ? "Destination"
     : "set a destination below");
 
   const M = Number($("miles").value) || 0;
@@ -1238,7 +1238,7 @@ function renderEta(){
 
   if(E.destTz && E.destTz !== E.originTz){
     show($("etaYours"), true);
-    $("etaYours").textContent = clockOf(eta, E.originTz)+" "+tzTag(E.originTz)+" · your clock";
+    $("etaYours").textContent = clockOf(eta, E.originTz)+" "+tzTag(E.originTz)+" · current device timezone";
   }
 
   if(E.mode==="quick"){
@@ -1262,9 +1262,10 @@ function renderEta(){
       // The clock leads in showTz (destination-local — same tz the main arrival number
       // uses), so it already reads correctly for wherever the truck is headed. When the
       // driver's own origin is a different zone, append a muted device-clock reading —
-      // same "HH:MM TZ · your clock" wording etaYours already uses for the main readout,
-      // just scoped to LIVE's own liveEta rather than the tuned/quick model's eta (the two
-      // can differ, since LIVE is solved from right now rather than the typed departure).
+      // same "HH:MM TZ · current device timezone" wording etaYours already uses for the
+      // main readout, just scoped to LIVE's own liveEta rather than the tuned/quick
+      // model's eta (the two can differ, since LIVE is solved from right now rather than
+      // the typed departure).
       $("liveLine").innerHTML = "<span class=\"liveBadge\">LIVE</span> "
         + "<span class=\"liveText\"><b>"+clockOf(LIVE.res.liveEta, showTz)+"</b> "+tzTag(showTz)+" "
         + dayOf(LIVE.res.liveEta, showTz)
@@ -1272,7 +1273,7 @@ function renderEta(){
         + (LIVE.trafficS >= 300 ? " · traffic +"+Math.round(LIVE.trafficS/60)+"m" : "")
         + (E.destTz && E.destTz !== E.originTz
             ? " · <span style=\"color:var(--mute)\">"+clockOf(LIVE.res.liveEta, E.originTz)
-              +" "+tzTag(E.originTz)+" · your clock</span>"
+              +" "+tzTag(E.originTz)+" · current device timezone</span>"
             : "")
         + "</span>";
       $("liveNote").textContent = "Traffic is right-now conditions — it mainly shapes the "
