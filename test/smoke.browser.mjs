@@ -301,6 +301,17 @@ try {
   const filledMiles = await autofillPage.inputValue("#miles");
   if (filledMiles !== "400")
     fail(`blank miles should autofill from the live route distance, got ${JSON.stringify(filledMiles)}`);
+  // The autofill runs the field through repaintField(), which drops it out of layout and
+  // restores it to force Mobile Safari to redraw. The redraw itself can't be observed in
+  // Chromium, but the cleanup can: if the restore is ever dropped the field stays
+  // display:none and vanishes outright, which is far worse than the bug being fixed.
+  const milesBox = await autofillPage.evaluate(() => {
+    const el = document.getElementById("miles");
+    return { inline: el.style.display, computed: getComputedStyle(el).display,
+             visible: el.getBoundingClientRect().height > 0 };
+  });
+  if (milesBox.inline !== "" || milesBox.computed === "none" || !milesBox.visible)
+    fail(`miles field must be left visible after the repaint, got ${JSON.stringify(milesBox)}`);
   if (autofillErrors.length) fail("autofill page errors: " + JSON.stringify(autofillErrors, null, 2));
   await autofillPage.close();
 
