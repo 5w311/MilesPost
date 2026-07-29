@@ -349,6 +349,130 @@ try {
   if (keepErrors.length) fail("keep-miles page errors: " + JSON.stringify(keepErrors, null, 2));
   await keepPage.close();
 
+  // Override ON: the driver has opted in, so live now wins even over a typed mileage —
+  // the exact opposite of the keepPage case above, which is the default (override off).
+  const overridePage = await browser.newPage();
+  const overrideErrors = [];
+  overridePage.on("pageerror", e => overrideErrors.push("pageerror: " + e.message));
+  await mockHere(overridePage);
+  await overridePage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await overridePage.fill("#miles", "250");
+  await overridePage.dispatchEvent("#miles", "input");
+  await overridePage.fill("#destIn", "Nashville TN");
+  await overridePage.click("#destSet");
+  await overridePage.click("#tabTuned");
+  await overridePage.click("#overrideBtn");
+  await overridePage.click("#liveBtn");
+  await overridePage.waitForTimeout(300);
+  const overriddenMiles = await overridePage.inputValue("#miles");
+  if (overriddenMiles === "250" || overriddenMiles === "")
+    fail(`override on should overwrite a typed mileage with the live distance, got ${JSON.stringify(overriddenMiles)}`);
+  if (overrideErrors.length) fail("override page errors: " + JSON.stringify(overrideErrors, null, 2));
+  await overridePage.close();
+
+  // CLEAR after a live quote: LIVE.res/at/note must be invalidated, not just the fields.
+  // Note this ISN'T visible as "the LIVE line disappears right after tapping CLEAR" — it
+  // already does, simply because miles goes to 0 and renderEta() bails out early before
+  // ever reaching the liveOn check. The actual bug is subtler and only shows up one step
+  // later: if a stale LIVE.res/at survive the clear, entering a BRAND NEW destination
+  // afterwards (one that was never live-quoted) would still show a fresh-looking "LIVE"
+  // line — for the OLD destination's route, mislabeled onto the new one. Reproduce that
+  // exact sequence: quote live for Nashville, CLEAR, then set a new destination (Laredo)
+  // and miles WITHOUT tapping UPDATE LIVE ETA again — the LIVE line must stay hidden.
+  // Tuning (preset/tuned values/swap schedule) must be untouched throughout — CLEAR
+  // empties the load, not the truck.
+  const clearLivePage = await browser.newPage();
+  const clearLiveErrors = [];
+  clearLivePage.on("pageerror", e => clearLiveErrors.push("pageerror: " + e.message));
+  await mockHere(clearLivePage);
+  await clearLivePage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await clearLivePage.fill("#destIn", "Nashville TN");
+  await clearLivePage.click("#destSet");
+  await clearLivePage.click("#tabTuned");
+  await clearLivePage.locator("#presets button").nth(2).click();   // Push — distinct from the default Realistic
+  await clearLivePage.click("#liveBtn");
+  await clearLivePage.waitForTimeout(300);
+  if (!(await clearLivePage.isVisible("#liveLine")))
+    fail("LIVE line should be showing before CLEAR (setup check)");
+  const tuneBefore = await clearLivePage.evaluate(() => ({
+    preset: [...document.getElementById("presets").children].find(b => b.getAttribute("aria-selected") === "true")?.textContent,
+    tune: ["mph","fuelEvery","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
+    swap: ["swapA","swapB","swapTz"].map(id => document.getElementById(id).value),
+  }));
+  await clearLivePage.click("#etaClear");                   // arm
+  await clearLivePage.click("#etaClear");                   // confirm
+  await clearLivePage.waitForTimeout(150);
+  if (await clearLivePage.isVisible("#liveLine"))
+    fail("CLEAR should hide a showing LIVE line immediately (miles is 0, so this is the easy part)");
+  // Now the real check: a new destination, never live-quoted, must not inherit Nashville's
+  // stale LIVE.res — set miles directly (bypassing UPDATE LIVE ETA) so only a leftover
+  // LIVE.res/at could possibly make the line reappear.
+  await clearLivePage.fill("#destIn", "Laredo TX");
+  await clearLivePage.click("#destSet");
+  await clearLivePage.fill("#miles", "900");
+  await clearLivePage.dispatchEvent("#miles", "input");
+  await clearLivePage.waitForTimeout(150);
+  if (await clearLivePage.isVisible("#liveLine"))
+    fail("a brand-new destination must not inherit a stale LIVE quote left over from before CLEAR");
+  const tuneAfter = await clearLivePage.evaluate(() => ({
+    preset: [...document.getElementById("presets").children].find(b => b.getAttribute("aria-selected") === "true")?.textContent,
+    tune: ["mph","fuelEvery","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
+    swap: ["swapA","swapB","swapTz"].map(id => document.getElementById(id).value),
+  }));
+  if (JSON.stringify(tuneBefore) !== JSON.stringify(tuneAfter))
+    fail(`CLEAR must not touch tuning/preset/swap, got ${JSON.stringify(tuneBefore)} -> ${JSON.stringify(tuneAfter)}`);
+  if (clearLiveErrors.length) fail("clear-live page errors: " + JSON.stringify(clearLiveErrors, null, 2));
+  await clearLivePage.close();
+
+  // Per-field "×" buttons: each clears only its own field, leaving the other field (and
+  // tuning) untouched. Miles first, then destination, on two independent fresh pages so
+  // one test can't mask the other.
+  const milesClearPage = await browser.newPage();
+  const milesClearErrors = [];
+  milesClearPage.on("pageerror", e => milesClearErrors.push("pageerror: " + e.message));
+  await milesClearPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await milesClearPage.fill("#miles", "500");
+  await milesClearPage.dispatchEvent("#miles", "input");
+  await milesClearPage.fill("#destIn", "Nashville TN");
+  await milesClearPage.click("#destSet");
+  await milesClearPage.waitForTimeout(100);
+  if (!(await milesClearPage.isVisible("#milesClear")))
+    fail("#milesClear should be visible once miles has content");
+  await milesClearPage.click("#milesClear");
+  await milesClearPage.waitForTimeout(100);
+  if ((await milesClearPage.inputValue("#miles")) !== "")
+    fail("#milesClear should empty the miles field");
+  if (await milesClearPage.isVisible("#milesClear"))
+    fail("#milesClear should hide itself once its field is empty");
+  if ((await milesClearPage.inputValue("#destIn")) !== "Nashville TN")
+    fail("#milesClear must not touch the destination field");
+  if (!(await milesClearPage.isVisible("#destMeta")))
+    fail("#milesClear must not un-resolve an already-set destination");
+  if (milesClearErrors.length) fail("milesClear page errors: " + JSON.stringify(milesClearErrors, null, 2));
+  await milesClearPage.close();
+
+  const destClearPage = await browser.newPage();
+  const destClearErrors = [];
+  destClearPage.on("pageerror", e => destClearErrors.push("pageerror: " + e.message));
+  await destClearPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await destClearPage.fill("#miles", "500");
+  await destClearPage.dispatchEvent("#miles", "input");
+  await destClearPage.fill("#destIn", "Nashville TN");
+  await destClearPage.click("#destSet");
+  await destClearPage.waitForTimeout(100);
+  if (!(await destClearPage.isVisible("#destClear")))
+    fail("#destClear should be visible once destIn has content");
+  await destClearPage.click("#destClear");
+  await destClearPage.waitForTimeout(100);
+  if ((await destClearPage.inputValue("#destIn")) !== "")
+    fail("#destClear should empty the destination field");
+  if (await destClearPage.isVisible("#destMeta"))
+    fail("#destClear should un-resolve the destination (destMeta hidden)");
+  if ((await destClearPage.inputValue("#miles")) !== "500")
+    fail("#destClear must not touch the miles field");
+  if (destClearErrors.length) fail("destClear page errors: " + JSON.stringify(destClearErrors, null, 2));
+  await destClearPage.close();
+
   // ---- City suggestions (destIn/origIn/rsIn share one mechanism — test destIn as the
   // representative case). The primary source is HERE Autocomplete (types=city), which
   // returns cities only — including same-named cities in different states. Mocked items
@@ -463,7 +587,7 @@ try {
   if (await page.isVisible("#helpBackdrop")) fail("tapping the backdrop should close the help modal");
 
   if (!process.exitCode)
-    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one, live re-quote refreshes its own autofilled miles, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
+    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one (override off) but always overwrites when override is on, live re-quote refreshes its own autofilled miles, CLEAR invalidates a stale LIVE quote without touching tuning, per-field × buttons clear independently, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
 } finally {
   await browser.close();
   server.close();
