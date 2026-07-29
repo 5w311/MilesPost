@@ -300,6 +300,9 @@
   .big{font-family:var(--mono);font-size:46px;font-weight:700;color:var(--amber);
     letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
   .big.done{color:var(--good)}
+  /* Timezone suffix on the big clock numbers — deliberately NOT sized/weighted to match
+     the 46px readout, so it reads as a small unit label rather than a second number. */
+  .big-tz{font-size:16px;font-weight:400;color:var(--mute);letter-spacing:normal}
   .day{font-family:var(--mono);font-size:13px;margin-top:6px}
   .sub{font-family:var(--mono);font-size:12px;color:var(--mute);margin-top:12px;
     padding-top:12px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
@@ -316,6 +319,13 @@
     border-radius:var(--r-pill);padding:2px 8px;line-height:1.4}
   .liveText{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink)}
   .liveText b{font-weight:600}
+  /* ON/OFF text next to the override switch — the knob is always the same amber
+     regardless of state (only its position changes), so a glance at the pill alone
+     doesn't say which side is which. --good on, so it doesn't read as another amber
+     "primary" thing and doesn't clash with the knob's own always-amber fill. */
+  .overrideState{font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    color:var(--mute)}
+  .overrideState.on{color:var(--good);font-weight:600}
   .note{font-family:var(--mono);font-size:12px;color:var(--mute);line-height:1.7;margin-top:14px}
 
   /* ETA run strip: drive legs split by stops */
@@ -494,10 +504,9 @@
         <label for="destIn">Destination town</label>
         <div class="row" style="position:relative">
           <div class="fieldwrap" style="flex:1">
-            <input id="destIn" placeholder="e.g. Laredo, TX" autocomplete="off">
+            <input id="destIn" placeholder="e.g. Laredo, TX" autocomplete="off" enterkeyhint="done">
             <button type="button" class="fieldClear hide" id="destClear" aria-label="Clear destination">×</button>
           </div>
-          <button class="go" id="destSet">SET</button>
           <div class="suggest hide" id="destSuggest"></div>
         </div>
         <div class="meta hide" id="destMeta"><span class="chip" id="destChip"></span></div>
@@ -550,10 +559,13 @@
             <div class="lbl" style="margin-bottom:0">Override</div>
             <button class="help-btn" id="overrideHelp" aria-label="What is this?" type="button"><span>?</span></button>
           </div>
-          <button class="switch" id="overrideBtn" role="switch" aria-checked="false"
-                  aria-label="Always overwrite mileage with the live route distance">
-            <i class="knob"></i>
-          </button>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="overrideState" id="overrideState">OFF</span>
+            <button class="switch" id="overrideBtn" role="switch" aria-checked="false"
+                    aria-label="Always overwrite mileage with the live route distance">
+              <i class="knob"></i>
+            </button>
+          </div>
         </div>
       </div>
       <button class="primary" id="liveBtn" style="margin-top:12px">UPDATE LIVE ETA</button>
@@ -649,7 +661,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.1.1</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.1.2</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -669,6 +681,12 @@ import {
   solveEtaLive, liveFresh, LIVE_MAX_AGE_MS, formatPlaceSuggestions,
   RESET_HOURS, AUTO_CLEAR_MS, autoClearElapsed, icsStamp, esc
 } from "./lib/logic.js";
+
+/* Every clock in the app carries its own timezone marking — never just implied by a
+   label elsewhere on the card. For the two big readout numbers (etaClock/rsClock) the
+   tag rides along as a smaller, muted suffix rather than matching the giant font, which
+   would read as a second clock rather than a unit label. */
+const clockWithTz = (d, tz) => clockOf(d, tz) + "<span class=\"big-tz\"> " + tzTag(tz) + "</span>";
 
 /* ======================= theme ======================= */
 const THEME_KEY = "milespost.theme";
@@ -1103,7 +1121,11 @@ $("tuneToggle").onclick = ()=>{
 // generic .switch[aria-checked="true"] CSS rule) rather than the page theme. Left visible
 // regardless of whether tuning is open — it's unrelated to tuning and always relevant
 // whenever the driver might tap UPDATE LIVE ETA.
-const renderOverrideBtn = () => $("overrideBtn").setAttribute("aria-checked", String(E.liveOverride));
+const renderOverrideBtn = () => {
+  $("overrideBtn").setAttribute("aria-checked", String(E.liveOverride));
+  $("overrideState").textContent = E.liveOverride ? "ON" : "OFF";
+  $("overrideState").classList.toggle("on", E.liveOverride);
+};
 $("overrideBtn").onclick = () => { E.liveOverride = !E.liveOverride; renderOverrideBtn(); saveEta(); };
 renderOverrideBtn();
 
@@ -1119,10 +1141,12 @@ const doDest = ()=>{
   }
   renderEta();
 };
-$("destSet").onclick = doDest;
+// No SET button on this field — resolving happens on Enter (enterkeyhint="done" labels
+// the mobile keyboard's return key accordingly) or by tapping a suggestion, which already
+// covers the field via attachPlaceSuggest's onPick below.
 $("destIn").addEventListener("keydown", e=>{ if(e.key==="Enter") doDest(); });
 // Same pattern as miles/appt/depart: renderEta() on every keystroke so #destClear's
-// visibility (tied to $("destIn").value in renderEta) tracks typing live, not just SET.
+// visibility (tied to $("destIn").value in renderEta) tracks typing live, not just on commit.
 $("destIn").addEventListener("input", renderEta);
 $("destPick").onchange = e=>{ E.destTz=e.target.value; E.destName="";
   show($("destErr"),false); show($("destPick"),false); renderEta(); };
@@ -1209,7 +1233,7 @@ function renderEta(){
     solveEta({ miles:M, p:E.p, swap:E.swap, startMs:start.getTime() });
   const eta = E.mode==="quick" ? quickEta : tunedEta;
 
-  $("etaClock").textContent = clockOf(eta, showTz);
+  $("etaClock").innerHTML = clockWithTz(eta, showTz);
   $("etaDay").textContent = dayOf(eta, showTz);
 
   if(E.destTz && E.destTz !== E.originTz){
@@ -1221,8 +1245,8 @@ function renderEta(){
     const diffH = (tunedEta-quickEta)/3600e3;
     show($("quickNote"), true);
     $("quickNote").innerHTML = M+" mi ÷ "+RATE+" = <span style='color:var(--ink)'>"+hm(quickH)+
-      "</span> all-in<br>Tuned model says "+clockOf(tunedEta,showTz)+" ("+hm(diffH)+" "+
-      (diffH<=0 ? "ahead of" : "behind")+" dispatch)";
+      "</span> all-in<br>Tuned model says "+clockOf(tunedEta,showTz)+" "+tzTag(showTz)+
+      " ("+hm(diffH)+" "+(diffH<=0 ? "ahead of" : "behind")+" dispatch)";
   } else {
     // Who's behind the wheel when we roll in — swaps run on a fixed clock, so arrival
     // time picks the shift. Tuned view only; Estimated has no swap concept.
@@ -1235,11 +1259,21 @@ function renderEta(){
     const liveOn = liveFresh(LIVE.at, Date.now()) && LIVE.res;
     if(liveOn){
       show($("liveLine"), true); show($("liveNote"), true);
+      // The clock leads in showTz (destination-local — same tz the main arrival number
+      // uses), so it already reads correctly for wherever the truck is headed. When the
+      // driver's own origin is a different zone, append a muted device-clock reading —
+      // same "HH:MM TZ · your clock" wording etaYours already uses for the main readout,
+      // just scoped to LIVE's own liveEta rather than the tuned/quick model's eta (the two
+      // can differ, since LIVE is solved from right now rather than the typed departure).
       $("liveLine").innerHTML = "<span class=\"liveBadge\">LIVE</span> "
-        + "<span class=\"liveText\">· <b>"+clockOf(LIVE.res.liveEta, showTz)+"</b> "
+        + "<span class=\"liveText\"><b>"+clockOf(LIVE.res.liveEta, showTz)+"</b> "+tzTag(showTz)+" "
         + dayOf(LIVE.res.liveEta, showTz)
         + " · "+Math.round(LIVE.res.miles)+" mi truck route"
         + (LIVE.trafficS >= 300 ? " · traffic +"+Math.round(LIVE.trafficS/60)+"m" : "")
+        + (E.destTz && E.destTz !== E.originTz
+            ? " · <span style=\"color:var(--mute)\">"+clockOf(LIVE.res.liveEta, E.originTz)
+              +" "+tzTag(E.originTz)+" · your clock</span>"
+            : "")
         + "</span>";
       $("liveNote").textContent = "Traffic is right-now conditions — it mainly shapes the "
         + "next few hours. The truck-legal routing applies to the whole run.";
@@ -1477,7 +1511,7 @@ function renderReset(){
   const pending = now < R.shutMs;          // planned, not started
 
   $("rsLabel").textContent = done ? "Legal now · 70 hours back" : "Legal at · "+tzTag(R.tz);
-  $("rsClock").textContent = clockOf(legal, R.tz);
+  $("rsClock").innerHTML = clockWithTz(legal, R.tz);
   $("rsDay").textContent = dayOf(legal, R.tz);
   $("rsClock").classList.toggle("done", done);
   $("rsReadout").classList.toggle("done", done);
@@ -1486,7 +1520,7 @@ function renderReset(){
   ["rsCount","bars","rsScale"].forEach(id=>show($(id), true));
   if(pending){
     $("rsCount").innerHTML = "Clock starts in <b>"+hms(R.shutMs-now)+"</b> · "+
-      clockOf(shut,R.tz)+" "+dayOf(shut,R.tz);
+      clockOf(shut,R.tz)+" "+tzTag(R.tz)+" "+dayOf(shut,R.tz);
   } else if(done){
     const secs = Math.max(0, Math.ceil((R.shutMs + RESET_HOURS*3600e3 + AUTO_CLEAR_MS - now)/1000));
     const clr = Math.floor(secs/60)+":"+String(secs%60).padStart(2,"0");

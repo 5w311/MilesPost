@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.1.1**
+**Current version: v3.1.2**
 
 ## Files
 
@@ -51,6 +51,32 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.1.2
+
+- **Removed the redundant SET button on Destination Town.** Resolving already worked two
+  other ways — pressing Enter (the field's mobile keyboard now labels its return key
+  "done" via `enterkeyhint`) and tapping a suggestion — so the button next to it was
+  dead weight. The field now fills the whole row.
+- **Dropped the stray "· " before the LIVE line's time** — "LIVE 23:14 ..." instead of
+  "LIVE · 23:14 ...", now that "LIVE" is its own badge and doesn't need a separator to
+  read as a distinct label.
+- **Clear ON/OFF text next to the override switch.** The knob is always the same amber
+  regardless of state — only its position changes — so at a glance there was no way to
+  tell which side meant what. Now reads "OFF" (muted) or "ON" (green, distinct from the
+  knob's own always-amber fill so it doesn't look like it's describing the knob's color).
+- **The LIVE line now shows the driver's own clock too, when it differs from the
+  destination's.** The leading time was already destination-local — same tz the main
+  arrival number uses — verified by an actual timezone-mismatch test rather than assumed
+  correct from reading the code. What was missing was LIVE's own equivalent of the main
+  readout's "· your clock" line; it now appends one (muted, using LIVE's own `liveEta`,
+  not the tuned/quick model's `eta` — the two can genuinely differ, since LIVE solves
+  from right now rather than the typed departure time).
+- **Every clock in the app now carries its own timezone marking**, not just implied by a
+  header label elsewhere on the card. Covers the two big readout numbers (a smaller,
+  muted suffix so it doesn't compete with the 46px digits), the Simple ETA tab's "Tuned
+  model says..." comparison, the LIVE line's leading time, and the 34-Reset "Clock
+  starts in..." pending preview.
 
 ### v3.1.1
 
