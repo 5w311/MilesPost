@@ -497,6 +497,12 @@
           <input id="miles" type="number" inputmode="decimal">
           <button type="button" class="fieldClear hide" id="milesClear" aria-label="Clear miles">×</button>
           <span class="suffix">mi</span>
+          <!-- Simple-tab-only: the Tuned tab's UPDATE LIVE ETA already covers this (and
+               more — full traffic-aware routing). Compact secondary action, not the
+               full-width .primary CTA that button uses. Visibility driven from
+               renderEta() below, same pattern as milesClear/destClear. -->
+          <button type="button" class="go hide" id="getMiBtn" style="margin-top:8px">GET MILEAGE</button>
+          <div class="err hide" id="getMiNote"></div>
         </div>
       </div>
 
@@ -661,7 +667,7 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.1.3</div>
+  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.1.4</div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -678,7 +684,7 @@
 import {
   resolvePlace, ZONE_LIST, deviceTz, tzTag, fromWall, toWall, clockOf, dayOf, hm, hms,
   RATE, PRESETS, PRESET_VERSION, SWAP_DEFAULT, solveEta, shiftAtArrival,
-  solveEtaLive, liveFresh, LIVE_MAX_AGE_MS, formatPlaceSuggestions,
+  solveEtaLive, liveFresh, LIVE_MAX_AGE_MS, formatPlaceSuggestions, metersToMiles,
   RESET_HOURS, AUTO_CLEAR_MS, autoClearElapsed, icsStamp, esc
 } from "./lib/logic.js";
 
@@ -982,41 +988,46 @@ const hereErr = async (label, res) => {
   return new Error(label+" "+res.status+(detail ? ": "+detail.slice(0,90) : ""));
 };
 
+/* Shared by UPDATE LIVE ETA (Tuned tab) and GET MILEAGE (Simple tab) — geocodes the
+   destination, then asks HERE for a truck-legal route to it. No departureTime on
+   purpose: v8 defaults it to the request time ("now"), which is what makes the
+   duration traffic-aware. The literal departureTime=now is v7 syntax and 400s on v8
+   ("Malformed request"). */
+async function fetchTruckRoute(destName){
+  const here = await geoPos();
+  const g = await fetch("https://geocode.search.hereapi.com/v1/geocode?q="
+    + encodeURIComponent(destName) + "&apikey=" + HERE_API_KEY);
+  if(!g.ok) throw await hereErr("geocode", g);
+  const gj = await g.json();
+  const pos = gj.items && gj.items[0] && gj.items[0].position;
+  if(!pos) throw new Error("geocode: no match for "+destName);
+
+  const q = new URLSearchParams({
+    transportMode:"truck",
+    origin: here.latitude + "," + here.longitude,
+    destination: pos.lat + "," + pos.lng,
+    return: "summary",
+    apikey: HERE_API_KEY
+  });
+  Object.entries(TRUCK).forEach(([k,v]) => q.append("vehicle["+k+"]", v));
+  const rt = await fetch("https://router.hereapi.com/v8/routes?" + q);
+  // A rejection here (e.g. free plan refusing truck params) surfaces HERE's own error
+  // title in the note, so it can be reported exactly even from a phone.
+  if(!rt.ok) throw await hereErr("route", rt);
+  const j = await rt.json();
+  const secs = (j.routes && j.routes[0] && j.routes[0].sections) || [];
+  if(!secs.length) throw new Error("route: no sections");
+  const sum = k => secs.reduce((a,s) => a + (Number(s.summary && s.summary[k]) || 0), 0);
+  return { duration: sum("duration"), length: sum("length"), base: sum("baseDuration") };
+}
+
 async function updateLive(){
   if(LIVE.pending) return;
   LIVE.tried = true;
   if(!E.destName){ LIVE.note = "set a destination to get a live ETA"; renderEta(); return; }
   LIVE.pending = true; renderLiveBtn();
   try{
-    const here = await geoPos();
-    const g = await fetch("https://geocode.search.hereapi.com/v1/geocode?q="
-      + encodeURIComponent(E.destName) + "&apikey=" + HERE_API_KEY);
-    if(!g.ok) throw await hereErr("geocode", g);
-    const gj = await g.json();
-    const pos = gj.items && gj.items[0] && gj.items[0].position;
-    if(!pos) throw new Error("geocode: no match for "+E.destName);
-
-    /* No departureTime on purpose: v8 defaults it to the request time ("now"), which is
-       what makes the duration traffic-aware. The literal departureTime=now is v7 syntax
-       and 400s on v8 ("Malformed request"). */
-    const q = new URLSearchParams({
-      transportMode:"truck",
-      origin: here.latitude + "," + here.longitude,
-      destination: pos.lat + "," + pos.lng,
-      return: "summary",
-      apikey: HERE_API_KEY
-    });
-    Object.entries(TRUCK).forEach(([k,v]) => q.append("vehicle["+k+"]", v));
-    const rt = await fetch("https://router.hereapi.com/v8/routes?" + q);
-    // A rejection here (e.g. free plan refusing truck params) surfaces HERE's own error
-    // title in the note, so it can be reported exactly even from a phone.
-    if(!rt.ok) throw await hereErr("route", rt);
-    const j = await rt.json();
-    const secs = (j.routes && j.routes[0] && j.routes[0].sections) || [];
-    if(!secs.length) throw new Error("route: no sections");
-    const sum = k => secs.reduce((a,s) => a + (Number(s.summary && s.summary[k]) || 0), 0);
-    const duration = sum("duration"), length = sum("length"), base = sum("baseDuration");
-
+    const { duration, length, base } = await fetchTruckRoute(E.destName);
     const startMs = Date.now();             // live means from where the truck sits right now
     LIVE.res = solveEtaLive({ driveSeconds:duration, meters:length, p:E.p, swap:E.swap, startMs });
     // Convenience only: fill miles from the real road distance when the field is blank, or
@@ -1058,6 +1069,42 @@ const renderLiveBtn = () => {
   $("liveBtn").disabled = LIVE.pending;
 };
 $("liveBtn").onclick = () => updateLive();
+
+/* Simple tab only: a destination is set but miles is still blank, so there's a real road
+   distance to fetch but no ETA math has anything to chew on yet. This is deliberately
+   narrow — it fills #miles and nothing else. Unlike updateLive() it never touches
+   LIVE.res/at/trafficS/note, because those represent an actual live/traffic-aware quote,
+   and Simple ETA never shows a LIVE line — producing one here would be a quote with
+   nowhere to display and no tab that means what it implies.
+   Writing into LIVE.autoMiles (not a separate tracker) is deliberate too: a mileage this
+   button fills is just as much "the app's own number" as one UPDATE LIVE ETA would write,
+   so if the driver later switches to Tuned and taps that button, it's correctly free to
+   refresh this same figure rather than treating it as hand-typed. */
+let getMiPending = false;
+async function getMileageOnly(){
+  if(getMiPending || !E.destName) return;
+  getMiPending = true; renderGetMiBtn();
+  try{
+    const { length } = await fetchTruckRoute(E.destName);
+    const milesEl = $("miles");
+    LIVE.autoMiles = String(Math.round(metersToMiles(length)));
+    milesEl.value = LIVE.autoMiles;
+    milesEl.dispatchEvent(new Event("input", {bubbles:true}));
+    repaintField(milesEl);
+    show($("getMiNote"), false);
+  }catch(err){
+    console.warn("get mileage unavailable:", err);
+    $("getMiNote").textContent = "couldn't get mileage ("
+      + ((err && err.message) || "error") + ") — enter it manually";
+    show($("getMiNote"), true);
+  }
+  getMiPending = false; renderGetMiBtn(); renderEta();
+}
+const renderGetMiBtn = () => {
+  $("getMiBtn").textContent = getMiPending ? "GETTING MILEAGE…" : "GET MILEAGE";
+  $("getMiBtn").disabled = getMiPending;
+};
+$("getMiBtn").onclick = () => getMileageOnly();
 
 const saveEta = () => { try{ localStorage.setItem("milespost.eta",
   JSON.stringify({pv:PRESET_VERSION, mode:E.mode, preset:E.preset, p:E.p, swap:E.swap,
@@ -1213,6 +1260,14 @@ function renderEta(){
     : "set a destination below");
 
   const M = Number($("miles").value) || 0;
+  // GET MILEAGE: Simple tab only (Tuned already has UPDATE LIVE ETA, which covers this
+  // and more), and only while there's a destination to route to but no miles yet — the
+  // instant miles gets a value some other way, this has nothing left to do. Hiding the
+  // button also drops its own stale error note, so a failure from a previous destination
+  // can't linger once the button it belongs to is gone.
+  const showGetMi = E.mode === "quick" && !!E.destTz && M === 0;
+  show($("getMiBtn"), showGetMi);
+  if(!showGetMi) show($("getMiNote"), false);
   const start = fromWall($("depart").value, E.originTz);
 
   // Inert until the load has something in it — nothing to clear otherwise.
