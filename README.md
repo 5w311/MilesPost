@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.1.3**
+**Current version: v3.1.4**
 
 ## Files
 
@@ -51,6 +51,24 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.1.4
+
+- **"GET MILEAGE" button on the Simple ETA tab.** If a destination is set but miles is
+  still blank, a small button appears next to the field and fetches the real road
+  distance (the same HERE truck-routing call UPDATE LIVE ETA already uses) to fill it in
+  — for a driver who typed the destination before knowing dispatch's mileage figure. This
+  does **not** produce a live/traffic-aware ETA — Simple ETA stays flat miles÷50 on
+  purpose, and this button never touches `LIVE.res`/`at`/`trafficS`/`note`. It only fills
+  the field, same as picking dispatch's own number would. Never shows on the Tuned tab —
+  UPDATE LIVE ETA already covers this there, and more.
+- The fetch itself is now `fetchTruckRoute()`, a small function factored out of
+  `updateLive()` so both buttons share one path instead of two copies of the same
+  geocode-then-route call. `updateLive()`'s own behavior is unchanged — confirmed via the
+  full existing test suite before adding anything new on top.
+- `lib/logic.js` gains `metersToMiles()`, the meters→miles conversion that used to be a
+  literal `1609.344` inlined once inside `solveEtaLive`. Now there's one source of truth
+  for a constant two different features both need.
 
 ### v3.1.3
 
