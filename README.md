@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.1.4**
+**Current version: v3.1.5**
 
 ## Files
 
@@ -51,6 +51,22 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.1.5
+
+- **Tap the version number in the footer to check for an update right now**, instead of
+  waiting on the browser's own update-check schedule (iOS Safari especially can lag well
+  behind an actual deploy). Taps through "CHECKING FOR UPDATES…" → either "YOU'RE UP TO
+  DATE" (reverts to the version stamp after a couple seconds) or "UPDATING…" if a new
+  version is found — which stays up while the page finishes swapping over and reloads on
+  its own, exactly as it already did before this change. Nothing about *how* an update
+  installs changed; this only asks the browser to check sooner.
+- The version footer is now a real `<button>` instead of a plain `<div>` (proper
+  accessibility for something now genuinely interactive), styled identically to how it
+  always looked. The service worker registration is also kept around and told never to
+  serve `sw.js` itself from HTTP cache (`updateViaCache: "none"`) — a client-side
+  guarantee that doesn't depend on assuming anything about GitHub Pages' own cache
+  headers, and what makes an on-demand check actually meaningful.
 
 ### v3.1.4
 

@@ -667,7 +667,10 @@
     </div>
   </div>
 
-  <div class="foot" style="text-align:center;opacity:.55">MilesPost v3.1.4</div>
+  <button type="button" id="verFoot" class="foot" aria-label="Check for app updates"
+    style="text-align:center;opacity:.55;background:none;border:none;width:100%">
+    MilesPost v3.1.5
+  </button>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -1616,6 +1619,9 @@ try{ startView = localStorage.getItem("milespost.view") || "eta"; }catch{}
 setView(startView === "reset" ? "reset" : "eta");
 setInterval(renderReset, 1000);      // the countdown has to tick
 
+// Module-scope (not block-scoped inside the `if` below) so the version-footer click
+// handler elsewhere in this script can reach it via closure once it's populated.
+let swReg = null;
 if("serviceWorker" in navigator){
   const hadController = !!navigator.serviceWorker.controller;
   let reloading = false;
@@ -1624,8 +1630,42 @@ if("serviceWorker" in navigator){
     reloading = true;
     location.reload();
   });
-  window.addEventListener("load", ()=> navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+  // updateViaCache:"none" is a client-side guarantee that sw.js itself is never served
+  // from HTTP cache on an update check — doesn't depend on assuming anything about GitHub
+  // Pages' own cache headers. The registration is kept so the version footer (below) can
+  // call swReg.update() on demand instead of waiting on the browser's own check schedule.
+  window.addEventListener("load", ()=>
+    navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
+      .then(r => { swReg = r; })
+      .catch(()=>{})
+  );
 }
+
+/* Manual, driver-initiated update check — no polling/background timer. Browsers (iOS
+   Safari especially) check for a new sw.js on their own schedule, which can lag well
+   behind an actual deploy; this asks right now instead of waiting on that schedule.
+   Everything downstream already works (skipWaiting/clients.claim in sw.js, the
+   controllerchange reload above) — this only ever triggers the check itself. */
+const verFoot = $("verFoot");
+const verFootDefault = verFoot.textContent.trim();
+verFoot.onclick = async () => {
+  if(!swReg) return;                 // SW unsupported/not ready — nothing to check
+  verFoot.textContent = "CHECKING FOR UPDATES…";
+  let found = false;
+  const onFound = () => { found = true; verFoot.textContent = "UPDATING…"; };
+  swReg.addEventListener("updatefound", onFound, { once:true });
+  try{ await swReg.update(); }catch{}
+  setTimeout(() => {
+    swReg.removeEventListener("updatefound", onFound);
+    if(!found){
+      verFoot.textContent = "YOU'RE UP TO DATE";
+      setTimeout(() => { verFoot.textContent = verFootDefault; }, 2000);
+    }
+    // if found is true, leave "UPDATING…" showing — the existing controllerchange
+    // listener above reloads the page automatically once the new worker finishes
+    // installing and takes control. No extra code needed here for that part.
+  }, 1500);
+};
 </script>
 </body>
 </html>
