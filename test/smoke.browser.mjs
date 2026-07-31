@@ -721,6 +721,67 @@ try {
   await page.waitForTimeout(100);
   if (await page.isVisible("#helpBackdrop")) fail("tapping the backdrop should close the override help modal");
 
+  // ---- Version footer: manual update check. Real service worker lifecycle timing (an
+  // actual new sw.js installing) isn't something this suite can fabricate, so — as the
+  // brief for this feature calls for — the registration itself is mocked: the app's own
+  // navigator.serviceWorker.register(...) call is intercepted (before the page's script
+  // runs) and handed a plain EventTarget standing in for a ServiceWorkerRegistration.
+  // That's enough to drive the app's REAL click handler through both branches.
+
+  // No update available: update() resolves, no "updatefound" ever fires.
+  const verNoUpdatePage = await browser.newPage();
+  const verNoUpdateErrors = [];
+  verNoUpdatePage.on("pageerror", e => verNoUpdateErrors.push("pageerror: " + e.message));
+  await verNoUpdatePage.addInitScript(() => {
+    window.__updateCalls = 0;
+    const fakeReg = new EventTarget();
+    fakeReg.update = () => { window.__updateCalls++; return Promise.resolve(); };
+    navigator.serviceWorker.register = () => Promise.resolve(fakeReg);
+  });
+  await verNoUpdatePage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await verNoUpdatePage.waitForTimeout(200);   // let the mocked registration resolve into swReg
+  const verFootDefault = (await verNoUpdatePage.textContent("#verFoot"))?.trim();
+  await verNoUpdatePage.click("#verFoot");
+  await verNoUpdatePage.waitForTimeout(100);
+  if ((await verNoUpdatePage.textContent("#verFoot"))?.trim() !== "CHECKING FOR UPDATES…")
+    fail(`tapping the version footer should show a checking state immediately, got ${JSON.stringify((await verNoUpdatePage.textContent("#verFoot"))?.trim())}`);
+  if ((await verNoUpdatePage.evaluate(() => window.__updateCalls)) !== 1)
+    fail("tapping the version footer should call registration.update() exactly once");
+  await verNoUpdatePage.waitForTimeout(1700);   // past the 1500ms found/not-found window
+  if ((await verNoUpdatePage.textContent("#verFoot"))?.trim() !== "YOU'RE UP TO DATE")
+    fail(`no updatefound within the window should show the up-to-date message, got ${JSON.stringify((await verNoUpdatePage.textContent("#verFoot"))?.trim())}`);
+  await verNoUpdatePage.waitForTimeout(2200);   // past the 2000ms revert-to-default timer
+  if ((await verNoUpdatePage.textContent("#verFoot"))?.trim() !== verFootDefault)
+    fail(`the footer should revert to its version stamp, got ${JSON.stringify((await verNoUpdatePage.textContent("#verFoot"))?.trim())}`);
+  if (verNoUpdateErrors.length) fail("verFoot (no-update) page errors: " + JSON.stringify(verNoUpdateErrors, null, 2));
+  await verNoUpdatePage.close();
+
+  // Update found: "updatefound" fires on the mocked registration — the footer must show
+  // "UPDATING…" and, critically, STAY there — the up-to-date fallback (on its own timer)
+  // must not clobber it once a real update is in progress.
+  const verUpdatePage = await browser.newPage();
+  const verUpdateErrors = [];
+  verUpdatePage.on("pageerror", e => verUpdateErrors.push("pageerror: " + e.message));
+  await verUpdatePage.addInitScript(() => {
+    const fakeReg = new EventTarget();
+    fakeReg.update = () => Promise.resolve();
+    window.__fireUpdateFound = () => fakeReg.dispatchEvent(new Event("updatefound"));
+    navigator.serviceWorker.register = () => Promise.resolve(fakeReg);
+  });
+  await verUpdatePage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await verUpdatePage.waitForTimeout(200);
+  await verUpdatePage.click("#verFoot");
+  await verUpdatePage.waitForTimeout(50);
+  await verUpdatePage.evaluate(() => window.__fireUpdateFound());
+  await verUpdatePage.waitForTimeout(100);
+  if ((await verUpdatePage.textContent("#verFoot"))?.trim() !== "UPDATING…")
+    fail(`updatefound should switch the footer to an updating state, got ${JSON.stringify((await verUpdatePage.textContent("#verFoot"))?.trim())}`);
+  await verUpdatePage.waitForTimeout(1800);   // past the 1500ms window AND the 2000ms revert
+  if ((await verUpdatePage.textContent("#verFoot"))?.trim() !== "UPDATING…")
+    fail(`the updating state must not be overwritten by the up-to-date fallback, got ${JSON.stringify((await verUpdatePage.textContent("#verFoot"))?.trim())}`);
+  if (verUpdateErrors.length) fail("verFoot (update-found) page errors: " + JSON.stringify(verUpdateErrors, null, 2));
+  await verUpdatePage.close();
+
   if (!process.exitCode)
     console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one (override off) but always overwrites when override is on, live re-quote refreshes its own autofilled miles, CLEAR invalidates a stale LIVE quote without touching tuning, GET MILEAGE fills miles on Simple tab only without ever producing a live quote, per-field × buttons clear independently, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
 } finally {
