@@ -669,7 +669,7 @@
 
   <button type="button" id="verFoot" class="foot" aria-label="Check for app updates"
     style="text-align:center;opacity:.55;background:none;border:none;width:100%">
-    MilesPost v3.1.5
+    MilesPost v3.1.6
   </button>
 </div>
 
@@ -782,8 +782,8 @@ const HELP = {
     "<p>This is the run you're on: miles left, where you're headed, and when you roll out. "+
     "Both ETA lines above read straight from these fields — change a number here and every "+
     "readout updates.</p>"+
-    "<ul><li>Type miles from dispatch, or leave it blank and tap \"UPDATE LIVE ETA\" on the "+
-    "Tuned tab to fill it in from the real route.</li>"+
+    "<ul><li>Type miles from dispatch, or leave it blank and tap \"GET MILEAGE\" (Simple "+
+    "tab) or \"UPDATE LIVE ETA\" (Tuned tab) to fill it in from the real route.</li>"+
     "<li>Destination just needs a town and state — it sets your time zone and, for live ETA, "+
     "the actual route.</li>"+
     "<li>CLEAR wipes the load but keeps your tuning and swap schedule.</li></ul>" },
@@ -1618,6 +1618,21 @@ let startView = "eta";
 try{ startView = localStorage.getItem("milespost.view") || "eta"; }catch{}
 setView(startView === "reset" ? "reset" : "eta");
 setInterval(renderReset, 1000);      // the countdown has to tick
+
+/* iOS suspends timers while the PWA is backgrounded, and firing overdue ones on resume
+   is common behavior rather than a guarantee. Both readouts are computed against
+   Date.now() at render time — renderEta() gates the LIVE line on liveFresh(), and
+   renderReset() recomputes the countdown — so a render on resume is all it takes to be
+   correct immediately, instead of showing this morning's LIVE arrival until something
+   else happens to trigger one.
+   Note renderReset() isn't purely a paint: past the auto-clear window it calls
+   rsClearAll(), which writes storage. That's the same thing the 1s tick above already
+   does (and what the auto-clear was designed to do on reopen) — this only makes it land
+   on the first frame rather than up to a second in. Deliberately no polling or update
+   checks here; the tap-to-update footer stays strictly manual. */
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "visible"){ renderEta(); renderReset(); }
+});
 
 // Module-scope (not block-scoped inside the `if` below) so the version-footer click
 // handler elsewhere in this script can reach it via closure once it's populated.
