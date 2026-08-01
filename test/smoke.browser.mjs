@@ -265,6 +265,7 @@ try {
   if (liveErrors.length) fail("live page errors: " + JSON.stringify(liveErrors, null, 2));
   await livePage.close();
 
+
   // Denied path: GPS permission refused -> LIVE line stays hidden, tuned readout intact,
   // unobtrusive note shown. The UI must never block or error.
   const deniedPage = await browser.newPage();
@@ -545,6 +546,42 @@ try {
     fail("#getMiBtn must never appear on the Tuned tab — UPDATE LIVE ETA already covers this");
   if (getMiTunedErrors.length) fail("getMi-tuned page errors: " + JSON.stringify(getMiTunedErrors, null, 2));
   await getMiTunedPage.close();
+
+  // Resume re-render: a LIVE quote that went stale while the app was backgrounded must be
+  // gone on the first frame after resume, not left showing this morning's arrival. The
+  // quote is aged by moving Date.now() forward past LIVE_MAX_AGE_MS rather than waiting
+  // ten real minutes — renderEta() gates the line on liveFresh(LIVE.at, Date.now()), so
+  // that's the same condition a real backgrounded hour produces.
+  // Deliberately asserting the line is STILL visible after aging but before the resume
+  // event: that isolates the visibilitychange listener as the thing that cleared it,
+  // instead of some unrelated render happening to fire in between and passing by luck.
+  const resumePage = await browser.newPage();
+  const resumeErrors = [];
+  resumePage.on("pageerror", e => resumeErrors.push("pageerror: " + e.message));
+  await mockHere(resumePage);
+  await resumePage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await resumePage.fill("#miles", "400");
+  await resumePage.dispatchEvent("#miles", "input");
+  await resumePage.fill("#destIn", "Nashville TN");
+  await resumePage.press("#destIn", "Enter");
+  await resumePage.click("#tabTuned");
+  await resumePage.click("#liveBtn");
+  await resumePage.waitForTimeout(300);
+  if (!(await resumePage.isVisible("#liveLine")))
+    fail("LIVE line should be showing before the resume check (setup)");
+  await resumePage.evaluate(() => {
+    const realNow = Date.now.bind(Date);
+    const skew = 11 * 60 * 1000;            // past LIVE_MAX_AGE_MS (10 min)
+    Date.now = () => realNow() + skew;
+  });
+  if (!(await resumePage.isVisible("#liveLine")))
+    fail("aging the clock alone must not clear the LIVE line — nothing has re-rendered yet");
+  await resumePage.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await resumePage.waitForTimeout(100);
+  if (await resumePage.isVisible("#liveLine"))
+    fail("returning to the foreground must drop a LIVE quote that went stale while backgrounded");
+  if (resumeErrors.length) fail("resume page errors: " + JSON.stringify(resumeErrors, null, 2));
+  await resumePage.close();
 
   // Per-field "×" buttons: each clears only its own field, leaving the other field (and
   // tuning) untouched. Miles first, then destination, on two independent fresh pages so

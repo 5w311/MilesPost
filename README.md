@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.1.5**
+**Current version: v3.1.6**
 
 ## Files
 
@@ -51,6 +51,15 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v3.1.6
+
+- **Both readouts re-render when the app comes back to the foreground**, so a LIVE quote
+  that went stale while backgrounded is gone on the first frame instead of still showing
+  this morning's arrival until something else happens to trigger a render (iOS suspends
+  timers in the background, and firing overdue ones on resume isn't guaranteed).
+- The "Your Load" help now mentions **GET MILEAGE (Simple tab)** alongside UPDATE LIVE ETA
+  (Tuned tab) as ways to fill in mileage from the real route.
 
 ### v3.1.5
 
