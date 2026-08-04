@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v3.1.6**
+**Current version: v4.0**
 
 ## Files
 
@@ -25,6 +25,8 @@ everything else works as always.
 | `manifest.webmanifest` | Makes it installable to the home screen. |
 | `icon-192.png` `icon-512.png` `apple-touch-icon.png` | App icons. |
 | `.nojekyll` | Tells GitHub Pages to serve the files as-is. Don't delete it. |
+| `fonts/` | Vendored Overpass + Overpass Mono (woff2, SIL OFL — licenses included). No fonts CDN: the shell stays fully offline. |
+| `design/highway-reference.html` | The driver-approved Highway mockup — design source of truth for v4.0. Not shipped to the app (not in `sw.js` ASSETS). |
 
 ## Install it to the home screen
 
@@ -51,6 +53,32 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.0 — "Highway"
+
+- **Full visual redesign in interstate guide-sign language**, replacing Liquid Glass.
+  Matches the driver-approved mockup (committed at `design/highway-reference.html`).
+  Panel color carries meaning, like real signage: **green** guide panels for the two
+  arrival readouts (with exit tabs showing day + timezone), **white** regulatory panels
+  for every input card and the help sign, **amber** for the primary CTAs and the 34-rule
+  warning (now a proper warning-diamond sign), and **red** reserved for BROKE THE 34
+  alone. The LIVE line is now an amber dot-matrix changeable-message board with its
+  caveat folded into the board; milepost markers run between cards; the masthead carries
+  an MP route shield; the version footer is a small tappable sign plate.
+- **Typefaces: Overpass / Overpass Mono, vendored — not linked.** The app is an offline
+  PWA with zero external requests in its shell, so the woff2 files are committed under
+  `fonts/` (SIL OFL, licenses included), declared with `font-display:swap` over the old
+  system stacks, and added to the service worker's ASSETS so they cache like everything
+  else. Airplane mode still shows signage type, not a fallback.
+- **Both themes survive.** Signs read the same day and night — only the road changes:
+  night keeps the dark asphalt (white panels dimmed slightly so a 2 AM cab doesn't take
+  a flashlight to the face), day swaps in a light concrete surface with the panels at
+  full brightness. Body-text contrast re-verified ≥ 4.5:1 in both.
+- **Zero logic changes.** Every id, function, state variable, and behavior is exactly
+  v3.1.6 — two-tap guards, override persistence, GET MILEAGE visibility, live freshness
+  gating, tap-to-update, all of it. The readouts' old amber/green top-accent border is
+  retired; the same `.done` toggle that drove it now turns the whole Legal-at sign's
+  border and exit tab green. The full test suite passed with zero assertion changes.
 
 ### v3.1.6
 

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MilesPost</title>
-<meta name="theme-color" content="#0B0E10">
+<meta name="theme-color" content="#13161a">
 <meta name="description" content="Team-driver ETA and 34-hour reset. Works offline.">
 <script>
 /* Runs before first paint so day mode never flashes black. */
@@ -22,72 +22,101 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MilesPost">
 <style>
-  /* Night: the Cascadia dash at 3am. Borders separate surfaces — no shadows in the dark. */
+  /* ============================ Highway (v4.0) ============================
+     Interstate guide-sign language, from design/highway-reference.html (the
+     driver-approved mockup — source of truth for visual details). Panel color
+     carries meaning, like real signage:
+       GREEN  guide info      — the two arrival readouts
+       WHITE  regulatory      — every input card + the help sign
+       AMBER  advisory        — primary CTAs, the 34-rule warning
+       RED    prohibitive     — BROKE THE 34, and nothing else
+     Signs read the same day and night — only the road around them changes, so
+     the theme blocks below swap the road surface and ambient chrome, never the
+     panels' own colors (one exception: white panels dim slightly at night so a
+     2 AM cab doesn't take a flashlight to the face). */
+
+  /* Vendored Overpass (SIL OFL, license in fonts/) — this is an offline PWA:
+     no fonts CDN, no render dependency on signal. Cached by sw.js like every
+     other asset; font-display:swap falls back to the system stacks below. */
+  @font-face{font-family:"Overpass";font-style:normal;font-weight:400;font-display:swap;
+    src:url(./fonts/overpass-latin-400-normal.woff2) format("woff2")}
+  @font-face{font-family:"Overpass";font-style:normal;font-weight:600;font-display:swap;
+    src:url(./fonts/overpass-latin-600-normal.woff2) format("woff2")}
+  @font-face{font-family:"Overpass";font-style:normal;font-weight:700;font-display:swap;
+    src:url(./fonts/overpass-latin-700-normal.woff2) format("woff2")}
+  @font-face{font-family:"Overpass";font-style:normal;font-weight:800;font-display:swap;
+    src:url(./fonts/overpass-latin-800-normal.woff2) format("woff2")}
+  @font-face{font-family:"Overpass Mono";font-style:normal;font-weight:400;font-display:swap;
+    src:url(./fonts/overpass-mono-latin-400-normal.woff2) format("woff2")}
+  @font-face{font-family:"Overpass Mono";font-style:normal;font-weight:600;font-display:swap;
+    src:url(./fonts/overpass-mono-latin-600-normal.woff2) format("woff2")}
+  @font-face{font-family:"Overpass Mono";font-style:normal;font-weight:700;font-display:swap;
+    src:url(./fonts/overpass-mono-latin-700-normal.woff2) format("woff2")}
+
+  /* Night (default): dark road, ambient chrome light, white panels dimmed. */
   :root, [data-theme="night"]{
     color-scheme: dark;
-    background-color:#0B0E10;
-    --asphalt:#0B0E10; --panel:#14181C; --line:#2B333A;
-    --amber:#FFB020; --amber-dim:#7A5511; --reefer:#5AC8E8;
-    --good:#4FD18B; --late:#FF5D52; --ink:#E7EDF2; --mute:#7C8B96;
-    --bar-off:#232A30; --rest:#3A444C; --warn-bg:rgba(255,176,32,.06);
-    --on-solid:#0B0E10; --shadow:none;
-    /* RGB triplets of the tokens glass surfaces composite against, so a translucent
-       background can be written once and stay theme-correct in both themes. */
-    --asphalt-rgb:11,14,16;   --panel-rgb:20,24,28;  --line-rgb:43,51,58;
-    --amber-rgb:255,176,32;   --ink-rgb:231,237,242;
-    /* Top stop of the active-pill gradient. Lighter than --amber, so contrast against
-       the near-black --on-solid text only goes up (10.2:1 flat, higher lifted). */
-    --amber-lift:#FFC451;
-    /* Specular sheen on solid pills, and the strength of the 1px surface hairline.
-       On a dark panel a light hairline reads as light catching an edge. */
-    --sheen:rgba(var(--ink-rgb),.25);
-    --spec-a:.42;
+    background-color:#13161a;
+    --asphalt:#13161a;                 /* the road */
+    --panel:#E0E2DE;                   /* white regulatory panels, night-dimmed */
+    --page-ink:#F5F6F4;                /* ambient text on the road */
+    --mute:#8b959e;                    /* ambient secondary on the road */
+    --line:#39424a;                    /* ambient hairlines / inactive borders */
+    --shadow:0 6px 18px rgba(0,0,0,.4);
+    --accent-line:#FFB020;             /* active-subtab border: bright on dark road */
+    /* Legacy triplets — nothing composites translucently anymore, kept so any
+       stray rgba(var(--x-rgb)) never breaks. */
+    --asphalt-rgb:19,22,26; --panel-rgb:224,226,222; --line-rgb:57,66,74;
+    --ink-rgb:21,24,27; --amber-rgb:185,135,0;
   }
-  /* Day: cool ground, warm amber. Amber must darken to #A8490A to clear 4.5:1 on white
-     AND on the page — raw #FFB020 on white is 1.8:1, invisible in the glare you'd need
-     it in. Page sits at 95% white, so borders + shadows carry the card separation. */
+  /* Day: light road (cool concrete), ambient chrome dark, panels at full white
+     with a firmer shadow so they separate from the light surface. The signs
+     themselves keep identical colors — that's what they're designed for. */
   [data-theme="day"]{
     color-scheme: light;
-    background-color:#F2F4F7;
-    --asphalt:#F2F4F7; --panel:#FFFFFF; --line:#CBD1D6;
-    --amber:#A8490A; --amber-dim:#E3B584; --reefer:#0369A1;
-    --good:#15803D; --late:#B3261E; --ink:#0F1419; --mute:#59636D;
-    --bar-off:#D5DADE; --rest:#B9C1C8; --warn-bg:rgba(168,73,10,.07);
-    --on-solid:#FFFFFF;
-    --shadow:0 1px 3px rgba(15,20,25,.10), 0 1px 2px rgba(15,20,25,.06);
-    --asphalt-rgb:242,244,247; --panel-rgb:255,255,255; --line-rgb:203,209,214;
-    --amber-rgb:168,73,10;     --ink-rgb:15,20,25;
-    /* Only a slight lift here: white text on the gradient's lightest stop still has to
-       clear 4.5:1 in glare. #B45210 is 5.05:1 on white; a brighter lift drops under 4.5. */
-    --amber-lift:#B45210;
-    /* Day ink is near-black, so the sheen/hairline are dark, not light — a dark hairline
-       on white reads as an edge, not a highlight, so it's softened rather than matched. */
-    --sheen:rgba(var(--ink-rgb),.06);
-    --spec-a:.24;
+    background-color:#E8EAED;
+    --asphalt:#E8EAED;
+    --panel:#F5F6F4;
+    --page-ink:#15181b;
+    --mute:#5c666f;
+    --line:#9aa4ad;
+    --shadow:0 4px 14px rgba(15,20,25,.25);
+    --accent-line:#B98700;             /* bright amber border vanishes on a light road */
+    --asphalt-rgb:232,234,237; --panel-rgb:245,246,244; --line-rgb:154,164,173;
+    --ink-rgb:21,24,27; --amber-rgb:185,135,0;
   }
+  /* Sign colors — identical in both themes, per the design language. */
   :root{
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    /* One radius scale for the whole app. */
-    --r-sm:10px;      /* inputs, selects, plain buttons */
-    --r-card:20px;    /* data surfaces */
-    --r-sheet:24px;   /* help sheet's top corners */
-    --r-pill:999px;   /* pill rows and solid pill buttons */
+    --panel-green:#006B3D; --panel-green-dk:#00552F;
+    --amber:#B98700;                   /* advisory panel fill */
+    --amber-hi:#FFB020;                /* CMS dot-matrix + highlights on dark */
+    --amber-dim:#E3B584;               /* fuel notch family — assignment unchanged */
+    --reefer:#5AC8E8; --good:#4FD18B; --late:#B3261E;
+    --ink:#15181b;                     /* panel ink: text on white/amber signs */
+    --on-solid:#fff;
+    --sign-line:#39424a;               /* inactive sign-button border, both themes */
+    --btn-dark:#20262c;                /* inactive sign-button fill, both themes */
+    --cms-bg:#0a0c0a; --cms-line:#494f45; --cms-dim:#8a7638;
+    --panel-mute:#4a545c;              /* secondary ink on white panels */
+    --bar-off:rgba(255,255,255,.22);
+    --warn-bg:var(--amber);
+    --mono:"Overpass Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans:"Overpass", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --r-sm:8px; --r-card:14px; --r-sheet:14px; --r-pill:999px;
   }
-  /* body::before is in this list because it now paints the canvas — without it, toggling
-     day/night snaps the background instead of crossfading with everything else. */
+
   body,body::before,.card,input,select,button,.stamp{
     transition:background-color .2s ease, color .2s ease, border-color .2s ease}
-  /* Restrained motion — this is a utility read at 70mph, not a showcase. A press
-     confirms itself with a small scale, nothing else moves. */
-  button{transition:background-color .2s ease, color .2s ease, border-color .2s ease,
+  /* Restrained motion — a utility read at 70 mph. A press confirms itself with a
+     small scale; tab/panel color swaps stay quick (~150ms). */
+  button{transition:background-color .15s ease, color .15s ease, border-color .15s ease,
     transform .12s ease}
   .primary:active,.go:active,.ghost:active,.danger:active,.muted:active,
   .tabs button:active,.subtabs button:active,.presets button:active{transform:scale(.97)}
   @keyframes helpFade{from{opacity:0} to{opacity:1}}
-  @keyframes helpRise{from{transform:translateY(12px)} to{transform:translateY(0)}}
-  .helpBackdrop:not(.hide){animation:helpFade .18s ease}
-  .helpBackdrop:not(.hide) .helpPanel{animation:helpRise .22s ease}
+  @keyframes helpRise{from{transform:translateY(10px)} to{transform:translateY(0)}}
+  .helpBackdrop:not(.hide){animation:helpFade .15s ease}
+  .helpBackdrop:not(.hide) .helpPanel{animation:helpRise .18s ease}
   @media (prefers-reduced-motion: reduce){
     *{transition:none !important; animation:none !important}
     .primary:active,.go:active,.ghost:active,.danger:active,.muted:active,
@@ -95,338 +124,301 @@
   }
 
   *{box-sizing:border-box}
-  /* No background-color on body on purpose. body::before is a fixed, z-index:-1 layer, so
-     it paints BEHIND body's own background — an opaque body background hides it entirely,
-     which is why the canvas gradient has to live on the layer that is actually visible.
-     :root already carries an opaque themed background-color (see both theme blocks), so
-     html still paints the base colour and nothing here can show a host page through. */
-  html,body{margin:0;color:var(--ink);font-family:var(--sans);
+  /* No background-color on body on purpose: body::before is the fixed, z-index:-1
+     layer that actually paints the road (a host page can force html/body
+     transparent — the app owns this layer). :root carries the opaque themed
+     background-color so html still paints the base. */
+  html,body{margin:0;color:var(--page-ink);font-family:var(--sans);
     -webkit-text-size-adjust:100%}
-  /* A host page (app preview, in-app browser) can force html/body transparent and let its
-     own dark canvas show through. Paint the background on a layer this app owns. */
   body{min-height:100vh; min-height:100dvh; position:relative;
-    padding:16px calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom))
-    calc(16px + env(safe-area-inset-left)); padding-top:calc(16px + env(safe-area-inset-top))}
-  /* background-color stays the fully opaque base — the guarantee above depends on it.
-     The gradient is a background-IMAGE layered on top of that base, so every
-     "transparent" stop in it reveals only --asphalt underneath, never the host page.
-     Its job is to give the tier-1 blur some tonal gradation to bend: on a perfectly
-     flat canvas, backdrop-filter has nothing to diffract and the chrome reads as a
-     flat tint no matter how far its opacity drops. Built from each theme's own
-     --panel/--line, so it follows the theme rather than being hand-picked per mode. */
+    padding:16px calc(14px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom))
+    calc(14px + env(safe-area-inset-left)); padding-top:calc(16px + env(safe-area-inset-top))}
   body::before{content:"";position:fixed;inset:0;background-color:var(--asphalt);
-    background-image:
-      radial-gradient(120% 90% at 15% -10%, rgba(var(--panel-rgb),.55) 0%, transparent 55%),
-      radial-gradient(100% 70% at 100% 0%, rgba(var(--line-rgb),.28) 0%, transparent 50%);
     z-index:-1;pointer-events:none}
   .wrap{max-width:470px;margin:0 auto}
 
+  /* Masthead: MP route shield + wordmark + motto; the day/night switch beside it. */
   .brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-  .brand b{font-family:var(--mono);font-size:13px;letter-spacing:.22em;color:var(--amber);
-    font-weight:400}
-  .brand-r{display:flex;align-items:center;gap:10px}
-  .tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--mute)}
-  @media (max-width:430px){ .tag{display:none} }
+  .shield{display:flex;align-items:center;gap:10px}
+  .shield svg{display:block;flex:none}
+  .brand h1{margin:0;font-family:var(--sans);font-weight:800;font-size:17px;line-height:1;
+    letter-spacing:.12em;color:var(--page-ink)}
+  .motto{font-family:var(--mono);font-weight:600;font-size:10px;line-height:1;
+    letter-spacing:.08em;color:var(--mute);margin-top:4px}
 
-  /* Surface (background/border) comes from the shared tier-1 glass rule below. */
+  /* Toggles: sign-language pills. Track dark, knob white, ON = green fill.
+     Same ids, same aria, same JS as always. */
   .switch{width:52px;height:28px;flex:none;padding:0;border-radius:var(--r-pill);
-    position:relative;box-shadow:var(--shadow)}
-  .switch .knob{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;
-    background:var(--amber);transition:transform .2s ease, background-color .2s ease;
+    position:relative;background:var(--btn-dark);border:2px solid var(--sign-line)}
+  .switch .knob{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;
+    background:#fff;transition:transform .2s ease, background-color .2s ease;
     display:flex;align-items:center;justify-content:center}
-  /* Scoped to themeBtn specifically (not .switch generally) — a bare ".switch .knob"
-     here would push EVERY .switch pill's knob right under day theme regardless of that
-     switch's own state, which is exactly wrong for the independent override toggle below.
-     themeBtn's own aria-checked is also kept in sync with data-theme by applyTheme(), so
-     the generic .switch[aria-checked="true"] rule further down agrees with this one. */
+  /* themeBtn's knob position tracks the page theme (its aria-checked is kept in
+     sync by applyTheme); every other switch travels off its own aria-checked. */
   [data-theme="day"] #themeBtn .knob{transform:translateX(24px)}
-  .switch svg{width:13px;height:13px;display:block}
-  .switch .moon{fill:var(--on-solid)}
-  .switch .sun{fill:none;stroke:var(--on-solid);stroke-width:2.1;stroke-linecap:round;display:none}
+  .switch svg{width:12px;height:12px;display:block}
+  .switch .moon{fill:var(--ink)}
+  .switch .sun{fill:none;stroke:var(--ink);stroke-width:2.1;stroke-linecap:round;display:none}
   [data-theme="day"] .switch .moon{display:none}
   [data-theme="day"] .switch .sun{display:block}
-  /* Generic: any .switch pill (not just the day/night one) travels its knob off its own
-     aria-checked, so a second toggle (the LIVE override below) gets the identical pill
-     behavior without being wired to the page theme. themeBtn already keeps aria-checked
-     in sync with data-theme, so this is additive there, not a change to it. */
   .switch[aria-checked="true"] .knob{transform:translateX(24px)}
+  .switch[aria-checked="true"]{background:var(--panel-green);border-color:#fff}
+  [data-theme="day"] #themeBtn{background:var(--panel-green);border-color:#fff}
 
-  /* Tier 2 — data surfaces. Near-opaque on purpose: this is what the driver actually
-     reads, in sun, one-handed. Same compositing language as the glass chrome, but
-     contrast wins over material. No blur here, ever.
-     position:relative carries the specular hairline. Deliberately NOT overflow:hidden —
-     the city-suggestion dropdown is absolutely positioned inside a card and has to be
-     able to hang past its bottom edge. The hairline is inset 12% from both sides, well
-     clear of the corner radius, so it needs no clipping. */
-  .card{background:rgba(var(--panel-rgb),.96);border:1px solid var(--line);
-    border-radius:var(--r-card);padding:16px;margin-bottom:14px;box-shadow:var(--shadow);
+  /* ============================ sign panels ============================
+     .card is the white regulatory panel; .readout layers the green guide panel
+     on top of it. position:relative carries the exit tab; deliberately NOT
+     overflow:hidden — the suggestion dropdown must hang past the card edge. */
+  .card{background:var(--panel);color:var(--ink);border:3px solid var(--ink);
+    border-radius:var(--r-card);padding:16px;margin-bottom:16px;box-shadow:var(--shadow);
     position:relative}
-  /* The signature detail: a 1px hairline near the top edge, fading in from the sides. */
-  .card::before{content:"";position:absolute;top:0;left:12%;right:12%;height:1px;
-    pointer-events:none;
-    background:linear-gradient(90deg,transparent,rgba(var(--ink-rgb),var(--spec-a)),transparent)}
-  /* Status accent — amber while running, green once legal. Functional signal, untouched
-     by the re-skin; the hairline layers with it rather than replacing it. */
-  .readout{border-top:2px solid var(--amber);padding:18px}
-  .readout.done{border-top-color:var(--good)}
+  .readout{background:var(--panel-green);color:#fff;border-color:#fff;
+    padding:16px 16px 14px;margin-top:22px}
+  /* Status now reads through the panel itself (the old top accent border is
+     retired): the same .done toggle that used to recolor the accent now turns
+     the whole sign's border + exit tab green-clear. Same trigger, new voice. */
+  .readout.done{border-color:var(--good)}
+  .readout.done .exit-tab{border-color:var(--good);color:var(--good)}
+  .exit-tab{position:absolute;top:-16px;right:14px;background:var(--panel-green);
+    border:3px solid #fff;border-radius:8px;padding:4px 12px;
+    font-family:var(--sans);font-weight:700;font-size:12px;line-height:1.2;color:#fff}
 
-  label,.lbl{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.14em;
-    text-transform:uppercase;color:var(--mute);margin-bottom:6px}
-
-  /* Card title + its "?" help button, as siblings — never nested inside a label whose
-     textContent gets overwritten at runtime (etaLabel, rsLabel). */
+  label,.lbl{display:block;font-family:var(--sans);font-weight:700;font-size:11px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--panel-mute);margin-bottom:6px}
+  .readout .lbl{color:#fff;opacity:.92}
   .lbl-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
   .lbl-row .lbl{margin-bottom:0}
   .help-btn{width:44px;height:44px;padding:0;border:none;background:transparent;
     display:inline-flex;align-items:center;justify-content:center;flex:none;cursor:pointer}
-  .help-btn span{width:22px;height:22px;border-radius:var(--r-pill);border:1px solid var(--line);
-    display:flex;align-items:center;justify-content:center;font-family:var(--mono);
-    font-size:11px;color:var(--mute);line-height:1;
-    box-shadow:inset 0 1px 0 var(--sheen)}
+  .help-btn span{width:26px;height:26px;border-radius:var(--r-pill);
+    border:2px solid rgba(21,24,27,.5);
+    display:flex;align-items:center;justify-content:center;font-family:var(--sans);
+    font-weight:700;font-size:13px;color:var(--ink);line-height:1}
+  .readout .help-btn span{border-color:rgba(255,255,255,.75);color:#fff}
   .help-btn:hover span,.help-btn:focus-visible span,.help-btn:active span{
-    border-color:var(--amber);color:var(--amber)}
+    border-color:var(--amber-hi);color:var(--amber-hi)}
 
-  /* One shared help modal, reused by all four "?" buttons — bottom sheet, no close
-     button; dismiss only by tapping the dimmed backdrop (or Escape). */
-  /* Tier 1 — the dimming layer is chrome, so it gets the blur. */
-  .helpBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;
-    display:flex;align-items:flex-end;justify-content:center}
-  [data-theme="day"] .helpBackdrop{background:rgba(15,20,25,.35)}
-  /* Tier 2 — the sheet's own body is dense reading text, so it stays near-opaque.
-     No hairline: this is a scroll container, and an absolutely positioned hairline
-     would scroll away from the edge it's meant to describe. */
-  .helpPanel{background:rgba(var(--panel-rgb),.96);border:1px solid var(--line);
-    border-bottom:none;
-    border-radius:var(--r-sheet) var(--r-sheet) 0 0;box-shadow:var(--shadow);
-    width:100%;max-width:470px;max-height:80vh;overflow-y:auto;
-    padding:20px calc(20px + env(safe-area-inset-right))
-      calc(14px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left))}
-  .helpPanel .lbl{margin-bottom:10px}
-  .helpPanel p{font-family:var(--sans);font-size:14px;line-height:1.55;color:var(--ink);
-    margin:0 0 12px}
-  .helpPanel ul{font-family:var(--sans);font-size:14px;line-height:1.55;color:var(--ink);
-    margin:0 0 4px;padding-left:18px}
+  /* Help modal: a white sign on a post, centered. Tap-outside/Escape dismissal
+     and the hint line keep their exact behavior — this restyles the container. */
+  .helpBackdrop{position:fixed;inset:0;background:rgba(6,8,10,.72);z-index:50;
+    display:flex;align-items:center;justify-content:center;
+    padding:22px calc(22px + env(safe-area-inset-right)) calc(22px + env(safe-area-inset-bottom))
+      calc(22px + env(safe-area-inset-left))}
+  .helpPanel{background:var(--panel);color:var(--ink);border:3px solid var(--ink);
+    border-radius:var(--r-sheet);box-shadow:var(--shadow);
+    width:100%;max-width:400px;max-height:80vh;overflow-y:auto;padding:18px}
+  .helpPanel .lbl{font-family:var(--sans);font-weight:800;font-size:16px;line-height:1.2;
+    letter-spacing:.03em;text-transform:none;color:var(--ink);margin-bottom:8px}
+  .helpPanel p{font-family:var(--sans);font-weight:600;font-size:13.5px;line-height:1.55;
+    color:var(--ink);margin:0 0 10px}
+  .helpPanel ul{font-family:var(--sans);font-weight:600;font-size:12.5px;line-height:1.6;
+    color:#3a434b;margin:0 0 4px;padding-left:18px}
   .helpPanel li{margin-bottom:6px}
-  .helpHint{text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:.06em;
-    color:var(--mute);margin-top:10px}
+  .helpHint{text-align:center;font-family:var(--mono);font-weight:600;font-size:10px;
+    letter-spacing:.06em;text-transform:uppercase;color:#8b959e;margin-top:14px}
 
-  /* Tier 3 — where real numbers get typed. Material unchanged; new radius only. */
-  input,select{width:100%;background:var(--asphalt);color:var(--ink);border:1px solid var(--line);
-    border-radius:var(--r-sm);padding:11px 12px;font-family:var(--mono);font-size:16px;outline:none;
-    -webkit-appearance:none;appearance:none}
+  /* Form fields on the white panels. */
+  input,select{width:100%;background:#fff;color:var(--ink);border:2px solid var(--ink);
+    border-radius:var(--r-sm);padding:11px 12px;font-family:var(--mono);font-weight:600;
+    font-size:16px;outline:none;-webkit-appearance:none;appearance:none}
   input[type=number]::-webkit-inner-spin-button{display:none}
-  :focus-visible{box-shadow:0 0 0 2px var(--amber)}
+  :focus-visible{box-shadow:0 0 0 3px var(--amber-hi)}
   .row{display:flex;gap:8px}
   .row > input{flex:1}
   .group{margin-bottom:14px}
   .group:last-child{margin-bottom:0}
   .fieldwrap{position:relative}
-  .suffix{position:absolute;right:12px;top:12px;font-family:var(--mono);font-size:12px;
-    color:var(--mute);pointer-events:none}
-  /* Small "×" clear button overlaid on a field, shown only once it has content (toggled
-     the same way the rest of the app shows/hides — see clearMilesField/clearDestField).
-     Subtle by design: --mute at rest, doesn't compete with the suffix label or SET. */
-  .fieldClear{position:absolute;top:50%;transform:translateY(-50%);width:20px;height:20px;
-    padding:0;border:none;background:transparent;color:var(--mute);font-size:16px;
+  .suffix{position:absolute;right:12px;top:14px;font-family:var(--mono);font-weight:600;
+    font-size:12px;color:var(--panel-mute);pointer-events:none}
+  .fieldClear{position:absolute;top:11px;width:24px;height:24px;
+    padding:0;border:2px solid var(--panel-mute);border-radius:6px;background:#fff;
+    color:var(--ink);font-size:14px;font-weight:700;
     line-height:1;display:flex;align-items:center;justify-content:center}
-  .fieldClear:hover,.fieldClear:focus-visible{color:var(--ink)}
-  #milesClear{right:32px}         /* sits left of the "mi" suffix, clear of its text */
-  #destClear{right:8px}           /* no suffix on this field, so it can sit at the edge */
+  .fieldClear:hover,.fieldClear:focus-visible{border-color:var(--ink)}
+  #milesClear{right:40px}         /* sits left of the "mi" suffix, clear of its text */
+  #destClear{right:10px}          /* no suffix on this field, so it can sit at the edge */
 
-  button{font-family:var(--mono);cursor:pointer;border-radius:var(--r-sm);
-    border:1px solid var(--line);
-    background:transparent;color:var(--mute);font-size:12px;letter-spacing:.08em}
-  .go{background:var(--reefer);color:var(--on-solid);border:none;padding:0 16px}
-  .ghost{color:var(--reefer);border-color:var(--reefer);padding:0 14px}
-  .primary{width:100%;padding:13px 0;background:var(--amber);color:var(--on-solid);
-    border:none;font-size:12px;letter-spacing:.12em}
+  /* Buttons. Field-scoped ones (.go SET/NOW-green, .ghost, DEVICE) are compact;
+     the sign CTAs (.primary/.danger/.muted) are full-width panels of their own. */
+  button{font-family:var(--sans);font-weight:700;cursor:pointer;border-radius:var(--r-sm);
+    border:2px solid var(--panel-mute);background:#fff;color:var(--panel-mute);
+    font-size:12px;letter-spacing:.05em}
+  .go{background:var(--panel-green);color:#fff;border:2px solid var(--panel-green);
+    padding:10px 16px;font-weight:800}
+  .ghost{background:#fff;color:var(--ink);border:2px solid var(--ink);padding:0 14px;font-weight:800}
+  .primary{display:block;width:100%;margin-top:14px;padding:15px 0;
+    background:var(--amber);color:#fff;border:3px solid var(--ink);border-radius:12px;
+    font-weight:800;font-size:14px;letter-spacing:.06em}
   .primary:disabled{opacity:.4}
-  .danger{width:100%;padding:11px 0;color:var(--late);border-color:var(--late);
-    background:transparent;font-size:11px;letter-spacing:.08em;margin-top:8px}
-  .muted{width:100%;padding:11px 0;color:var(--mute);border-color:var(--line);
-    background:transparent;font-size:11px;letter-spacing:.08em;margin-top:8px}
-  .danger.armed{background:var(--late);color:var(--on-solid);border-color:var(--late)}
-  .muted.armed{background:var(--mute);color:var(--on-solid);border-color:var(--mute)}
-  .danger:disabled,.muted:disabled{opacity:.3;cursor:default}
-  /* Tier 1b — solid pill buttons. These are the high-stakes one-handed taps (SET, CLEAR,
-     BROKE THE 34, UPDATE LIVE ETA), so they get the pill shape and the sheen but stay
-     fully OPAQUE: no blur, no translucency. A floating translucent SET button over
-     other content is exactly the ambiguity this app can't afford. Every colour
-     assignment above is kept as-is; only shape and sheen change here. */
-  .primary,.go,.ghost,.danger,.muted{border-radius:var(--r-pill);
-    box-shadow:inset 0 1px 0 var(--sheen)}
-  .link{background:none;border:none;color:var(--reefer);font-size:11px;padding:0;
-    text-decoration:underline;font-family:var(--mono)}
+  .danger{display:block;width:100%;margin-top:10px;padding:13px 0;
+    background:var(--late);color:#fff;border:3px solid var(--ink);border-radius:12px;
+    font-weight:800;font-size:12.5px;letter-spacing:.04em}
+  .muted{display:block;width:100%;margin-top:10px;padding:12px 0;
+    background:#fff;color:var(--ink);border:2px solid var(--ink);border-radius:12px;
+    font-weight:700;font-size:12px;letter-spacing:.05em}
+  /* Armed states: same two-tap flow the logic already drives — the label swap is
+     the message, the ring is the siren. */
+  .danger.armed{border-color:#F5F6F4;box-shadow:0 0 0 3px var(--late)}
+  .muted.armed{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .danger:disabled,.muted:disabled{opacity:.35;cursor:default}
+  .link{background:none;border:none;color:var(--ink);font-size:11px;padding:0;
+    text-decoration:underline;font-family:var(--mono);font-weight:600}
 
-  /* ===================== Tier 1 — floating glass chrome =====================
-     Navigation and controls only, never data. The solid rgba(...,.92) background is
-     declared first so an engine without backdrop-filter still renders a legible panel
-     instead of a washed-out one; the @supports block layers the real material on top. */
-  .tabs,.subtabs,.presets,.switch{
-    background:rgba(var(--panel-rgb),.92);
-    /* Edge carries more of the pane's definition now that the fill is thinner. */
-    border:1px solid rgba(var(--ink-rgb),.14);
-    border-radius:var(--r-pill)}
-  @supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
-    .tabs,.subtabs,.presets,.switch{
-      background:rgba(var(--panel-rgb),.38);
-      -webkit-backdrop-filter:blur(22px) saturate(180%);
-      backdrop-filter:blur(22px) saturate(180%)}
-  }
-  /* One shared pill-row treatment: the row is the glass surface, each button a pill
-     inside it. Padding insets the pills so the row reads as a single track. */
-  .tabs,.subtabs,.presets{display:flex;gap:4px;padding:4px;position:relative}
-  .tabs button,.subtabs button,.presets button{
-    border-radius:var(--r-pill);border-color:transparent;background:transparent}
-  .tabs::before,.subtabs::before,.presets::before{
-    content:"";position:absolute;top:0;left:12%;right:12%;height:1px;pointer-events:none;
-    background:linear-gradient(90deg,transparent,rgba(var(--ink-rgb),var(--spec-a)),transparent)}
+  /* Tab rows: solid sign-buttons, identical in both themes (signs don't retheme). */
+  .tabs{display:flex;gap:8px;margin-bottom:10px}
+  .tabs button{flex:1;padding:12px 4px;font-family:var(--sans);font-weight:700;
+    font-size:12.5px;letter-spacing:.05em;background:var(--btn-dark);color:#8b959e;
+    border:2px solid var(--sign-line);border-radius:9px}
+  .tabs button[aria-selected=true]{background:var(--panel-green);color:#fff;border-color:#fff}
+  .subtabs{display:flex;gap:8px;margin-bottom:16px}
+  .subtabs button{flex:1;padding:10px 4px;font-family:var(--sans);font-weight:700;
+    font-size:11.5px;letter-spacing:.04em;background:var(--btn-dark);color:#8b959e;
+    border:2px solid var(--sign-line);border-radius:9px}
+  .subtabs button[aria-selected=true]{background:transparent;color:var(--page-ink);
+    border-color:var(--accent-line)}
 
-  /* primary nav: two tools. filled when active. */
-  .tabs{margin-bottom:10px}
-  .tabs button{flex:1;padding:11px 0;font-size:11px;letter-spacing:.12em}
-  /* Active pill carries the same amber sheen as the primary button — a gradient fill
-     rather than the old flat amber. Colour role and aria-driven logic are unchanged. */
-  .tabs button[aria-selected=true]{
-    background:linear-gradient(180deg,var(--amber-lift),var(--amber));
-    color:var(--on-solid);border-color:transparent;
-    box-shadow:inset 0 1px 0 var(--sheen)}
-  /* secondary nav: two views of one calculation. outlined, visibly subordinate — kept
-     that way on purpose, so it never competes with the primary tabs for the eye. */
-  .subtabs{margin-bottom:14px}
-  .subtabs button{flex:1;padding:8px 0;font-size:10px;letter-spacing:.08em}
-  .subtabs button[aria-selected=true]{color:var(--amber);border-color:var(--amber)}
-
-  .big{font-family:var(--mono);font-size:46px;font-weight:700;color:var(--amber);
-    letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+  /* Green-panel readout typography. */
+  .big{font-family:var(--sans);font-size:52px;font-weight:800;color:#fff;
+    letter-spacing:-.01em;line-height:1;font-variant-numeric:tabular-nums}
   .big.done{color:var(--good)}
-  /* Timezone suffix on the big clock numbers — deliberately NOT sized/weighted to match
-     the 46px readout, so it reads as a small unit label rather than a second number. */
-  .big-tz{font-size:16px;font-weight:400;color:var(--mute);letter-spacing:normal}
-  .day{font-family:var(--mono);font-size:13px;margin-top:6px}
-  .sub{font-family:var(--mono);font-size:12px;color:var(--mute);margin-top:12px;
-    padding-top:12px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
-  .sub b{color:var(--ink);font-weight:400}
-  /* LIVE line: its own class (not .sub) so this doesn't touch etaYours/etaShift, which
-     stay exactly as plain/muted as every other secondary readout line. Keeps .sub's
-     divider/spacing, but the content reads as "this matters" rather than one more
-     identical-looking line: a distinct reefer-filled "LIVE" badge, and the rest of the
-     line bumped up in size/weight/color from the .sub baseline. */
-  .liveLine{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);
-    font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
-  .liveBadge{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:600;
-    letter-spacing:.06em;color:var(--on-solid);background:var(--reefer);
-    border-radius:var(--r-pill);padding:2px 8px;line-height:1.4}
-  .liveText{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink)}
-  .liveText b{font-weight:600}
-  /* ON/OFF text next to the override switch — the knob is always the same amber
-     regardless of state (only its position changes), so a glance at the pill alone
-     doesn't say which side is which. --good on, so it doesn't read as another amber
-     "primary" thing and doesn't clash with the knob's own always-amber fill. */
-  .overrideState{font-family:var(--mono);font-size:10px;letter-spacing:.08em;
-    color:var(--mute)}
-  .overrideState.on{color:var(--good);font-weight:600}
-  .note{font-family:var(--mono);font-size:12px;color:var(--mute);line-height:1.7;margin-top:14px}
+  .big-tz{font-size:15px;font-weight:600;color:rgba(255,255,255,.75);letter-spacing:normal}
+  .day{font-family:var(--sans);font-weight:700;font-size:15px;margin-top:4px}
+  .sub{font-family:var(--mono);font-weight:600;font-size:12.5px;color:rgba(255,255,255,.88);
+    margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.3);
+    font-variant-numeric:tabular-nums}
+  .sub b{color:#fff;font-weight:700}
+  .readout .note{color:rgba(255,255,255,.85);font-weight:600}
+  .readout .note span[style]{color:#fff !important}
 
-  /* ETA run strip: drive legs split by stops */
-  .strip{display:flex;height:12px;margin-top:16px;border-radius:3px;overflow:hidden;
-    border:1px solid var(--line)}
+  /* The LIVE line as an amber changeable-message board. The [LIVE] tag is a
+     bordered chip; the caveat (#liveNote right after it) fuses into the board's
+     lower half when a quote is live — when there's no live line, #liveNote is
+     just a plain muted note (the "live unavailable…" path), not a CMS board. */
+  .liveLine{display:block;margin-top:12px;background:var(--cms-bg);
+    border:3px solid var(--cms-line);border-radius:8px;padding:10px 12px;
+    font-family:var(--mono);font-weight:700;font-size:14px;line-height:1.5;
+    color:var(--amber-hi);letter-spacing:.05em;text-transform:uppercase;
+    text-shadow:0 0 8px rgba(255,176,32,.5);font-variant-numeric:tabular-nums}
+  .liveBadge{display:inline-block;font-family:var(--mono);font-weight:700;font-size:11px;
+    letter-spacing:.06em;color:var(--amber-hi);background:transparent;
+    border:2px solid var(--amber-hi);border-radius:4px;padding:1px 7px;margin-right:6px;
+    vertical-align:2px;text-shadow:none}
+  .liveText{font-family:inherit;font-size:inherit;font-weight:inherit;color:inherit}
+  .liveText b{font-weight:700}
+  .liveLine span[style]{color:var(--cms-dim) !important;text-shadow:none}
+  .liveLine:has(+ .note:not(.hide)):not(.hide){
+    border-bottom:none;border-bottom-left-radius:0;border-bottom-right-radius:0;
+    padding-bottom:4px}
+  .liveLine:not(.hide) + .note{background:var(--cms-bg);border:3px solid var(--cms-line);
+    border-top:none;border-radius:0 0 8px 8px;margin-top:0;padding:0 12px 10px;
+    color:var(--cms-dim);font-family:var(--mono);font-weight:600;font-size:10.5px;
+    letter-spacing:.04em;line-height:1.5;text-transform:uppercase}
+
+  .overrideState{font-family:var(--mono);font-weight:600;font-size:10px;
+    letter-spacing:.08em;color:var(--panel-mute)}
+  .overrideState.on{color:var(--panel-green);font-weight:700}
+  .note{font-family:var(--mono);font-weight:600;font-size:11px;color:var(--panel-mute);
+    line-height:1.6;margin-top:14px}
+
+  /* Run strip: white driving segments on the green panel; the stop notches keep
+     their exact existing colors (DOT --good, fuel --amber-dim, swap --reefer). */
+  .strip{display:flex;height:14px;margin-top:14px;border-radius:7px;overflow:hidden;
+    border:2px solid rgba(255,255,255,.85)}
   .strip i{display:block}
-  .strip i.d{background:var(--amber)}
+  .strip i.d{background:#F5F6F4}
   .strip i.swap{background:var(--reefer);min-width:2px}
   .strip i.fuel{background:var(--amber-dim);min-width:2px}
   .strip i.dot{background:var(--good);min-width:2px}
-  .legend{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;
-    color:var(--mute);margin-top:6px;letter-spacing:.08em}
-  /* Colour key for the strip notches — swatches pull the same vars as the strip,
-     so they track both themes automatically. */
-  .stripkey{display:flex;justify-content:center;gap:8px;font-family:var(--mono);font-size:10px;
-    color:var(--mute);margin-top:8px;letter-spacing:.08em;flex-wrap:wrap}
-  /* Small solid pill chips (not blurred — they sit on a tier-2 card). Colour dot +
-     label. The three colour assignments are the strip's own vars, unchanged. */
-  .stripkey span{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;
-    border-radius:var(--r-pill);background:rgba(var(--ink-rgb),.06);
-    border:1px solid rgba(var(--ink-rgb),.08)}
-  .stripkey i{width:8px;height:8px;border-radius:50%;flex:none}
+  .legend{display:flex;justify-content:space-between;font-family:var(--mono);font-weight:600;
+    font-size:11px;color:rgba(255,255,255,.85);margin-top:10px;letter-spacing:.04em}
+  .stripkey{display:flex;justify-content:center;gap:8px;font-family:var(--sans);
+    font-weight:600;font-size:11px;color:#fff;margin-top:10px;flex-wrap:wrap}
+  .stripkey span{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;
+    border-radius:var(--r-pill);background:rgba(255,255,255,.14);
+    border:1.5px solid rgba(255,255,255,.5)}
+  .stripkey i{width:9px;height:9px;border-radius:50%;flex:none}
   .stripkey i.dot{background:var(--good)}
   .stripkey i.fuel{background:var(--amber-dim)}
   .stripkey i.swap{background:var(--reefer)}
 
-  /* 34 reset: one bar per hour */
+  /* 34 reset: one bar per hour, on the green panel. */
   .bars{display:flex;gap:2px;height:22px;margin-top:14px}
   .bars i{flex:1;display:block;border-radius:1px;background:var(--bar-off)}
-  .bars i.on{background:var(--amber)}
-  .bars i.now{background:var(--amber);opacity:.45}
+  .bars i.on{background:var(--amber-hi)}
+  .bars i.now{background:var(--amber-hi);opacity:.45}
   .bars.done i.on{background:var(--good)}
-  .scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;
-    color:var(--mute);margin-top:5px;letter-spacing:.08em}
+  .scale{display:flex;justify-content:space-between;font-family:var(--mono);font-weight:600;
+    font-size:9px;color:rgba(255,255,255,.7);margin-top:5px;letter-spacing:.08em}
 
-  .cushion{margin-top:14px;padding:10px 12px;border-radius:6px;font-family:var(--mono);
-    font-size:13px}
-  .cushion.ok{background:rgba(79,209,139,.10);border:1px solid var(--good);color:var(--good)}
-  .cushion.bad{background:rgba(255,93,82,.10);border:1px solid var(--late);color:var(--late)}
-  [data-theme="day"] .cushion.ok{background:rgba(21,128,61,.08)}
-  [data-theme="day"] .cushion.bad{background:rgba(179,38,30,.08)}
+  .cushion{margin-top:14px;padding:10px 12px;border-radius:8px;font-family:var(--mono);
+    font-weight:600;font-size:13px;background:#fff;color:var(--ink)}
+  .cushion.ok{border:2px solid var(--good)}
+  .cushion.bad{border:2px solid var(--late)}
 
-  .chip{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--reefer);
-    border:1px solid var(--reefer);border-radius:999px;padding:3px 10px;letter-spacing:.04em}
-  .chip.grey{color:var(--mute);border-color:var(--mute)}
+  .chip{display:inline-block;font-family:var(--mono);font-weight:600;font-size:11px;
+    color:var(--ink);border:2px solid var(--ink);border-radius:999px;padding:3px 10px;
+    letter-spacing:.04em}
+  .chip.grey{color:var(--panel-mute);border-color:var(--panel-mute)}
   .meta{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
-  .err{font-family:var(--mono);font-size:11px;color:var(--late);margin-top:8px}
+  .err{font-family:var(--mono);font-weight:600;font-size:11px;color:var(--late);margin-top:8px}
 
-  /* City-suggestion dropdown, shared shape for destIn/origIn/rsIn. Positioned under
-     whichever .row wraps its input (that row gets position:relative inline).
-     Tier 2 surface: a list of names being read and tapped, so near-opaque, not glass.
-     No hairline — it scrolls, and the hairline would scroll off the edge it describes.
-     Radius sits between --r-sm and --r-card: full --r-card is too round for a row list.
-     Fully opaque, unlike the other tier-2 surfaces: this is the only one that floats over
-     other CONTENT rather than the flat page background, so even 4% translucency ghosts the
-     fields behind it through the city names. Contrast is the priority for tier 2. */
+  /* Suggestion dropdown: a white regulatory sign list. Absolutely positioned so
+     it overlays the fields below (behavior and wiring untouched). */
   .suggest{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;
-    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    background:#fff;border:2px solid var(--ink);border-radius:8px;
     box-shadow:var(--shadow);max-height:220px;overflow-y:auto}
   .suggest button{display:block;width:100%;text-align:left;padding:11px 12px;
     border:none;border-radius:0;background:transparent;color:var(--ink);
-    font-family:var(--sans);font-size:14px;letter-spacing:normal;text-transform:none}
-  .suggest button+button{border-top:1px solid var(--line)}
-  .suggest button:hover,.suggest button:focus-visible{background:var(--asphalt)}
+    font-family:var(--sans);font-weight:600;font-size:14px;letter-spacing:normal;
+    text-transform:none}
+  .suggest button+button{border-top:1px solid #c8cdd2}
+  .suggest button:hover,.suggest button:focus-visible{background:#eef0ee}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-  .presets{margin-bottom:12px}
-  .presets button{flex:1;padding:9px 0;font-size:11px;text-transform:uppercase;
-    letter-spacing:.08em}
-  .presets button[aria-selected=true]{
-    background:linear-gradient(180deg,var(--amber-lift),var(--amber));
-    color:var(--on-solid);border-color:transparent;
-    box-shadow:inset 0 1px 0 var(--sheen)}
+  .presets{display:flex;gap:8px;margin-bottom:12px}
+  .presets button{flex:1;padding:11px 4px;font-family:var(--sans);font-weight:700;
+    font-size:12px;text-transform:uppercase;letter-spacing:.02em;background:#fff;
+    color:var(--ink);border:2px solid var(--ink);border-radius:8px}
+  .presets button[aria-selected=true]{background:var(--panel-green);color:#fff;
+    border-color:var(--panel-green)}
 
-  .warn{border:1px solid var(--amber-dim);background:var(--warn-bg);border-radius:6px;
-    padding:12px;margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--mute);
-    line-height:1.7}
-  .warn b{color:var(--amber);font-weight:400}
-  .stamp{font-family:var(--mono);font-size:16px;color:var(--ink);margin-top:8px;
-    padding:10px 12px;background:var(--asphalt);border:1px solid var(--line);border-radius:6px;
+  /* Milepost markers between cards — presentational dividers. */
+  .mp{display:flex;justify-content:center;margin:-4px 0 12px}
+  .mp span{background:var(--panel-green);border:2px solid #fff;border-radius:5px;color:#fff;
+    padding:3px 9px;font-family:var(--sans);font-weight:700;font-size:10px;
+    letter-spacing:.06em;box-shadow:var(--shadow)}
+
+  /* Advisory: the amber warning sign. The 34-rule note carries the black
+     warning diamond; #frameWarn shares the panel without one. */
+  .warn{display:flex;gap:12px;align-items:flex-start;background:var(--amber);color:var(--ink);
+    border:3px solid #fff;border-radius:var(--r-card);padding:14px;margin-bottom:16px;
+    font-family:var(--sans);font-weight:600;font-size:13px;line-height:1.5;
+    box-shadow:var(--shadow);text-align:left}
+  .card .warn{margin-top:14px;margin-bottom:0;border-color:var(--ink)}
+  .warn .dia{flex:none;width:34px;height:34px;background:var(--ink);transform:rotate(45deg);
+    border-radius:6px;margin:4px 6px;display:flex;align-items:center;justify-content:center}
+  .warn .dia b{transform:rotate(-45deg);color:var(--amber-hi);
+    font-family:var(--sans);font-weight:800;font-size:18px;line-height:1}
+  .warn p{margin:0;font-family:var(--sans);font-weight:600;font-size:13px;line-height:1.5}
+  .warn b{color:var(--ink);font-weight:800}
+
+  .stamp{font-family:var(--mono);font-weight:600;font-size:16px;color:var(--ink);margin-top:8px;
+    padding:10px 12px;background:#fff;border:2px solid var(--ink);border-radius:8px;
     user-select:all;-webkit-user-select:all}
-  .foot{font-family:var(--mono);font-size:10px;color:var(--mute);line-height:1.8;margin-top:14px;
-    letter-spacing:.03em}
-  .foot p{margin:0;text-align:center}   /* center on the text element itself, not via inherit */
-  .foot p + p{margin-top:.9em}          /* subtle one-line separation between stacked lines */
-  /* Safari ignores text-align on a <select> face; text-align-last centers it there. */
+  .foot{font-family:var(--mono);font-weight:600;font-size:10px;color:var(--mute);
+    line-height:1.8;margin-top:14px;letter-spacing:.03em}
+  .card .foot{color:var(--panel-mute)}
+  .foot p{margin:0;text-align:center}
+  .foot p + p{margin-top:.9em}
+  /* Version footer: a small sign plate, still the tappable update check. */
+  .footWrap{text-align:center;margin-top:10px}
+  #verFoot{display:inline-block;width:auto;background:transparent;color:var(--mute);
+    border:2px solid var(--line);border-radius:6px;padding:4px 12px;
+    font-family:var(--mono);font-weight:600;font-size:11px;letter-spacing:.03em}
   select.centered{text-align:center;text-align-last:center}
 
-  /* The modal's dimming layer is tier-1 chrome, so it blurs what's behind it. Its own
-     dim colour is kept — that's what makes the sheet readable, blur alone wouldn't. */
-  @supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
-    .helpBackdrop{-webkit-backdrop-filter:blur(18px) saturate(160%);
-      backdrop-filter:blur(18px) saturate(160%)}
-  }
-  /* Anyone who has asked their OS to cut transparency gets the tier-2 treatment
-     everywhere: near-opaque, no blur. Unsupported browsers simply skip this block. */
+  /* Nothing translucent is left to reduce, but the plumbing stays harmless. */
   @media (prefers-reduced-transparency: reduce){
-    .tabs,.subtabs,.presets,.switch{
-      background:rgba(var(--panel-rgb),.96);
-      -webkit-backdrop-filter:none;backdrop-filter:none}
     .helpBackdrop{-webkit-backdrop-filter:none;backdrop-filter:none}
-    .card,.helpPanel,.suggest{background:var(--panel)}
   }
   .hide{display:none !important}
 </style>
@@ -434,9 +426,17 @@
 <body>
 <div class="wrap">
   <div class="brand">
-    <b>MILESPOST</b>
+    <div class="shield">
+      <svg width="34" height="38" viewBox="0 0 34 38" aria-hidden="true">
+        <path d="M17 1 L31 6 C31 20 27 30 17 37 C7 30 3 20 3 6 Z" fill="#006B3D" stroke="#fff" stroke-width="2"/>
+        <text x="17" y="24" text-anchor="middle" font-family="Overpass, sans-serif" font-weight="800" font-size="13" fill="#fff">MP</text>
+      </svg>
+      <div>
+        <h1>MILESPOST</h1>
+        <div class="motto">WHEELS NEVER STOP</div>
+      </div>
+    </div>
     <div class="brand-r">
-      <span class="tag">WHEELS NEVER STOP</span>
       <button class="switch" id="themeBtn" role="switch" aria-checked="false"
               aria-label="Switch to day mode">
         <i class="knob">
@@ -465,6 +465,7 @@
     </div>
 
     <div class="card readout">
+      <div class="exit-tab hide" id="etaExit"></div>
       <div class="lbl-row">
         <div class="lbl" id="etaLabel">Arrival</div>
         <button class="help-btn" id="etaHelp" aria-label="What is this?" type="button"><span>?</span></button>
@@ -485,6 +486,8 @@
       <div class="legend hide" id="legend"></div>
       <div class="cushion hide" id="cushion"></div>
     </div>
+
+    <div class="mp hide" id="mpTopWrap"><span id="mpTop"></span></div>
 
     <div class="card">
       <div class="lbl-row">
@@ -524,7 +527,7 @@
         <label for="depart">Rolling out</label>
         <div class="row">
           <input id="depart" type="datetime-local">
-          <button class="ghost" id="nowBtn">NOW</button>
+          <button class="go" id="nowBtn">NOW</button>
         </div>
         <div class="meta">
           <span class="chip grey" id="origChip"></span>
@@ -547,6 +550,8 @@
 
       <button class="muted" id="etaClear">CLEAR</button>
     </div>
+
+    <div class="mp hide" id="mpFuelWrap"><span id="mpFuel"></span></div>
 
     <div class="card hide" id="panelTuned">
       <div class="lbl-row">
@@ -602,6 +607,7 @@
   <!-- ========================== 34 RESET ========================== -->
   <div id="viewReset" class="hide">
     <div class="card readout" id="rsReadout">
+      <div class="exit-tab hide" id="rsExit"></div>
       <div class="lbl-row">
         <div class="lbl" id="rsLabel">Legal at</div>
         <button class="help-btn" id="rsHelp" aria-label="What is this?" type="button"><span>?</span></button>
@@ -644,8 +650,8 @@
           open, closed, or deleted.</p>
       </div>
       <div class="warn hide" id="frameWarn">
-        <b>You're viewing this inside an app preview.</b> Previews block downloads, so the
-        calendar handoff won't fire here. Open the page in Safari or Chrome and it'll work.
+        <p><b>You're viewing this inside an app preview.</b> Previews block downloads, so the
+        calendar handoff won't fire here. Open the page in Safari or Chrome and it'll work.</p>
       </div>
       <div class="hide" id="manual">
         <div class="lbl" style="margin-top:14px">Or set an alarm by hand for</div>
@@ -655,10 +661,11 @@
       <button class="muted" id="rsClear">CLEAR TIMER</button>
     </div>
 
-    <div class="warn" style="text-align:center">
-      <b>It has to be 34 consecutive hours off duty.</b> Going on duty for even a minute —
+    <div class="warn">
+      <div class="dia" aria-hidden="true"><b>34</b></div>
+      <p><b>It has to be 34 consecutive hours off duty.</b> Going on duty for even a minute —
       moving the truck, a quick pre-trip, signing something — starts the whole thing over
-      from zero. If that happens, hit restart above.
+      from zero. If that happens, hit restart above.</p>
     </div>
 
     <div class="foot" style="text-align:center">
@@ -667,10 +674,9 @@
     </div>
   </div>
 
-  <button type="button" id="verFoot" class="foot" aria-label="Check for app updates"
-    style="text-align:center;opacity:.55;background:none;border:none;width:100%">
-    MilesPost v3.1.6
-  </button>
+  <div class="footWrap">
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.0</button>
+  </div>
 </div>
 
 <!-- Shared help modal, reused by every "?" button. No close button — dismiss by
@@ -707,7 +713,7 @@ const applyTheme = t => {
   b.setAttribute("aria-checked", String(t === "day"));
   b.setAttribute("aria-label", t === "day" ? "Switch to night mode" : "Switch to day mode");
   const m = document.querySelector('meta[name=theme-color]');
-  if(m) m.setAttribute("content", t === "day" ? "#F2F4F7" : "#0B0E10");
+  if(m) m.setAttribute("content", t === "day" ? "#E8EAED" : "#13161a");
   try{ localStorage.setItem(THEME_KEY, t); }catch{}
 };
 document.getElementById("themeBtn").onclick = () =>
@@ -1278,8 +1284,17 @@ function renderEta(){
   $("etaClear").disabled = !hasLoad;
   if(!hasLoad) etaClearGuard.disarm();
 
-  ["etaYours","etaShift","liveLine","liveNote","quickNote","strip","stripKey","legend","cushion"]
-    .forEach(id=>show($(id),false));
+  // Highway dressing, all from state this pass already has: the milepost marker
+  // between cards shows miles remaining; the fuel milepost fronts the run panel
+  // (so it shows/hides with it) with the preset's own fuel interval — never a
+  // number that can disagree with what the run note says.
+  show($("mpTopWrap"), M > 0);
+  if(M > 0) $("mpTop").textContent = "MILE " + M;
+  show($("mpFuelWrap"), E.mode === "tuned");
+  $("mpFuel").textContent = Number(E.p.fuelEvery) > 0 ? "MILE " + E.p.fuelEvery + " · FUEL" : "FUEL";
+
+  ["etaYours","etaShift","liveLine","liveNote","quickNote","strip","stripKey","legend","cushion",
+   "etaExit"].forEach(id=>show($(id),false));
   renderLiveBtn();
   if(!(M > 0 && start)){
     $("etaClock").textContent = "--:--";
@@ -1293,6 +1308,9 @@ function renderEta(){
 
   $("etaClock").innerHTML = clockWithTz(eta, showTz);
   $("etaDay").textContent = dayOf(eta, showTz);
+  // Exit tab: same day + tz the readout just computed, in guide-sign shorthand.
+  $("etaExit").textContent = dayOf(eta, showTz).split(",")[0].toUpperCase() + " · " + tzTag(showTz);
+  show($("etaExit"), true);
 
   if(E.destTz && E.destTz !== E.originTz){
     show($("etaYours"), true);
@@ -1545,7 +1563,7 @@ function renderReset(){
     $("rsLabel").textContent = "Legal at";
     $("rsClock").textContent = "--:--";
     $("rsDay").textContent = "Set the time you shut down.";
-    ["rsCount","bars","rsScale","manual"].forEach(id=>show($(id), false));
+    ["rsCount","bars","rsScale","manual","rsExit"].forEach(id=>show($(id), false));
     show($("rsInputCard"), true);          // input returns only in the empty state
     $("icsBtn").disabled = true;
     $("rsBroke").disabled = true; brokeGuard.disarm();
@@ -1572,6 +1590,10 @@ function renderReset(){
   $("rsLabel").textContent = done ? "Legal now · 70 hours back" : "Legal at · "+tzTag(R.tz);
   $("rsClock").innerHTML = clockWithTz(legal, R.tz);
   $("rsDay").textContent = dayOf(legal, R.tz);
+  // Exit tab: the legal day + tz this pass just computed, in guide-sign shorthand.
+  // Its green-clear "done" look rides the same .done class toggled two lines down.
+  $("rsExit").textContent = dayOf(legal, R.tz).split(",")[0].toUpperCase() + " · " + tzTag(R.tz);
+  show($("rsExit"), true);
   $("rsClock").classList.toggle("done", done);
   $("rsReadout").classList.toggle("done", done);
   $("stamp").textContent = clockOf(legal,R.tz)+" · "+dayOf(legal,R.tz)+" · "+tzTag(R.tz);

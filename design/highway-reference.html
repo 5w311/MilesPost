@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MilesPost — Highway, full pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;700;800&family=Overpass+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0}
+  html{-webkit-text-size-adjust:100%}
+  :root{
+    --road:#13161a; --panel-green:#006B3D; --panel-green-dk:#00552F;
+    --amber:#B98700; --amber-hi:#FFB020;
+    --white:#F5F6F4; --ink:#15181b; --line:#39424a; --mute:#8b959e;
+    --late:#B3261E; --reefer:#5AC8E8; --good:#4FD18B; --fuel:#E3B584;
+  }
+  body{min-height:100vh;background:var(--road);color:#fff;
+    font-family:"Overpass",sans-serif;padding:18px 14px 60px}
+  .wrap{max-width:430px;margin:0 auto}
+
+  /* masthead */
+  .mast{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .mast .shield{display:flex;align-items:center;gap:10px}
+  .mast .shield svg{display:block}
+  .mast h1{font:800 17px/1 "Overpass";letter-spacing:.12em}
+  .mast .motto{font:600 10px/1 "Overpass Mono";color:var(--mute);letter-spacing:.08em}
+
+  /* tab rows as sign-adjacent buttons */
+  .tabs{display:flex;gap:8px;margin-bottom:10px}
+  .tabs button{flex:1;padding:12px 4px;font:700 12.5px/1 "Overpass";letter-spacing:.05em;
+    background:#20262c;color:var(--mute);border:2px solid var(--line);border-radius:9px;cursor:pointer}
+  .tabs button.on{background:var(--panel-green);color:#fff;border-color:#fff}
+  .subtabs{display:flex;gap:8px;margin-bottom:16px}
+  .subtabs button{flex:1;padding:10px 4px;font:700 11.5px/1 "Overpass";letter-spacing:.04em;
+    background:#20262c;color:var(--mute);border:2px solid var(--line);border-radius:9px;cursor:pointer}
+  .subtabs button.on{background:transparent;color:#fff;border-color:var(--amber-hi)}
+
+  /* sign panels */
+  .panel{position:relative;background:var(--panel-green);border:3px solid #fff;border-radius:14px;
+    padding:16px 16px 14px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+  .panel .qmark{position:absolute;top:12px;right:12px;width:26px;height:26px;border-radius:99px;
+    border:2px solid rgba(255,255,255,.75);background:transparent;color:#fff;
+    font:700 13px/1 "Overpass";cursor:pointer}
+  .exit-tab{position:absolute;top:-16px;right:14px;background:var(--panel-green);
+    border:3px solid #fff;border-radius:8px;padding:4px 12px;font:700 12px/1.2 "Overpass"}
+  .paneltop{font:600 13px/1.3 "Overpass";opacity:.92}
+  .bigtime{font:800 56px/1 "Overpass";letter-spacing:-.01em}
+  .dest{font:700 22px/1.15 "Overpass";margin-top:2px}
+  .sub{font:600 13px/1.55 "Overpass Mono";opacity:.88;margin-top:8px}
+  .panel.amberp{background:var(--amber);border-color:#fff}
+  .panel.whitep{background:var(--white);color:var(--ink);border-color:var(--ink)}
+  .panel.whitep .qmark{border-color:rgba(21,24,27,.5);color:var(--ink)}
+
+  /* CMS board — the LIVE line as a changeable message sign */
+  .cms{margin-top:12px;background:#0a0c0a;border:3px solid #494f45;border-radius:8px;
+    padding:10px 12px;font:700 15px/1.5 "Overpass Mono";color:var(--amber-hi);
+    letter-spacing:.06em;text-shadow:0 0 8px rgba(255,176,32,.5)}
+  .cms .tag{display:inline-block;border:2px solid var(--amber-hi);border-radius:4px;
+    padding:1px 7px;margin-right:8px;font-size:11px;vertical-align:2px}
+  .cms small{display:block;font:600 10.5px/1.5 "Overpass Mono";color:#7d6a35;
+    letter-spacing:.04em;text-shadow:none;margin-top:4px}
+
+  .strip{display:flex;height:14px;border-radius:7px;overflow:hidden;margin-top:12px;
+    border:2px solid rgba(255,255,255,.85)}
+  .strip i{display:block;height:100%}
+  .chips{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .chip{display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;
+    font:600 11px/1 "Overpass";background:rgba(255,255,255,.14);border:1.5px solid rgba(255,255,255,.5)}
+  .dot{width:9px;height:9px;border-radius:99px}
+  .statline{display:flex;justify-content:space-between;margin-top:10px;
+    font:600 11.5px/1 "Overpass Mono";opacity:.85}
+
+  /* white regulatory panel: form fields */
+  .flabel{font:700 11px/1 "Overpass";letter-spacing:.1em;color:#4a545c;margin:12px 0 6px;text-transform:uppercase}
+  .frow{display:flex;gap:8px}
+  .fin{flex:1;padding:12px;font:600 15px/1 "Overpass Mono";color:var(--ink);
+    background:#fff;border:2px solid var(--ink);border-radius:8px;min-width:0}
+  .fbtn{padding:0 16px;font:800 12px/1 "Overpass";letter-spacing:.05em;background:var(--panel-green);
+    color:#fff;border:2px solid var(--panel-green);border-radius:8px;cursor:pointer}
+  .fbtn.ghost{background:#fff;color:var(--ink);border-color:var(--ink)}
+  .fnote{font:600 11px/1.5 "Overpass Mono";color:#5c666f;margin-top:6px}
+  .cta{display:block;width:100%;margin-top:14px;padding:15px;font:800 14px/1 "Overpass";
+    letter-spacing:.06em;background:var(--amber);color:#fff;border:3px solid #fff;border-radius:12px;cursor:pointer}
+  .whitep .cta{border-color:var(--ink)}
+  .cta.quiet{background:#fff;color:var(--ink);border:2px solid var(--ink);font-weight:700;padding:12px}
+  .cta.danger{background:var(--late)}
+  .presets{display:flex;gap:8px;margin-top:8px}
+  .presets button{flex:1;padding:11px 4px;font:700 12px/1 "Overpass";background:#fff;
+    color:var(--ink);border:2px solid var(--ink);border-radius:8px;cursor:pointer}
+  .presets button.on{background:var(--panel-green);color:#fff;border-color:var(--panel-green)}
+
+  /* mileposts running down the margin between cards */
+  .mp{display:flex;justify-content:center;margin:-6px 0 10px}
+  .mp span{background:var(--panel-green);border:2px solid #fff;border-radius:5px;
+    padding:3px 8px;font:700 10px/1.2 "Overpass";letter-spacing:.06em}
+
+  /* warning diamond note (34-reset rule) */
+  .warn{display:flex;gap:12px;align-items:flex-start;background:var(--amber);color:#15181b;
+    border:3px solid #fff;border-radius:14px;padding:14px;margin-bottom:16px}
+  .warn .dia{flex:none;width:34px;height:34px;background:#15181b;transform:rotate(45deg);
+    border-radius:6px;margin:4px 6px;display:flex;align-items:center;justify-content:center}
+  .warn .dia b{transform:rotate(-45deg);color:var(--amber-hi);font:800 18px/1 "Overpass"}
+  .warn p{font:600 13px/1.5 "Overpass"}
+  .warn b.lead{font-weight:800}
+
+  .foot{margin-top:6px;text-align:center;font:600 11px/1.6 "Overpass Mono";color:#5c666f}
+  .foot .ver{display:inline-block;margin-top:6px;border:2px solid var(--line);border-radius:6px;
+    padding:3px 10px;color:var(--mute);cursor:pointer}
+
+  .hide{display:none!important}
+
+  /* help modal — a sign on a post */
+  .backdrop{position:fixed;inset:0;background:rgba(6,8,10,.72);display:none;
+    align-items:center;justify-content:center;padding:22px;z-index:20}
+  .backdrop.show{display:flex}
+  .sign{max-width:400px;width:100%;background:var(--white);color:var(--ink);
+    border:3px solid var(--ink);border-radius:14px;padding:18px}
+  .sign h3{font:800 16px/1.2 "Overpass";letter-spacing:.03em;margin-bottom:8px}
+  .sign p{font:600 13.5px/1.55 "Overpass";margin-bottom:10px}
+  .sign ul{padding-left:18px;font:600 12.5px/1.6 "Overpass";color:#3a434b}
+  .sign .hint{text-align:center;font:600 10px/1 "Overpass Mono";color:#8b959e;margin-top:14px}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mast">
+    <div class="shield">
+      <svg width="34" height="38" viewBox="0 0 34 38" aria-hidden="true">
+        <path d="M17 1 L31 6 C31 20 27 30 17 37 C7 30 3 20 3 6 Z" fill="#006B3D" stroke="#fff" stroke-width="2"/>
+        <text x="17" y="24" text-anchor="middle" font-family="Overpass" font-weight="800" font-size="13" fill="#fff">MP</text>
+      </svg>
+      <div>
+        <h1>MILESPOST</h1>
+        <div class="motto">WHEELS NEVER STOP</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="on" data-v="eta">ETA</button>
+    <button data-v="reset">34 RESET</button>
+  </div>
+
+  <!-- ================= ETA VIEW ================= -->
+  <div id="v-eta">
+    <div class="subtabs">
+      <button data-m="quick" class="on">SIMPLE ETA</button>
+      <button data-m="tuned">TUNED MODEL</button>
+    </div>
+
+    <!-- SIMPLE -->
+    <div id="m-quick">
+      <div class="panel">
+        <div class="exit-tab">TUE · CT</div>
+        <button class="qmark" onclick="openHelp('simple')">?</button>
+        <div class="paneltop">ARRIVAL</div>
+        <div class="bigtime">19:58</div>
+        <div class="dest">Nashville, TN</div>
+        <div class="sub">1250 mi ÷ 50 · 25 h 00 m all-in<br>Tuned model says 16:01 · 3 h 56 m ahead</div>
+      </div>
+    </div>
+
+    <!-- TUNED -->
+    <div id="m-tuned" class="hide">
+      <div class="panel">
+        <div class="exit-tab">TUE · CT</div>
+        <button class="qmark" onclick="openHelp('tuned')">?</button>
+        <div class="paneltop">ARRIVAL</div>
+        <div class="bigtime">16:01</div>
+        <div class="dest">Nashville, TN</div>
+        <div class="sub">day shift driving</div>
+        <div class="cms">
+          <span class="tag">LIVE</span>17:32 CT WED · 642 MI · TRAFFIC +14 MIN
+          <small>RIGHT-NOW CONDITIONS — SHAPES THE NEXT FEW HOURS. TRUCK-LEGAL ROUTE APPLIES TO THE WHOLE RUN.</small>
+        </div>
+        <div class="strip">
+          <i style="flex:24;background:#F5F6F4"></i><i style="flex:2;background:var(--good)"></i>
+          <i style="flex:20;background:#F5F6F4"></i><i style="flex:2;background:var(--fuel)"></i>
+          <i style="flex:16;background:#F5F6F4"></i><i style="flex:3;background:var(--reefer)"></i>
+          <i style="flex:28;background:#F5F6F4"></i>
+        </div>
+        <div class="chips">
+          <span class="chip"><i class="dot" style="background:var(--good)"></i>DOT</span>
+          <span class="chip"><i class="dot" style="background:var(--fuel)"></i>Fuel</span>
+          <span class="chip"><i class="dot" style="background:var(--reefer)"></i>Swap</span>
+        </div>
+        <div class="statline"><span>ROLLING 19 H 14 M</span><span>STOPPED 1 H 50 M</span><span>59.3 MPH</span></div>
+      </div>
+    </div>
+
+    <div class="mp"><span>MILE 1250</span></div>
+
+    <!-- LOAD (white regulatory panel) -->
+    <div class="panel whitep">
+      <button class="qmark" onclick="openHelp('load')">?</button>
+      <div class="paneltop">YOUR LOAD</div>
+      <div class="flabel">Miles remaining</div>
+      <div class="frow">
+        <input class="fin" value="1250" inputmode="decimal"><button class="fbtn ghost">✕</button>
+      </div>
+      <div class="flabel">Destination town</div>
+      <div class="frow">
+        <input class="fin" value="Nashville, TN"><button class="fbtn ghost">✕</button>
+      </div>
+      <div class="flabel">Rolling out</div>
+      <div class="frow">
+        <input class="fin" value="Jul 27 · 6:58 PM"><button class="fbtn">NOW</button>
+      </div>
+      <div class="fnote">Your device · EDT · change</div>
+      <button class="cta quiet">CLEAR</button>
+    </div>
+
+    <div class="mp"><span>MILE 650 · FUEL</span></div>
+
+    <!-- HOW YOU RUN -->
+    <div class="panel whitep" id="runPanel">
+      <button class="qmark" onclick="openHelp('run')">?</button>
+      <div class="paneltop">HOW YOU RUN</div>
+      <div class="presets">
+        <button>CONSERVATIVE</button><button class="on">REALISTIC</button><button>PUSH</button>
+      </div>
+      <div class="sub" style="opacity:.75">65 mph · fuel 650 mi (20 min) · swap 06:00/18:00 EDT (30 min) · DOT 30 min @ 5 h<br>This run: 1 swap · 1 fuel stop · 2 DOT breaks</div>
+      <button class="cta" id="ctaMain">UPDATE LIVE ETA</button>
+      <div class="fnote" style="text-align:center;margin-top:8px">+ TUNE TO YOUR TRUCK</div>
+    </div>
+  </div>
+
+  <!-- ================= 34 RESET VIEW ================= -->
+  <div id="v-reset" class="hide">
+    <div class="panel">
+      <button class="qmark" onclick="openHelp('reset')">?</button>
+      <div class="paneltop">LEGAL AT</div>
+      <div class="bigtime">--:--</div>
+      <div class="sub">Set the time you shut down.</div>
+    </div>
+
+    <div class="panel whitep">
+      <div class="paneltop">SHUT DOWN</div>
+      <div class="frow" style="margin-top:8px">
+        <input class="fin" placeholder=""><button class="fbtn">SET</button><button class="fbtn ghost">NOW</button>
+      </div>
+      <div class="fnote">Your device · EDT · change</div>
+      <button class="cta">ADD ALARM TO CALENDAR</button>
+      <div class="fnote" style="text-align:center;margin-top:8px">No web app can wake your phone on its own — this hands a real alarm to your Calendar.</div>
+      <button class="cta danger">BROKE THE 34 — RESTART FROM NOW</button>
+      <button class="cta quiet">CLEAR TIMER</button>
+    </div>
+
+    <div class="warn">
+      <div class="dia"><b>34</b></div>
+      <p><b class="lead">It has to be 34 consecutive hours off duty.</b> Going on duty for even a minute — moving the truck, a quick pre-trip, signing something — starts the whole thing over from zero. If that happens, hit restart above.</p>
+    </div>
+  </div>
+
+  <div class="foot">
+    34-hour restart under 395.3(c) · counts real elapsed hours, DST-safe<br>
+    <span class="ver">MILESPOST v4.0</span>
+  </div>
+</div>
+
+<!-- help modal -->
+<div class="backdrop" id="bk" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="sign">
+    <h3 id="hT"></h3>
+    <p id="hB"></p>
+    <ul id="hL"></ul>
+    <div class="hint">TAP OUTSIDE TO CLOSE</div>
+  </div>
+</div>
+
+<script>
+  // view + mode switching
+  const V = {eta:document.getElementById("v-eta"), reset:document.getElementById("v-reset")};
+  document.querySelectorAll(".tabs button").forEach(b=>{
+    b.onclick=()=>{
+      document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b));
+      V.eta.classList.toggle("hide", b.dataset.v!=="eta");
+      V.reset.classList.toggle("hide", b.dataset.v!=="reset");
+    };
+  });
+  const M = {quick:document.getElementById("m-quick"), tuned:document.getElementById("m-tuned")};
+  document.querySelectorAll(".subtabs button").forEach(b=>{
+    b.onclick=()=>{
+      document.querySelectorAll(".subtabs button").forEach(x=>x.classList.toggle("on",x===b));
+      M.quick.classList.toggle("hide", b.dataset.m!=="quick");
+      M.tuned.classList.toggle("hide", b.dataset.m!=="tuned");
+      document.getElementById("ctaMain").textContent =
+        b.dataset.m==="quick" ? "GET MILEAGE" : "UPDATE LIVE ETA";
+    };
+  });
+  // start on Simple: CTA reads GET MILEAGE
+  document.getElementById("ctaMain").textContent = "GET MILEAGE";
+
+  const HELP = {
+    simple:{t:"Simple ETA",b:"Dispatch's number: your load's miles divided by a flat 50 mph, nonstop. No stops, no traffic, no truck-legal routing — a fast, rough guess.",
+      l:["Good for sanity-checking dispatch's own ETA.","It doesn't know about fuel, swaps, or breaks — expect it to run early."]},
+    tuned:{t:"Tuned Model ETA",b:"Runs your actual pace: your cruise speed plus real stops — fuel, driver swaps on the clock, and one DOT break per shift.",
+      l:["Pick a preset, or dial in your own numbers under TUNE TO YOUR TRUCK.","Tap UPDATE LIVE ETA for a truck-legal, traffic-aware read when you've got signal."]},
+    load:{t:"Your Load",b:"The run you're on: miles left, where you're headed, and when you roll out. Every readout reads straight from these fields.",
+      l:["Type miles from dispatch, or leave it blank and tap GET MILEAGE / UPDATE LIVE ETA to fill it from the real route.","CLEAR wipes the load but keeps your tuning and swap schedule."]},
+    run:{t:"How You Run",b:"Your driving profile — how the Tuned Model turns miles into time.",
+      l:["DOT break has a 30-minute floor — the legal minimum.","Changing a preset only touches the pace math — swaps and theme stay put."]},
+    reset:{t:"Legal At",b:"Tracks your 34-hour restart. Set the moment you shut down; this shows the exact time you're legal to run again — 34 real hours later, DST accounted for.",
+      l:["It hands you a calendar event with two alarms instead of a notification — add it when prompted.","BROKE THE 34 restarts the clock from right now.","The timer clears itself 10 minutes after you go legal."]}
+  };
+  function openHelp(k){
+    const h=HELP[k];
+    document.getElementById("hT").textContent=h.t;
+    document.getElementById("hB").textContent=h.b;
+    document.getElementById("hL").innerHTML=h.l.map(x=>"<li>"+x+"</li>").join("");
+    document.getElementById("bk").classList.add("show");
+  }
+</script>
+</body>
+</html>
