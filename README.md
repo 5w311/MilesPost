@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v4.0.1**
+**Current version: v4.0.2**
 
 ## Files
 
@@ -23,7 +23,7 @@ everything else works as always.
 | `lib/logic.js` | The pure logic — timezone resolver, ETA solver, 34-reset and ICS math. No DOM, no dependencies. Imported by the app and covered by the test suite. |
 | `sw.js` | Service worker. Caches everything so it works with zero bars. |
 | `manifest.webmanifest` | Makes it installable to the home screen. |
-| `icon-192.png` `icon-512.png` `apple-touch-icon.png` | App icons. |
+| `icon-192.png` `icon-512.png` `apple-touch-icon.png` `shield.png` | App icons (opaque) and the transparent in-app masthead mark. |
 | `.nojekyll` | Tells GitHub Pages to serve the files as-is. Don't delete it. |
 | `fonts/` | Vendored Overpass + Overpass Mono (woff2, SIL OFL — licenses included). No fonts CDN: the shell stays fully offline. |
 | `design/highway-reference.html` | The driver-approved Highway mockup — design source of truth for v4.0. Not shipped to the app (not in `sw.js` ASSETS). |
@@ -53,6 +53,19 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.0.2
+
+- **New mark: the interstate MilesPost shield** — red crest reading MILES over a blue
+  field reading POST, replacing v4.0.1's green MP shield everywhere it appears. All
+  three home-screen/favicon files swapped in place, and the masthead now uses the same
+  mark (`shield.png`, a transparent cutout of the identical shield, cached offline like
+  everything else) instead of the old inline green SVG — home screen, favicon, and
+  in-app brand are one identity.
+- **Already installed? Re-add to the home screen — again.** Same iOS limitation as
+  v4.0.1: the home-screen icon is cached at install time, so anyone who re-added after
+  v4.0.1 still sees the green MP shield until they remove and re-add MilesPost once
+  more. In-browser and fresh installs update immediately.
 
 ### v4.0.1
 

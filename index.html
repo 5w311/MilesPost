@@ -140,7 +140,7 @@
   /* Masthead: MP route shield + wordmark + motto; the day/night switch beside it. */
   .brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
   .shield{display:flex;align-items:center;gap:10px}
-  .shield svg{display:block;flex:none}
+  .shield svg,.shield img{display:block;flex:none}
   .brand h1{margin:0;font-family:var(--sans);font-weight:800;font-size:17px;line-height:1;
     letter-spacing:.12em;color:var(--page-ink)}
   .motto{font-family:var(--mono);font-weight:600;font-size:10px;line-height:1;
@@ -427,10 +427,11 @@
 <div class="wrap">
   <div class="brand">
     <div class="shield">
-      <svg width="34" height="38" viewBox="0 0 34 38" aria-hidden="true">
-        <path d="M17 1 L31 6 C31 20 27 30 17 37 C7 30 3 20 3 6 Z" fill="#006B3D" stroke="#fff" stroke-width="2"/>
-        <text x="17" y="24" text-anchor="middle" font-family="Overpass, sans-serif" font-weight="800" font-size="13" fill="#fff">MP</text>
-      </svg>
+      <!-- Same interstate mark as the home-screen icons, cut out with alpha so the day
+           theme doesn't get a dark box behind it. The h1 beside it carries the name, so
+           the mark is decorative: empty alt. Height only — the asset is 509x512, and
+           forcing a square would stretch it. -->
+      <img src="shield.png" alt="" height="36" style="display:block;flex:none">
       <div>
         <h1>MILESPOST</h1>
         <div class="motto">WHEELS NEVER STOP</div>
@@ -675,7 +676,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.0.1</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.0.2</button>
   </div>
 </div>
 

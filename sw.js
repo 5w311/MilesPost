@@ -1,6 +1,6 @@
 // Build marker, NOT the app version. Bump it on every single deploy, or installed
 // phones will decide they're already current and quietly ignore the new build.
-const CACHE = "milespost-v4.0.1";
+const CACHE = "milespost-v4.0.2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const ASSETS = [
   "./icon-192.png",
   "./icon-512.png",
   "./apple-touch-icon.png",
+  "./shield.png",
   // Vendored Overpass (see fonts/LICENSE-*): cached like everything else so the
   // Highway signage face works with zero bars, not just the fallback stack.
   "./fonts/overpass-latin-400-normal.woff2",
