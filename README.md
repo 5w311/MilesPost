@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v4.0.2**
+**Current version: v4.0.3**
 
 ## Files
 
@@ -53,6 +53,12 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.0.3
+
+- **GET MILEAGE now shows on both ETA tabs**, not just Simple — same conditions
+  (destination set, miles still blank). On Tuned it sits alongside UPDATE LIVE ETA as the
+  quicker, narrower action: road distance only, no traffic quote.
 
 ### v4.0.2
 
