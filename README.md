@@ -13,7 +13,7 @@ no API, no signal required. The one exception is the optional **LIVE** ETA line,
 signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
 everything else works as always.
 
-**Current version: v4.0**
+**Current version: v4.0.1**
 
 ## Files
 
@@ -53,6 +53,20 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.0.1
+
+- **New app icon: the MP route shield** — the same green shield with white border and MP
+  monogram as the v4.0 masthead, on the road-dark background with a muted amber lane-dash
+  line (an echo of the old roadside-marker icon's amber). All three icon files replaced
+  in place, full-bleed opaque as iOS requires.
+- **Already installed? Re-add to the home screen to see it.** iOS caches the home-screen
+  icon at install time and nothing can force a refresh — remove MilesPost from the home
+  screen and add it again from Safari. In-browser tabs and fresh installs pick the new
+  icon up immediately.
+- Shipped as its own patch because v4.0 had already deployed by the time the icon landed:
+  the icons live in the service worker's cache-first ASSETS, so without this deploy's own
+  CACHE bump an installed phone would keep serving the old files forever.
 
 ### v4.0 — "Highway"
 
