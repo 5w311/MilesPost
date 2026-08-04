@@ -496,7 +496,7 @@ try {
   if (clearLiveErrors.length) fail("clear-live page errors: " + JSON.stringify(clearLiveErrors, null, 2));
   await clearLivePage.close();
 
-  // GET MILEAGE: Simple-tab-only convenience button. Destination set, miles blank ->
+  // GET MILEAGE: convenience button on either tab. Destination set, miles blank ->
   // button appears; click it -> miles fills from the same mocked HERE route (400 mi) AND
   // the app must not have produced anything resembling a live/traffic-aware quote — that's
   // the whole point of this button being narrower than UPDATE LIVE ETA.
@@ -531,19 +531,34 @@ try {
   if (getMiErrors.length) fail("getMi page errors: " + JSON.stringify(getMiErrors, null, 2));
   await getMiPage.close();
 
-  // Negative case: same destination-set/miles-blank state, but on the Tuned tab — the
-  // Tuned tab already has UPDATE LIVE ETA for this, so GET MILEAGE must never show there.
+  // Same destination-set/miles-blank state on the Tuned tab: GET MILEAGE shows there too,
+  // deliberately sitting alongside UPDATE LIVE ETA as the quicker, narrower action. The
+  // boundary that matters most here is that using it from Tuned still can't fabricate a
+  // live quote — on this tab a set LIVE.res would render the LIVE line, so its continued
+  // absence right where it would appear is the check.
   const getMiTunedPage = await browser.newPage();
   const getMiTunedErrors = [];
   getMiTunedPage.on("pageerror", e => getMiTunedErrors.push("pageerror: " + e.message));
   await mockHere(getMiTunedPage);
   await getMiTunedPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await getMiTunedPage.click("#tabTuned");
+  await getMiTunedPage.waitForTimeout(100);
+  if (await getMiTunedPage.isVisible("#getMiBtn"))
+    fail("#getMiBtn should start hidden on the Tuned tab with no destination set");
   await getMiTunedPage.fill("#destIn", "Nashville TN");
   await getMiTunedPage.press("#destIn", "Enter");
-  await getMiTunedPage.click("#tabTuned");
   await getMiTunedPage.waitForTimeout(150);
+  if (!(await getMiTunedPage.isVisible("#getMiBtn")))
+    fail("#getMiBtn should appear on the Tuned tab too, once a destination is set and miles is blank");
+  await getMiTunedPage.click("#getMiBtn");
+  await getMiTunedPage.waitForTimeout(300);
+  const getMiTunedMiles = await getMiTunedPage.inputValue("#miles");
+  if (getMiTunedMiles !== "400")
+    fail(`GET MILEAGE on the Tuned tab should fill miles from the real road distance, got ${JSON.stringify(getMiTunedMiles)}`);
   if (await getMiTunedPage.isVisible("#getMiBtn"))
-    fail("#getMiBtn must never appear on the Tuned tab — UPDATE LIVE ETA already covers this");
+    fail("#getMiBtn should hide itself once miles has a value, on the Tuned tab as well");
+  if (await getMiTunedPage.isVisible("#liveLine"))
+    fail("GET MILEAGE from the Tuned tab must not produce a live quote — LIVE line appeared");
   if (getMiTunedErrors.length) fail("getMi-tuned page errors: " + JSON.stringify(getMiTunedErrors, null, 2));
   await getMiTunedPage.close();
 
@@ -820,7 +835,7 @@ try {
   await verUpdatePage.close();
 
   if (!process.exitCode)
-    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one (override off) but always overwrites when override is on, live re-quote refreshes its own autofilled miles, CLEAR invalidates a stale LIVE quote without touching tuning, GET MILEAGE fills miles on Simple tab only without ever producing a live quote, per-field × buttons clear independently, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
+    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one (override off) but always overwrites when override is on, live re-quote refreshes its own autofilled miles, CLEAR invalidates a stale LIVE quote without touching tuning, GET MILEAGE fills miles on both tabs without ever producing a live quote, per-field × buttons clear independently, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
 } finally {
   await browser.close();
   server.close();

@@ -501,10 +501,11 @@
           <input id="miles" type="number" inputmode="decimal">
           <button type="button" class="fieldClear hide" id="milesClear" aria-label="Clear miles">×</button>
           <span class="suffix">mi</span>
-          <!-- Simple-tab-only: the Tuned tab's UPDATE LIVE ETA already covers this (and
-               more — full traffic-aware routing). Compact secondary action, not the
-               full-width .primary CTA that button uses. Visibility driven from
-               renderEta() below, same pattern as milesClear/destClear. -->
+          <!-- On the Tuned tab this sits alongside UPDATE LIVE ETA on purpose: GET MILEAGE
+               is the quicker, narrower action — distance only, no traffic quote — so it
+               stays available there too. Compact secondary action, not the full-width
+               .primary CTA that button uses. Visibility driven from renderEta() below,
+               same pattern as milesClear/destClear. -->
           <button type="button" class="go hide" id="getMiBtn" style="margin-top:8px">GET MILEAGE</button>
           <div class="err hide" id="getMiNote"></div>
         </div>
@@ -676,7 +677,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.0.2</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.0.3</button>
   </div>
 </div>
 
@@ -1270,12 +1271,11 @@ function renderEta(){
     : "set a destination below");
 
   const M = Number($("miles").value) || 0;
-  // GET MILEAGE: Simple tab only (Tuned already has UPDATE LIVE ETA, which covers this
-  // and more), and only while there's a destination to route to but no miles yet — the
-  // instant miles gets a value some other way, this has nothing left to do. Hiding the
-  // button also drops its own stale error note, so a failure from a previous destination
-  // can't linger once the button it belongs to is gone.
-  const showGetMi = E.mode === "quick" && !!E.destTz && M === 0;
+  // GET MILEAGE: either tab, but only while there's a destination to route to and no
+  // miles yet — the instant miles gets a value some other way, this has nothing left to
+  // do. Hiding the button also drops its own stale error note, so a failure from a
+  // previous destination can't linger once the button it belongs to is gone.
+  const showGetMi = !!E.destTz && M === 0;
   show($("getMiBtn"), showGetMi);
   if(!showGetMi) show($("getMiNote"), false);
   const start = fromWall($("depart").value, E.originTz);
