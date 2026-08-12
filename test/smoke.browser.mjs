@@ -371,13 +371,19 @@ try {
   await deniedPage.close();
 
   // Shared mock for the autofill cases below: same geocode/route responses as the happy path.
+  // Every call is tallied in window.__hereCalls so a test can assert not just what the app
+  // rendered but how many transactions it spent getting there.
   const mockHere = page => page.addInitScript(() => {
     Object.defineProperty(navigator, "geolocation", { value: {
       getCurrentPosition: ok => ok({ coords: { latitude: 41.8781, longitude: -87.6298 } })
     }});
+    window.__hereCalls = { geocode: 0, route: 0, total: 0 };
     const realFetch = window.fetch.bind(window);
     window.fetch = (url, ...rest) => {
       const u = String(url);
+      window.__hereCalls.total++;
+      if (u.includes("geocode.search.hereapi.com")) window.__hereCalls.geocode++;
+      if (u.includes("router.hereapi.com")) window.__hereCalls.route++;
       if (u.includes("geocode.search.hereapi.com"))
         return Promise.resolve(new Response(JSON.stringify(
           { items: [{ position: { lat: 36.1627, lng: -86.7816 } }] })));
@@ -640,6 +646,142 @@ try {
     fail("GET MILEAGE from the Tuned tab must not produce a live quote — LIVE line appeared");
   if (getMiTunedErrors.length) fail("getMi-tuned page errors: " + JSON.stringify(getMiTunedErrors, null, 2));
   await getMiTunedPage.close();
+
+  // RUNNING: keeps the departure clock and the arrival current, and must do it entirely
+  // offline. The clock is driven by a controllable Date so a minute of wall time can pass
+  // in a tick — #depart is minute-precision, so a real-time test could only watch it sit
+  // still. Patching Date rather than just Date.now() because toWall() reads `new Date()`.
+  const runPage = await browser.newPage();
+  const runErrors = [];
+  runPage.on("pageerror", e => runErrors.push("pageerror: " + e.message));
+  await runPage.addInitScript(() => {
+    const RealDate = Date;
+    window.__skewMs = 0;
+    class FakeDate extends RealDate {
+      constructor(...a){ if (a.length === 0) super(RealDate.now() + window.__skewMs); else super(...a); }
+      static now(){ return RealDate.now() + window.__skewMs; }
+    }
+    window.Date = FakeDate;
+  });
+  await mockHere(runPage);
+  await runPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await runPage.fill("#destIn", "Nashville TN");
+  await runPage.press("#destIn", "Enter");
+  await runPage.click("#tabTuned");
+  await runPage.click("#liveBtn");
+  await runPage.waitForTimeout(300);
+  if (!(await runPage.isVisible("#liveLine")))
+    fail("RUNNING setup: a live quote should be in hand before switching it on");
+  // Session mode: off on load, and both departure controls are the driver's until it's on.
+  if ((await runPage.getAttribute("#runningBtn", "aria-checked")) !== "false")
+    fail("RUNNING must start OFF — it's a session mode, never restored");
+  if (await runPage.isDisabled("#depart")) fail("#depart should be the driver's while RUNNING is off");
+  await runPage.click("#runningBtn");
+  await runPage.waitForTimeout(100);
+  if ((await runPage.textContent("#runningState"))?.trim() !== "ON")
+    fail("the RUNNING indicator should read ON once switched");
+  if (!(await runPage.isDisabled("#depart")))
+    fail("#depart must be disabled while RUNNING drives it");
+  if (!(await runPage.isDisabled("#nowBtn")))
+    fail("NOW must be disabled while RUNNING drives the departure");
+
+  // The assertion this whole feature is built around: ticking costs nothing. Let several
+  // ticks land and confirm not one of them reached the network — HERE or anything else.
+  const callsBefore = await runPage.evaluate(() => ({ ...window.__hereCalls }));
+  const departBefore = await runPage.inputValue("#depart");
+  await runPage.evaluate(() => { window.__skewMs = 3 * 60 * 1000; });   // three minutes on
+  await runPage.waitForTimeout(2500);
+  const callsAfter = await runPage.evaluate(() => ({ ...window.__hereCalls }));
+  if (callsAfter.total !== callsBefore.total)
+    fail(`RUNNING must never re-fetch: ${callsBefore.total} calls before ticking, ${callsAfter.total} after`);
+  const departRunning = await runPage.inputValue("#depart");
+  if (departRunning === departBefore)
+    fail(`RUNNING should move the departure clock on its own, still ${JSON.stringify(departBefore)}`);
+  // Still a live arrival on screen — re-solved locally, not re-fetched.
+  if (!(await runPage.isVisible("#liveLine")))
+    fail("the LIVE line should survive ticking (the quote is still fresh)");
+
+  // Leaving the Live tab stops the clock; coming back resumes it. The switch itself stays on.
+  await runPage.click("#tabQuick");
+  await runPage.waitForTimeout(100);
+  const departOnQuick = await runPage.inputValue("#depart");
+  await runPage.evaluate(() => { window.__skewMs = 6 * 60 * 1000; });
+  await runPage.waitForTimeout(1600);
+  if ((await runPage.inputValue("#depart")) !== departOnQuick)
+    fail("the RUNNING clock must stop while the Predicted tab is in front");
+  await runPage.click("#tabTuned");
+  await runPage.waitForTimeout(1600);
+  if ((await runPage.inputValue("#depart")) === departOnQuick)
+    fail("the RUNNING clock must resume on returning to the Live tab");
+  if ((await runPage.getAttribute("#runningBtn", "aria-checked")) !== "true")
+    fail("switching tabs must stop the timer without flipping the switch off");
+
+  // Backgrounding does the same. visibilityState is read-only, so stub the getter.
+  await runPage.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  const departHidden = await runPage.inputValue("#depart");
+  // Each jump is whole minutes clear of the last: #depart is minute-precision, so a
+  // smaller bump could leave the field unchanged and pass a paused check by luck.
+  await runPage.evaluate(() => { window.__skewMs = 12 * 60 * 1000; });
+  await runPage.waitForTimeout(1600);
+  if ((await runPage.inputValue("#depart")) !== departHidden)
+    fail("the RUNNING clock must pause while the app is backgrounded");
+  await runPage.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await runPage.waitForTimeout(1600);
+  if ((await runPage.inputValue("#depart")) === departHidden)
+    fail("the RUNNING clock must resume when the app comes back to the foreground");
+
+  // Switching off freezes the clock where it stopped and hands both controls back.
+  await runPage.click("#runningBtn");
+  await runPage.waitForTimeout(100);
+  const departOff = await runPage.inputValue("#depart");
+  if (await runPage.isDisabled("#depart")) fail("#depart must be editable again once RUNNING is off");
+  if (await runPage.isDisabled("#nowBtn")) fail("NOW must be usable again once RUNNING is off");
+  await runPage.evaluate(() => { window.__skewMs = 20 * 60 * 1000; });
+  await runPage.waitForTimeout(1600);
+  if ((await runPage.inputValue("#depart")) !== departOff)
+    fail("the departure must stay frozen at its last value once RUNNING is off");
+  if (runErrors.length) fail("running page errors: " + JSON.stringify(runErrors, null, 2));
+  await runPage.close();
+
+  // Geocode caching: a town's coordinates don't move between refreshes, so re-quoting the
+  // same destination should spend a routing call and nothing else. Changing the destination
+  // must miss the cache — routing a new city against the old city's position would be far
+  // worse than the lookup it saves.
+  const geoPage = await browser.newPage();
+  const geoErrors = [];
+  geoPage.on("pageerror", e => geoErrors.push("pageerror: " + e.message));
+  await mockHere(geoPage);
+  await geoPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await geoPage.fill("#destIn", "Nashville TN");
+  await geoPage.press("#destIn", "Enter");
+  await geoPage.click("#tabTuned");
+  await geoPage.click("#liveBtn");
+  await geoPage.waitForTimeout(300);
+  await geoPage.click("#liveBtn");
+  await geoPage.waitForTimeout(300);
+  const sameDest = await geoPage.evaluate(() => ({ ...window.__hereCalls }));
+  if (sameDest.route !== 2)
+    fail(`two refreshes should cost two routing calls, got ${sameDest.route}`);
+  if (sameDest.geocode !== 1)
+    fail(`re-quoting the same destination should geocode once, got ${sameDest.geocode}`);
+  // A different city must re-geocode rather than reuse Nashville's position.
+  await geoPage.fill("#destIn", "Laredo TX");
+  await geoPage.press("#destIn", "Enter");
+  await geoPage.waitForTimeout(100);
+  await geoPage.click("#liveBtn");
+  await geoPage.waitForTimeout(300);
+  const newDest = await geoPage.evaluate(() => ({ ...window.__hereCalls }));
+  if (newDest.geocode !== 2)
+    fail(`a new destination must re-geocode, got ${newDest.geocode} geocode calls`);
+  if (newDest.route !== 3) fail(`the new destination should also route, got ${newDest.route}`);
+  if (geoErrors.length) fail("geocode-cache page errors: " + JSON.stringify(geoErrors, null, 2));
+  await geoPage.close();
 
   // Resume re-render: a LIVE quote that went stale while the app was backgrounded must be
   // gone on the first frame after resume, not left showing this morning's arrival. The
