@@ -15,7 +15,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.2**
+**Current version: v4.2.1**
 
 ## Files
 
@@ -55,6 +55,16 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.2.1
+
+- **Live readout tidy-up.** Every item removed here was already on screen within an inch of
+  itself. The Live tab's label reads **LIVE ARRIVAL** (Predicted still reads ARRIVAL); the
+  CMS board is down to `LIVE truck route · traffic +Nm`, having dropped the arrival clock,
+  its date and zone, the road mileage and the device-clock tail — the big number above, the
+  miles field below, and the device-timezone line directly above the board all still carry
+  those. The stat line's average speed is now **TOTAL**, so rolling and stopped visibly add
+  up to it.
 
 ### v4.2
 

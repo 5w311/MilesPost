@@ -238,26 +238,40 @@ try {
   await livePage.waitForTimeout(300);
   if (!(await livePage.isVisible("#liveLine")))
     fail("LIVE line should render after a successful mocked HERE fetch");
+  // The board carries only what isn't already on screen: that this is truck routing, and
+  // what traffic costs. The arrival clock, its date, the mileage and the device-clock tail
+  // all live elsewhere on the same panel and were dropped from here.
   const liveText = (await livePage.textContent("#liveLine"))?.trim() || "";
-  if (!/^LIVE \d{2}:\d{2}/.test(liveText))
-    fail(`LIVE line should lead with an arrival clock, got ${JSON.stringify(liveText)}`);
-  if (!liveText.includes("400 mi")) fail(`LIVE line should show the route miles, got ${JSON.stringify(liveText)}`);
-  if (!liveText.includes("traffic +20m")) fail(`LIVE line should show the traffic cost, got ${JSON.stringify(liveText)}`);
+  if (liveText !== "LIVE truck route · traffic +20m")
+    fail(`unexpected LIVE board copy: ${JSON.stringify(liveText)}`);
+  // Guard the separator specifically: dropping the leading pieces must not strand a "·"
+  // against the badge, which is what naive concatenation of " · "-prefixed fragments does.
+  if (/LIVE\s+·/.test(liveText))
+    fail(`the LIVE badge must not be followed by a dangling separator: ${JSON.stringify(liveText)}`);
   // With a fresh quote the Live tab is a full run again: the arrival is the quote's own
   // arrival, and the strip/chips/stat line that the empty state suppressed all come back.
   const liveClock = (await livePage.textContent("#etaClock"))?.trim();
   if (!/^\d{2}:\d{2} \S+$/.test(liveClock || "") || liveClock === "--:--")
     fail(`Live tab should show the quote's arrival, got ${JSON.stringify(liveClock)}`);
-  if (!liveText.startsWith("LIVE " + liveClock.split(" ")[0]))
-    fail(`the Live arrival must be the quote's own liveEta, got ${JSON.stringify(liveClock)} vs ${JSON.stringify(liveText)}`);
   for (const id of ["strip", "stripKey", "legend", "etaShift", "etaExit"])
     if (!(await livePage.isVisible(`#${id}`)))
       fail(`#${id} should be visible on the Live tab once a quote lands`);
   const shiftText = (await livePage.textContent("#etaShift"))?.trim();
   if (!/^(day|night) shift driving$/.test(shiftText || ""))
     fail(`expected a shift readout, got ${JSON.stringify(shiftText)}`);
-  if (!/MPH AVG/.test((await livePage.textContent("#legend")) || ""))
-    fail("the stat line should report the run's average speed once a quote lands");
+  // Rolling + stopped now visibly sum to the third cell, which is the point of showing a
+  // total instead of an average speed.
+  const legendText = (await livePage.textContent("#legend")) || "";
+  const cells = legendText.match(/ROLLING (\d+)h (\d+)m.*STOPPED (\d+)h (\d+)m.*TOTAL (\d+)h (\d+)m/);
+  if (!cells) fail(`the stat line should read ROLLING / STOPPED / TOTAL, got ${JSON.stringify(legendText)}`);
+  else {
+    const mins = (h, m) => Number(h) * 60 + Number(m);
+    if (mins(cells[1], cells[2]) + mins(cells[3], cells[4]) !== mins(cells[5], cells[6]))
+      fail(`rolling + stopped must add up to the total, got ${JSON.stringify(legendText)}`);
+  }
+  // The Live tab is labelled for what it is; the shared label follows the mode.
+  if ((await livePage.textContent("#etaLabel"))?.trim().startsWith("Live Arrival ·") !== true)
+    fail(`the Live tab label should read "Live Arrival", got ${JSON.stringify(await livePage.textContent("#etaLabel"))}`);
   // The run panel describes the stop rules on every pass, and appends this run's counts
   // only when a quote backs them — no cruise speed anywhere, it isn't a setting anymore.
   const runNoteText = (await livePage.textContent("#runNote")) || "";
@@ -271,6 +285,15 @@ try {
   const liveQuickNote = (await livePage.textContent("#quickNote")) || "";
   if (!/Live says \d{2}:\d{2} [A-Z]{2,6} \(/.test(liveQuickNote))
     fail(`quickNote should show the live comparison with its tz code, got ${JSON.stringify(liveQuickNote)}`);
+  // Cross-check that the Live tab's big number really is the quote's own liveEta. The board
+  // used to carry the clock and made this comparable in one place; with that gone, this
+  // line is the other reading of LIVE.res.liveEta on screen, so the two must agree.
+  if (!liveQuickNote.includes("Live says " + liveClock.split(" ")[0]))
+    fail(`the Live arrival and the "Live says" comparison must be the same quote: ${JSON.stringify(liveClock)} vs ${JSON.stringify(liveQuickNote)}`);
+  // Same shared label, other tab: Predicted's flat ÷50 is not a live arrival.
+  const quickLabel = (await livePage.textContent("#etaLabel"))?.trim() || "";
+  if (!quickLabel.startsWith("Arrival ·"))
+    fail(`the Predicted tab label should stay "Arrival", got ${JSON.stringify(quickLabel)}`);
   // The gap must be run-time vs run-time. Dispatch's number departs from the typed
   // "rolling out"; the quote departs from when it was fetched. Push the typed departure
   // months out — differencing the two ARRIVALS would fold that separation into the answer
@@ -458,12 +481,46 @@ try {
   if (keepErrors.length) fail("keep-miles page errors: " + JSON.stringify(keepErrors, null, 2));
   await keepPage.close();
 
-  // LIVE line timezone: the leading clock is destination-local (same tz the main arrival
-  // number uses) already, by virtue of using showTz — nothing to change there. What's new
-  // is a muted "current device timezone" addendum, mirroring etaYours, when the driver's
-  // own origin tz differs from the destination's. Force a real tz mismatch via a fresh
-  // context (device clock in LA, destination in Nashville/Central) rather than trusting
-  // the code reads right without ever actually observing two different clocks.
+  // Light traffic: the traffic segment is conditional, so the board is down to one piece.
+  // It must read cleanly on its own — no trailing separator, no invented filler.
+  const calmPage = await browser.newPage();
+  const calmErrors = [];
+  calmPage.on("pageerror", e => calmErrors.push("pageerror: " + e.message));
+  await calmPage.addInitScript(() => {
+    Object.defineProperty(navigator, "geolocation", { value: {
+      getCurrentPosition: ok => ok({ coords: { latitude: 41.8781, longitude: -87.6298 } })
+    }});
+    const realFetch = window.fetch.bind(window);
+    window.fetch = (url, ...rest) => {
+      const u = String(url);
+      if (u.includes("geocode.search.hereapi.com"))
+        return Promise.resolve(new Response(JSON.stringify(
+          { items: [{ position: { lat: 36.1627, lng: -86.7816 } }] })));
+      if (u.includes("router.hereapi.com"))
+        // duration === baseDuration: a clear road, so no traffic segment at all.
+        return Promise.resolve(new Response(JSON.stringify(
+          { routes: [{ sections: [{ summary: { duration: 21600, baseDuration: 21600,
+            length: 643738 } }] }] })));
+      return realFetch(url, ...rest);
+    };
+  });
+  await calmPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await calmPage.fill("#destIn", "Nashville TN");
+  await calmPage.press("#destIn", "Enter");
+  await calmPage.click("#tabTuned");
+  await calmPage.click("#liveBtn");
+  await calmPage.waitForTimeout(300);
+  const calmLine = (await calmPage.textContent("#liveLine"))?.trim() || "";
+  if (calmLine !== "LIVE truck route")
+    fail(`with no traffic the board should read exactly "LIVE truck route", got ${JSON.stringify(calmLine)}`);
+  if (calmErrors.length) fail("calm-traffic page errors: " + JSON.stringify(calmErrors, null, 2));
+  await calmPage.close();
+
+  // Device-timezone reading: a driver whose own zone differs from the destination's still
+  // gets their arrival in their own clock. It reads off #etaYours — the board used to
+  // repeat it and no longer does, since that line sits directly above it. Force a real tz
+  // mismatch via a fresh context (device clock in LA, destination in Nashville/Central)
+  // rather than trusting the code reads right without ever observing two different clocks.
   const tzCtx = await browser.newContext({ timezoneId: "America/Los_Angeles" });
   const tzPage = await tzCtx.newPage();
   const tzErrors = [];
@@ -475,16 +532,21 @@ try {
   await tzPage.click("#tabTuned");
   await tzPage.click("#liveBtn");
   await tzPage.waitForTimeout(300);
-  const mismatchLine = (await tzPage.textContent("#liveLine"))?.trim() || "";
+  if (!(await tzPage.isVisible("#etaYours")))
+    fail("a driver in a different tz should get their own clock reading on the Live tab");
+  const mismatchLine = (await tzPage.textContent("#etaYours"))?.trim() || "";
   if (!/current device timezone$/.test(mismatchLine))
-    fail(`LIVE line should append a current-device-timezone addendum when origin/destination tz differ, got ${JSON.stringify(mismatchLine)}`);
+    fail(`the device-clock line should be labelled as such when origin/destination tz differ, got ${JSON.stringify(mismatchLine)}`);
   if (!mismatchLine.includes("PDT") && !mismatchLine.includes("PST"))
-    fail(`current-device-timezone addendum should be in the origin's (Pacific) tz, got ${JSON.stringify(mismatchLine)}`);
+    fail(`the device-clock reading should be in the origin's (Pacific) tz, got ${JSON.stringify(mismatchLine)}`);
+  // And the board must not say it a second time an inch below.
+  if (/current device timezone/.test((await tzPage.textContent("#liveLine")) || ""))
+    fail("the LIVE board must not repeat the device-clock reading that sits above it");
   if (tzErrors.length) fail("tz-mismatch page errors: " + JSON.stringify(tzErrors, null, 2));
   await tzCtx.close();
 
-  // Same-tz case: no addendum should appear at all — a driver whose origin and
-  // destination share a timezone doesn't need to be told their own clock twice.
+  // Same-tz case: no second clock at all — a driver whose origin and destination share a
+  // timezone doesn't need to be told their own clock twice.
   const sameTzCtx = await browser.newContext({ timezoneId: "America/Los_Angeles" });
   const sameTzPage = await sameTzCtx.newPage();
   const sameTzErrors = [];
@@ -496,9 +558,11 @@ try {
   await sameTzPage.click("#tabTuned");
   await sameTzPage.click("#liveBtn");
   await sameTzPage.waitForTimeout(300);
+  if (await sameTzPage.isVisible("#etaYours"))
+    fail("no device-clock line should appear when origin and destination share a tz");
   const sameTzLine = (await sameTzPage.textContent("#liveLine"))?.trim() || "";
-  if (/current device timezone$/.test(sameTzLine))
-    fail(`LIVE line should NOT show a current-device-timezone addendum when origin and destination share a tz, got ${JSON.stringify(sameTzLine)}`);
+  if (/current device timezone/.test(sameTzLine))
+    fail(`the LIVE board should carry no device-clock reading at all, got ${JSON.stringify(sameTzLine)}`);
   if (sameTzErrors.length) fail("same-tz page errors: " + JSON.stringify(sameTzErrors, null, 2));
   await sameTzCtx.close();
 
