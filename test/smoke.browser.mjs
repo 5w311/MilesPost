@@ -1158,6 +1158,138 @@ try {
   if (verUpdateErrors.length) fail("verFoot (update-found) page errors: " + JSON.stringify(verUpdateErrors, null, 2));
   await verUpdatePage.close();
 
+  // A check that never comes back. Both cases above use an update() that resolves at once,
+  // which is precisely why they could not see this: the fallback used to be scheduled AFTER
+  // `await swReg.update()`, so a call that never settled meant the fallback was never even
+  // created and the label sat on "CHECKING FOR UPDATES…" indefinitely. That is what a dead
+  // URL or a captive portal actually looks like on the road, and the driver got no reason.
+  const verHangPage = await browser.newPage();
+  const verHangErrors = [];
+  verHangPage.on("pageerror", e => verHangErrors.push("pageerror: " + e.message));
+  await verHangPage.addInitScript(() => {
+    const fakeReg = new EventTarget();
+    fakeReg.update = () => new Promise(() => {});     // never settles, ever
+    navigator.serviceWorker.register = () => Promise.resolve(fakeReg);
+  });
+  await verHangPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await verHangPage.waitForTimeout(200);
+  const hangDefault = (await verHangPage.textContent("#verFoot"))?.trim();
+  await verHangPage.click("#verFoot");
+  await verHangPage.waitForTimeout(100);
+  if ((await verHangPage.textContent("#verFoot"))?.trim() !== "CHECKING FOR UPDATES…")
+    fail("a hung check should still show the checking state first");
+  // Tapping again mid-check must not stack a second check on top of the first.
+  await verHangPage.click("#verFoot");
+  await verHangPage.waitForTimeout(8600);            // past the 8s check deadline
+  const hangText = (await verHangPage.textContent("#verFoot"))?.trim();
+  if (hangText === "CHECKING FOR UPDATES…")
+    fail("a check that never settles must not leave the footer stuck on the checking state");
+  if (hangText !== "COULDN'T CHECK — NO SIGNAL?")
+    fail(`a failed check should say so rather than claim you're up to date, got ${JSON.stringify(hangText)}`);
+  await verHangPage.waitForTimeout(2700);
+  if ((await verHangPage.textContent("#verFoot"))?.trim() !== hangDefault)
+    fail("the footer should return to its version stamp after a failed check");
+  if (verHangErrors.length) fail("verFoot (hung-check) page errors: " + JSON.stringify(verHangErrors, null, 2));
+  await verHangPage.close();
+
+  // A check that outright rejects — the site's URL is gone, the server refused. Same
+  // honest answer, and specifically NOT "YOU'RE UP TO DATE", which would be a lie about
+  // an app that is in fact stale.
+  const verFailPage = await browser.newPage();
+  const verFailErrors = [];
+  verFailPage.on("pageerror", e => verFailErrors.push("pageerror: " + e.message));
+  await verFailPage.addInitScript(() => {
+    const fakeReg = new EventTarget();
+    fakeReg.update = () => Promise.reject(new Error("404"));
+    navigator.serviceWorker.register = () => Promise.resolve(fakeReg);
+  });
+  await verFailPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await verFailPage.waitForTimeout(200);
+  await verFailPage.click("#verFoot");
+  await verFailPage.waitForTimeout(400);
+  const failText = (await verFailPage.textContent("#verFoot"))?.trim();
+  if (failText !== "COULDN'T CHECK — NO SIGNAL?")
+    fail(`a rejected check should report the failure, got ${JSON.stringify(failText)}`);
+  if (verFailErrors.length) fail("verFoot (failed-check) page errors: " + JSON.stringify(verFailErrors, null, 2));
+  await verFailPage.close();
+
+  /* ---- Real service-worker update, end to end. No fake registration: a second server
+     that can change what it serves, a genuine install, a genuine deploy, and the reload
+     the driver is actually waiting for.
+
+     The case that matters is the one that shipped broken. `hadController` exists to skip
+     the reload on the first handover — a worker claiming a page that just downloaded the
+     newest content has nothing to reload for — but as a parse-time snapshot it swallowed
+     every later handover on that same page too. So a page that installed the worker on
+     THIS load (a first launch, or after iOS evicted the worker) would install and activate
+     a new version while continuing to show the old one, with the footer stuck on
+     "UPDATING…". Exactly the state a driver would describe as the updater not working. */
+  let swVersion = "0.0.1";
+  const swServer = http.createServer((req, res) => {
+    let p = decodeURIComponent(req.url.split("?")[0]);
+    if (p === "/") p = "/index.html";
+    fs.readFile(path.join(ROOT, p), (err, data) => {
+      if (err) { res.writeHead(404); res.end("not found"); return; }
+      let body = data;
+      // Restamp the two files that carry a version so "deploying" is a one-line change.
+      if (p === "/index.html" || p === "/sw.js")
+        body = data.toString().replace(/(MilesPost v|milespost-v)[0-9][0-9.]*/g, "$1" + swVersion);
+      res.writeHead(200, { "content-type": TYPES[path.extname(p)] || "application/octet-stream" });
+      res.end(body);
+    });
+  });
+  await new Promise(r => swServer.listen(0, r));
+  const swPort = swServer.address().port;
+  try {
+    const swCtx = await browser.newContext();
+    const swPage = await swCtx.newPage();
+    // Deliberately NOT reloading after the first install: this page is uncontrolled at
+    // parse time and becomes controlled during the load, which is the broken path.
+    await swPage.goto(`http://127.0.0.1:${swPort}/index.html`, { waitUntil: "networkidle" });
+    await swPage.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 15000 })
+      .catch(() => fail("the service worker never took control on first load"));
+    if ((await swPage.textContent("#verFoot"))?.trim() !== "MilesPost v0.0.1")
+      fail(`SW test setup: expected the v0.0.1 stamp, got ${JSON.stringify((await swPage.textContent("#verFoot"))?.trim())}`);
+
+    swVersion = "0.0.2";                                  // deploy
+    const reloaded = swPage.waitForNavigation({ timeout: 15000 }).then(() => true).catch(() => false);
+    await swPage.click("#verFoot");
+    if (!(await reloaded))
+      fail("tapping check-for-update with a new version deployed must reload the page — "
+         + "the new worker activates either way, so without this the app keeps showing the old version");
+    await swPage.waitForLoadState("networkidle");
+    const afterUpdate = (await swPage.textContent("#verFoot"))?.trim();
+    if (afterUpdate !== "MilesPost v0.0.2")
+      fail(`after updating, the app should be running the new version, got ${JSON.stringify(afterUpdate)}`);
+    // And the old cache is gone, so nothing can serve the previous build back.
+    const swCaches = await swPage.evaluate(() => caches.keys());
+    if (!swCaches.includes("milespost-v0.0.2") || swCaches.includes("milespost-v0.0.1"))
+      fail(`activate should leave only the new cache, got ${JSON.stringify(swCaches)}`);
+
+    // Second update on the same page, now controlled from parse time — the path that was
+    // already working, kept honest so a fix to one case can't regress the other.
+    swVersion = "0.0.3";
+    const reloadedAgain = swPage.waitForNavigation({ timeout: 15000 }).then(() => true).catch(() => false);
+    await swPage.click("#verFoot");
+    if (!(await reloadedAgain)) fail("a second update on the same page must also reload");
+    await swPage.waitForLoadState("networkidle");
+    if ((await swPage.textContent("#verFoot"))?.trim() !== "MilesPost v0.0.3")
+      fail("the second update should land too");
+
+    // Nothing new deployed: an honest "up to date", and no reload.
+    let bounced = false;
+    swPage.once("framenavigated", () => { bounced = true; });
+    await swPage.click("#verFoot");
+    await swPage.waitForTimeout(1400);
+    const idle = (await swPage.textContent("#verFoot"))?.trim();
+    if (idle !== "YOU'RE UP TO DATE")
+      fail(`with nothing deployed the check should report up to date, got ${JSON.stringify(idle)}`);
+    if (bounced) fail("an up-to-date check must not reload the page");
+    await swCtx.close();
+  } finally {
+    swServer.close();
+  }
+
   if (!process.exitCode)
     console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Live only), Live tab is strictly live (empty state with no/denied/stale quote, full run once one lands), preset chooser and cruise-speed field gone, CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one (override off) but always overwrites when override is on, live re-quote refreshes its own autofilled miles, CLEAR invalidates a stale LIVE quote without touching tuning, GET MILEAGE fills miles on both tabs without ever producing a live quote, per-field × buttons clear independently, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
 } finally {

@@ -690,7 +690,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.2.2</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.2.3</button>
   </div>
 </div>
 
@@ -1807,10 +1807,18 @@ document.addEventListener("visibilitychange", () => {
 // handler elsewhere in this script can reach it via closure once it's populated.
 let swReg = null;
 if("serviceWorker" in navigator){
-  const hadController = !!navigator.serviceWorker.controller;
+  /* Live state, NOT a snapshot. The point of the check is to skip the reload on the very
+     first handover — a worker claiming a page that just downloaded the newest content has
+     nothing to reload for. But frozen at parse time it also swallowed every LATER handover
+     on that same page: install the worker on this load (a first launch, or after iOS has
+     evicted it), tap check-for-update, and the new version would install and activate while
+     the page sat there showing the old one. Updating it as soon as we're controlled means
+     the first handover is skipped and every real update after it still reloads. */
+  let hadController = !!navigator.serviceWorker.controller;
   let reloading = false;
   navigator.serviceWorker.addEventListener("controllerchange", ()=>{
-    if(!hadController || reloading) return;
+    if(reloading) return;
+    if(!hadController){ hadController = true; return; }
     reloading = true;
     location.reload();
   });
@@ -1832,23 +1840,46 @@ if("serviceWorker" in navigator){
    controllerchange reload above) — this only ever triggers the check itself. */
 const verFoot = $("verFoot");
 const verFootDefault = verFoot.textContent.trim();
+const VER_CHECK_MS = 8000;      // how long to wait on the check before calling it dead
+const VER_SETTLE_MS = 800;      // grace for a late updatefound after update() resolves
+const VER_HELD_MS = 10000;      // how long "UPDATING…" may stand before we admit it stalled
+let verFootBusy = false;
+const verFootRest = () => { verFoot.textContent = verFootDefault; verFootBusy = false; };
+
 verFoot.onclick = async () => {
-  if(!swReg) return;                 // SW unsupported/not ready — nothing to check
+  if(!swReg || verFootBusy) return;   // SW unsupported/not ready, or a check already running
+  verFootBusy = true;
   verFoot.textContent = "CHECKING FOR UPDATES…";
   let found = false;
   const onFound = () => { found = true; verFoot.textContent = "UPDATING…"; };
   swReg.addEventListener("updatefound", onFound, { once:true });
-  try{ await swReg.update(); }catch{}
-  setTimeout(() => {
-    swReg.removeEventListener("updatefound", onFound);
-    if(!found){
-      verFoot.textContent = "YOU'RE UP TO DATE";
-      setTimeout(() => { verFoot.textContent = verFootDefault; }, 2000);
-    }
-    // if found is true, leave "UPDATING…" showing — the existing controllerchange
-    // listener above reloads the page automatically once the new worker finishes
-    // installing and takes control. No extra code needed here for that part.
-  }, 1500);
+
+  /* Race the check against a deadline. update() can reject — the site's URL is gone, a
+     captive portal answered instead of the server — but it can also simply never settle on
+     a dead connection, and the old fallback was scheduled AFTER `await swReg.update()`, so
+     in that case it was never even created: the label sat on "CHECKING FOR UPDATES…"
+     forever with nothing to tell the driver why. Every path below ends in a definite
+     answer, and a failed check says so instead of claiming you're up to date. */
+  let timer;
+  const outcome = await Promise.race([
+    swReg.update().then(() => "checked", () => "failed"),
+    new Promise(r => { timer = setTimeout(() => r("failed"), VER_CHECK_MS); })
+  ]);
+  clearTimeout(timer);
+  // updatefound normally fires during update(), but let a late one land before concluding.
+  if(!found && outcome === "checked") await new Promise(r => setTimeout(r, VER_SETTLE_MS));
+  swReg.removeEventListener("updatefound", onFound);
+
+  if(found){
+    // Leave "UPDATING…" up: the controllerchange listener above reloads the page once the
+    // new worker takes over, which normally lands within a second. If it somehow doesn't,
+    // don't leave the driver staring at a label that never resolves — a reload that does
+    // happen navigates away and takes this timer with it.
+    setTimeout(() => { if(verFootBusy) verFootRest(); }, VER_HELD_MS);
+    return;
+  }
+  verFoot.textContent = outcome === "checked" ? "YOU'RE UP TO DATE" : "COULDN'T CHECK — NO SIGNAL?";
+  setTimeout(verFootRest, 2500);
 };
 </script>
 </body>
