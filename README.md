@@ -15,7 +15,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.2.1**
+**Current version: v4.2.2**
 
 ## Files
 
@@ -55,6 +55,14 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.2.2
+
+- **The Predicted tab's live comparison is now a changeable-message board**, same black
+  panel and amber dot-matrix as the Live tab's. It's a live-sourced number, so it should
+  look like one. Dispatch's own `÷ 50` math stays plain note text directly above it, since
+  that half isn't live-sourced. The wording drops "Live says" — the LIVE badge on the board
+  already says it.
 
 ### v4.2.1
 

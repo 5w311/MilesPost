@@ -81,13 +81,16 @@ try {
   if (!/^\d{2}:\d{2} \S+$/.test(etaClock || "") || etaClock === "--:--")
     fail(`expected a computed arrival clock with its own tz suffix, got ${JSON.stringify(etaClock)}`);
   // Predicted's cross-model comparison is live-sourced now, so with no quote in hand the
-  // "Live says …" line must be absent entirely — never a stale or fabricated comparison.
+  // comparison board must be absent entirely — never a stale or fabricated comparison.
   // (The present-after-a-quote half is asserted on livePage, which has one.)
   const quickNoteText = (await page.textContent("#quickNote")) || "";
   if (!/÷ 50 =/.test(quickNoteText))
     fail(`quickNote should still show dispatch's own math, got ${JSON.stringify(quickNoteText)}`);
-  if (/Live says/.test(quickNoteText))
-    fail(`quickNote must not show a "Live says" comparison with no fresh quote, got ${JSON.stringify(quickNoteText)}`);
+  if (await page.isVisible("#quickLive"))
+    fail("the Predicted comparison board must be hidden with no fresh quote");
+  // Dispatch's own ÷50 math is not live-sourced and must stay out of the board.
+  if (/dispatch\)?$/.test(quickNoteText.trim()) && /LIVE/.test(quickNoteText))
+    fail(`the comparison must not be inside #quickNote any more, got ${JSON.stringify(quickNoteText)}`);
 
   // The Live tab is strictly live: with no quote it shows the empty state, not an offline
   // model. Miles and a departure are entered, so the old build would have had a full run
@@ -282,14 +285,30 @@ try {
   // Predicted's comparison line is present now, sourced from that same quote.
   await livePage.click("#tabQuick");
   await livePage.waitForTimeout(100);
-  const liveQuickNote = (await livePage.textContent("#quickNote")) || "";
-  if (!/Live says \d{2}:\d{2} [A-Z]{2,6} \(/.test(liveQuickNote))
-    fail(`quickNote should show the live comparison with its tz code, got ${JSON.stringify(liveQuickNote)}`);
-  // Cross-check that the Live tab's big number really is the quote's own liveEta. The board
-  // used to carry the clock and made this comparable in one place; with that gone, this
-  // line is the other reading of LIVE.res.liveEta on screen, so the two must agree.
-  if (!liveQuickNote.includes("Live says " + liveClock.split(" ")[0]))
-    fail(`the Live arrival and the "Live says" comparison must be the same quote: ${JSON.stringify(liveClock)} vs ${JSON.stringify(liveQuickNote)}`);
+  if (!(await livePage.isVisible("#quickLive")))
+    fail("the Predicted comparison board should appear once a quote backs it");
+  const liveQuickNote = (await livePage.textContent("#quickLive")) || "";
+  if (!/^LIVE \d{2}:\d{2} [A-Z]{2,6} · \d+h \d+m (ahead of|behind) dispatch$/.test(liveQuickNote.trim()))
+    fail(`unexpected Predicted comparison board copy: ${JSON.stringify(liveQuickNote)}`);
+  // Dispatch's own ÷50 math is not live-sourced, so it stays out of the board and keeps
+  // its plain note styling next door.
+  const dispatchNote = (await livePage.textContent("#quickNote")) || "";
+  if (!/÷ 50 =/.test(dispatchNote) || /dispatch$/.test(dispatchNote.trim()))
+    fail(`#quickNote should hold only dispatch's own math, got ${JSON.stringify(dispatchNote)}`);
+  // Cross-check that the Live tab's big number really is the quote's own liveEta — this
+  // board is the other reading of LIVE.res.liveEta on screen, so the two must agree.
+  if (!liveQuickNote.includes("LIVE " + liveClock.split(" ")[0]))
+    fail(`the Live arrival and the comparison board must be the same quote: ${JSON.stringify(liveClock)} vs ${JSON.stringify(liveQuickNote)}`);
+  // The board must not fuse with the note above it — .liveLine joins to a FOLLOWING .note,
+  // and #quickLive's next sibling is #strip, so it stays a panel of its own.
+  const fused = await livePage.evaluate(() => {
+    const q = document.getElementById("quickLive");
+    return { next: q.nextElementSibling?.id, radius: getComputedStyle(q).borderBottomLeftRadius };
+  });
+  if (fused.next !== "strip")
+    fail(`#quickLive must sit directly before #strip, not a .note — next sibling is ${JSON.stringify(fused.next)}`);
+  if (fused.radius === "0px")
+    fail("#quickLive should keep its own rounded bottom, not fuse into a following panel");
   // Same shared label, other tab: Predicted's flat ÷50 is not a live arrival.
   const quickLabel = (await livePage.textContent("#etaLabel"))?.trim() || "";
   if (!quickLabel.startsWith("Arrival ·"))
@@ -302,9 +321,9 @@ try {
   await livePage.fill("#depart", "2027-01-20T08:00");
   await livePage.dispatchEvent("#depart", "input");
   await livePage.waitForTimeout(150);
-  const skewNote = (await livePage.textContent("#quickNote")) || "";
-  const gap = skewNote.match(/\((\d+)h (\d+)m (ahead of|behind) dispatch\)/);
-  if (!gap) fail(`quickNote should still carry a live comparison, got ${JSON.stringify(skewNote)}`);
+  const skewNote = (await livePage.textContent("#quickLive")) || "";
+  const gap = skewNote.match(/(\d+)h (\d+)m (ahead of|behind) dispatch/);
+  if (!gap) fail(`the comparison board should still carry a gap, got ${JSON.stringify(skewNote)}`);
   else if (Number(gap[1]) > 24)
     fail(`the dispatch gap must compare run times, not arrival clocks — a far-off departure leaked in: ${JSON.stringify(skewNote)}`);
   await livePage.click("#tabTuned");
@@ -890,14 +909,16 @@ try {
   for (const id of ["strip", "stripKey", "legend", "etaShift"])
     if (await resumePage.isVisible(`#${id}`))
       fail(`#${id} must clear along with a stale quote`);
-  // Predicted's "Live says …" comparison is gated on freshness, not merely on a quote
-  // having once existed — a ten-minute-old read compared against dispatch is exactly the
-  // fabricated comparison the line is supposed to avoid.
+  // Predicted's comparison board is gated on freshness, not merely on a quote having once
+  // existed — a ten-minute-old read compared against dispatch is exactly the fabricated
+  // comparison the board is supposed to avoid.
   await resumePage.click("#tabQuick");
   await resumePage.waitForTimeout(100);
+  if (await resumePage.isVisible("#quickLive"))
+    fail("a stale quote must not feed the Predicted comparison board");
   const staleQuickNote = (await resumePage.textContent("#quickNote")) || "";
-  if (/Live says/.test(staleQuickNote))
-    fail(`a stale quote must not feed the Predicted comparison line, got ${JSON.stringify(staleQuickNote)}`);
+  if (/dispatch/.test(staleQuickNote))
+    fail(`a stale quote must not leave a comparison in #quickNote either, got ${JSON.stringify(staleQuickNote)}`);
   if (resumeErrors.length) fail("resume page errors: " + JSON.stringify(resumeErrors, null, 2));
   await resumePage.close();
 
