@@ -1,5 +1,10 @@
 # MilesPost
 
+### → **https://5w311.github.io/MilesPost/**
+
+That capitalisation is load-bearing. GitHub Pages paths are case-sensitive, so the old
+lowercase `…/milespost/` address is a 404 — see [Moving off the old URL](#moving-off-the-old-url).
+
 Team-driver tools. Two questions, two tabs:
 
 **ETA** — when do I get there? *Predicted ETA* is dispatch's flat `miles ÷ 50`. *Live ETA* is
@@ -32,11 +37,29 @@ back up.
 
 ## Install it to the home screen
 
-**iPhone:** open the link in Safari → Share → *Add to Home Screen*.
-**Android:** open in Chrome → menu → *Install app* / *Add to Home Screen*.
+**iPhone:** open **https://5w311.github.io/MilesPost/** in Safari → Share → *Add to Home Screen*.
+**Android:** open it in Chrome → menu → *Install app* / *Add to Home Screen*.
 
 Own icon, fullscreen, no browser bars, and it works in a dead zone because the service
 worker cached it on first load.
+
+## Moving off the old URL
+
+The repository was renamed `milespost` → `MilesPost`, and GitHub Pages paths are
+case-sensitive, so the site moved with it. The old lowercase address now returns 404.
+
+**A copy installed from the old address will never update again.** It won't look broken —
+that's the trap. The service worker serves the whole app from its cache, so it keeps
+launching and working perfectly while every request to the dead origin 404s silently,
+leaving it frozen at whatever version it last cached.
+
+Nothing in this repo can repoint it: a home-screen app's start URL is captured at install
+time, on the device. The only fix is to **remove it from the home screen and add it again
+from the new address above.** Do that once and it resumes updating normally.
+
+Nothing in the app itself hardcodes a URL — every path is relative and the HERE key is
+locked to the `5w311.github.io` domain rather than a path — so the app runs correctly at
+the new address with no code change.
 
 ## Notes
 
