@@ -15,7 +15,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.2.2**
+**Current version: v4.2.3**
 
 ## Files
 
@@ -55,6 +55,25 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.2.3
+
+- **Fixed: an update could install without the app ever switching to it.** The check that
+  suppresses the pointless reload on a first install was a snapshot taken when the page
+  loaded, so it also swallowed every real update afterwards on that same page. If the
+  service worker installed during *this* load — a first launch, or after iOS had evicted it
+  — the new version would download and activate while the app carried on showing the old
+  one, footer stuck on "UPDATING…". It now tracks being controlled as live state: the first
+  handover is skipped, every update after it reloads.
+- **Fixed: "CHECKING FOR UPDATES…" could hang forever.** The fallback that reports the
+  result was scheduled *after* awaiting the check, so a check that never came back meant
+  the fallback was never created either. The check is now raced against an 8-second
+  deadline, and a check that fails or times out says **"COULDN'T CHECK — NO SIGNAL?"**
+  instead of hanging — or, worse, claiming you're up to date when it never reached the
+  server. Tapping again mid-check no longer stacks a second one.
+- Both are now covered by a real service-worker test — an actual install, an actual deploy,
+  an actual reload — rather than a stand-in whose update call always succeeded instantly,
+  which is why neither bug was caught before.
 
 ### v4.2.2
 
