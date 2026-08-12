@@ -684,7 +684,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.2</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.2.1</button>
   </div>
 </div>
 
@@ -1354,7 +1354,10 @@ function renderEta(){
   show($("destMeta"), !!E.destName);
   if(E.destName) $("destChip").textContent = E.destName + " · " + tzTag(E.destTz);
   $("apptLbl").textContent = "Appointment · " + tzTag(showTz) + " (optional)";
-  $("etaLabel").textContent = "Arrival · " + (E.destName
+  // One label, two tabs — so the word has to follow the mode. Only the Live tab's number
+  // comes off a live quote; calling the Predicted tab's flat ÷50 a live arrival would be
+  // a straight lie about where it came from.
+  $("etaLabel").textContent = (E.mode === "tuned" ? "Live Arrival" : "Arrival") + " · " + (E.destName
     ? E.destName
     : E.destTz ? "Destination"
     : "set a destination below");
@@ -1474,23 +1477,17 @@ function renderEta(){
     /* LIVE line: HERE truck route with current traffic, same team overlay on top. */
     {
       show($("liveLine"), true); show($("liveNote"), true);
-      // The clock leads in showTz (destination-local — same tz the main arrival number
-      // uses), so it already reads correctly for wherever the truck is headed. When the
-      // driver's own origin is a different zone, append a muted device-clock reading —
-      // same "HH:MM TZ · current device timezone" wording etaYours already uses for the
-      // main readout, just scoped to LIVE's own liveEta rather than the tuned/quick
-      // model's eta (the two can differ, since LIVE is solved from right now rather than
-      // the typed departure).
+      // The board carries only what isn't already on this screen. The arrival clock, its
+      // date and zone, the road mileage and the device-clock reading were all repeats of
+      // something within an inch of here — the big number above, the miles field below,
+      // the device-timezone line directly above the board. What's left is the two facts
+      // the board alone reports: that this came off truck routing, and what traffic is
+      // costing. Assembled as a list and joined, so dropping a piece can never strand a
+      // separator against the LIVE badge. Light traffic leaves just "truck route".
+      const board = ["truck route"];
+      if(LIVE.trafficS >= 300) board.push("traffic +"+Math.round(LIVE.trafficS/60)+"m");
       $("liveLine").innerHTML = "<span class=\"liveBadge\">LIVE</span> "
-        + "<span class=\"liveText\"><b>"+clockOf(LIVE.res.liveEta, showTz)+"</b> "+tzTag(showTz)+" "
-        + dayOf(LIVE.res.liveEta, showTz)
-        + " · "+Math.round(LIVE.res.miles)+" mi truck route"
-        + (LIVE.trafficS >= 300 ? " · traffic +"+Math.round(LIVE.trafficS/60)+"m" : "")
-        + (E.destTz && E.destTz !== E.originTz
-            ? " · <span style=\"color:var(--mute)\">"+clockOf(LIVE.res.liveEta, E.originTz)
-              +" "+tzTag(E.originTz)+" · current device timezone</span>"
-            : "")
-        + "</span>";
+        + "<span class=\"liveText\">" + board.join(" · ") + "</span>";
       $("liveNote").textContent = "Traffic is right-now conditions — it mainly shapes the "
         + "next few hours. The truck-legal routing applies to the whole run.";
     }
@@ -1511,8 +1508,10 @@ function renderEta(){
     }
     $("strip").innerHTML = html;
     show($("strip"), true); show($("stripKey"), true); show($("legend"), true);
+    // Total rather than an average speed: rolling and stopped visibly add up to it, which
+    // is the number a driver is actually planning against.
     $("legend").innerHTML = "<span>ROLLING "+hm(driveH)+"</span><span>STOPPED "+hm(stopH)+
-      "</span><span>"+(liveMiles/totalH).toFixed(1)+" MPH AVG</span>";
+      "</span><span>TOTAL "+hm(totalH)+"</span>";
     // The rules line is already on screen from every pass; append what this quote solved to.
     $("runNote").innerHTML += "<br>This run: "+swaps.length+" swap"+(swaps.length===1?"":"s")+", "+
       fuelStops+" fuel stop"+(fuelStops===1?"":"s")+", "+
