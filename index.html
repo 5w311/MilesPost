@@ -574,6 +574,21 @@
           </div>
         </div>
       </div>
+      <div id="runningRow">
+        <div class="lbl-row" style="margin-top:14px;margin-bottom:0">
+          <div style="display:flex;align-items:center;gap:2px">
+            <div class="lbl" style="margin-bottom:0">Running</div>
+            <button class="help-btn" id="runningHelp" aria-label="What is this?" type="button"><span>?</span></button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="overrideState" id="runningState">OFF</span>
+            <button class="switch" id="runningBtn" role="switch" aria-checked="false"
+                    aria-label="Keep the departure clock and arrival current">
+              <i class="knob"></i>
+            </button>
+          </div>
+        </div>
+      </div>
       <button class="primary" id="liveBtn" style="margin-top:12px">UPDATE LIVE ETA</button>
       <div class="grid hide" id="tuneGrid">
         <div><div class="lbl">Fuel every</div><div class="fieldwrap"><input id="fuelEvery" type="number" inputmode="decimal"><span class="suffix">mi</span></div></div>
@@ -669,7 +684,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.1</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.2</button>
   </div>
 </div>
 
@@ -801,6 +816,16 @@ const HELP = {
     "<ul><li>Turn this on and \"Update Live ETA\" always overwrites miles with the real "+
     "road distance, even one you typed yourself.</li>"+
     "<li>Off by default, and remembered across sessions once you change it.</li></ul>" },
+  running:{ title:"Running", body:
+    "<p>Keeps the Live ETA current on its own — the departure clock tracks now and the "+
+    "arrival re-solves against it. Doesn't use data; tap \"UPDATE LIVE ETA\" to pull a "+
+    "fresh quote.</p>"+
+    "<ul><li>Nothing is re-fetched while it runs: the arrival is re-solved from the quote "+
+    "you already pulled, so the drive time and traffic in it stay as of that fetch.</li>"+
+    "<li>Once that quote is more than ten minutes old it goes stale like always, and the "+
+    "arrival clears until you pull a new one.</li>"+
+    "<li>Starts off every time you open the app, and pauses while you're on another tab "+
+    "or another app.</li></ul>" },
   reset:{ title:"Legal At", body:
     "<p>This tracks your 34-hour restart. Set the moment you shut down, and this shows the "+
     "exact time you're legal to run again — 34 real hours later, DST accounted for.</p>"+
@@ -817,6 +842,7 @@ $("etaHelp").onclick = ()=>{
 $("loadHelp").onclick = ()=> openHelp(HELP.load.title, HELP.load.body);
 $("runHelp").onclick = ()=> openHelp(HELP.run.title, HELP.run.body);
 $("overrideHelp").onclick = ()=> openHelp(HELP.override.title, HELP.override.body);
+$("runningHelp").onclick = ()=> openHelp(HELP.running.title, HELP.running.body);
 $("rsHelp").onclick = ()=> openHelp(HELP.reset.title, HELP.reset.body);
 
 // Old keys are read once so a rename never costs the driver their settings.
@@ -865,7 +891,10 @@ const LIVE = { at:null, res:null, trafficS:0, note:"", pending:false, tried:fals
      changing the destination used to leave the old city's mileage sitting there. If the
      field still reads exactly what we wrote, it's ours to replace; the moment it reads
      anything else the driver has taken it over and we never touch it again. */
-  autoMiles:null };
+  autoMiles:null,
+  /* The raw routing numbers behind res, kept so the arrival can be re-solved against a new
+     departure without asking HERE anything (see RUNNING). Invalidated wherever res is. */
+  raw:null };
 
 /* Shared clearing helpers — used by the small per-field "×" buttons AND by the big CLEAR
    button below, so all three sites clear exactly the same way instead of three copies of
@@ -884,7 +913,8 @@ function clearDestField(){
   show($("destSuggest"), false);
   // A live quote is tied to the destination it was solved for — clearing the destination
   // is what should invalidate it, not clearing miles (miles has its own clear above).
-  LIVE.res = null; LIVE.at = null; LIVE.trafficS = 0; LIVE.note = "";
+  LIVE.res = null; LIVE.at = null; LIVE.trafficS = 0; LIVE.note = ""; LIVE.raw = null;
+  clearGeoCache();
   renderEta();
 }
 
@@ -998,14 +1028,27 @@ const hereErr = async (label, res) => {
    purpose: v8 defaults it to the request time ("now"), which is what makes the
    duration traffic-aware. The literal departureTime=now is v7 syntax and 400s on v8
    ("Malformed request"). */
+/* A town's coordinates don't move between refreshes, so re-quoting the same destination —
+   or tapping GET MILEAGE after UPDATE LIVE ETA — shouldn't pay for the same lookup twice.
+   One entry is enough: the driver refreshes one destination over and over, and keying on
+   the exact destination string means a new city simply misses and re-geocodes rather than
+   ever routing against the last city's position. Only the geocode is cached; the route
+   itself is re-fetched every time, since that's the half that changes with traffic. */
+let geoCache = null;                        // { dest, pos } for the last destination geocoded
+const clearGeoCache = () => { geoCache = null; };
+
 async function fetchTruckRoute(destName){
   const here = await geoPos();
-  const g = await fetch("https://geocode.search.hereapi.com/v1/geocode?q="
-    + encodeURIComponent(destName) + "&apikey=" + HERE_API_KEY);
-  if(!g.ok) throw await hereErr("geocode", g);
-  const gj = await g.json();
-  const pos = gj.items && gj.items[0] && gj.items[0].position;
-  if(!pos) throw new Error("geocode: no match for "+destName);
+  let pos = geoCache && geoCache.dest === destName ? geoCache.pos : null;
+  if(!pos){
+    const g = await fetch("https://geocode.search.hereapi.com/v1/geocode?q="
+      + encodeURIComponent(destName) + "&apikey=" + HERE_API_KEY);
+    if(!g.ok) throw await hereErr("geocode", g);
+    const gj = await g.json();
+    pos = gj.items && gj.items[0] && gj.items[0].position;
+    if(!pos) throw new Error("geocode: no match for "+destName);
+    geoCache = { dest: destName, pos };
+  }
 
   const q = new URLSearchParams({
     transportMode:"truck",
@@ -1034,6 +1077,9 @@ async function updateLive(){
   try{
     const { duration, length, base } = await fetchTruckRoute(E.destName);
     const startMs = Date.now();             // live means from where the truck sits right now
+    // Kept raw as well as solved: RUNNING re-solves these same numbers against a moving
+    // departure, which is what lets the arrival stay current without another fetch.
+    LIVE.raw = { duration, length, base };
     LIVE.res = solveEtaLive({ driveSeconds:duration, meters:length, p:E.p, swap:E.swap, startMs });
     // Convenience only: fill miles from the real road distance when the field is blank, or
     // when it still holds a number we put there ourselves — so re-quoting for a new
@@ -1062,7 +1108,7 @@ async function updateLive(){
     // silently to the tuned model. The UI must never block or error on this path.
     // The note names the reason (terse) so a driver can report it without a console.
     console.warn("live ETA unavailable:", err);
-    LIVE.at = null; LIVE.res = null; LIVE.trafficS = 0;
+    LIVE.at = null; LIVE.res = null; LIVE.trafficS = 0; LIVE.raw = null;
     const why = (err && err.message) ? err.message : "error";
     LIVE.note = "live unavailable ("+why+") — showing tuned";
   }
@@ -1159,6 +1205,7 @@ $("tuneToggle").onclick = ()=>{
   // aria-checked — it's still there, just off-screen, and reappears exactly as it was.
   show($("liveBtn"), !on);
   show($("overrideRow"), !on);
+  show($("runningRow"), !on);
   $("tuneToggle").textContent = on ? "− HIDE TUNING" : "+ TUNE TO YOUR TRUCK";
 };
 
@@ -1173,6 +1220,60 @@ const renderOverrideBtn = () => {
 };
 $("overrideBtn").onclick = () => { E.liveOverride = !E.liveOverride; renderOverrideBtn(); saveEta(); };
 renderOverrideBtn();
+
+/* RUNNING: keeps the departure clock on "now" and the arrival re-solved against it, once a
+   second. Deliberately a session mode — never persisted, always OFF on load — because it's
+   about what the driver is doing right now, not how they've set the app up.
+
+   It never touches the network. The tick re-runs solveEtaLive over LIVE.raw, the exact
+   numbers the last fetch already returned, against a new departure: same drive time and
+   same traffic, but the swap/DOT/fuel overlay re-solved from the current moment, which is
+   the part that actually moves as the clock does. UPDATE LIVE ETA stays the only thing in
+   the app that calls the routing API.
+
+   It does not touch LIVE.at either, so it can't extend a quote's life: ten minutes after
+   the fetch the quote goes stale and the Live tab shows its empty state exactly as it
+   would have, RUNNING on or off. */
+let running = false;
+let runTimer = null;
+
+// Re-solve the arrival from the cached raw quote against a new departure. No-op with no
+// quote in hand — clearing the destination or a failed fetch drops LIVE.raw with the rest.
+const resolveLiveFromRaw = startMs => {
+  if(!LIVE.raw) return;
+  LIVE.res = solveEtaLive({ driveSeconds:LIVE.raw.duration, meters:LIVE.raw.length,
+    p:E.p, swap:E.swap, startMs });
+};
+const runTick = () => {
+  $("depart").value = toWall(new Date(), E.originTz);
+  resolveLiveFromRaw(Date.now());
+  renderEta();
+};
+// The timer only exists while it can actually be seen doing something: RUNNING on, the Live
+// tab in front, and the app in the foreground. Always torn down first, so no path can leave
+// two intervals running.
+const syncRunTimer = () => {
+  clearInterval(runTimer);
+  runTimer = null;
+  if(running && E.mode === "tuned" && document.visibilityState === "visible")
+    runTimer = setInterval(runTick, 1000);
+};
+const renderRunningBtn = () => {
+  $("runningBtn").setAttribute("aria-checked", String(running));
+  $("runningState").textContent = running ? "ON" : "OFF";
+  $("runningState").classList.toggle("on", running);
+  // A departure that re-writes itself every second can't also be hand-set. Turning RUNNING
+  // off hands both controls back with the clock left wherever it stopped.
+  $("depart").disabled = running;
+  $("nowBtn").disabled = running;
+};
+$("runningBtn").onclick = () => {
+  running = !running;
+  renderRunningBtn();
+  syncRunTimer();
+  if(running) runTick();      // land on "now" immediately rather than up to a second late
+};
+renderRunningBtn();
 
 const doDest = ()=>{
   const raw = $("destIn").value.trim();
@@ -1232,6 +1333,7 @@ const setEtaMode = m => {
   $("tabTuned").setAttribute("aria-selected", String(m==="tuned"));
   show($("panelTuned"), m==="tuned");
   renderEta();
+  syncRunTimer();     // the running clock belongs to the Live tab; leaving it stops the tick
   // On-demand refresh, never a timer: opening the Tuned tab refreshes a stale quote,
   // but only after the driver has asked for live once (no surprise GPS prompt).
   if(m==="tuned" && LIVE.tried && E.destName && !LIVE.pending && !liveFresh(LIVE.at, Date.now()))
@@ -1684,6 +1786,10 @@ setInterval(renderReset, 1000);      // the countdown has to tick
    on the first frame rather than up to a second in. Deliberately no polling or update
    checks here; the tap-to-update footer stays strictly manual. */
 document.addEventListener("visibilitychange", () => {
+  // Also where the RUNNING tick pauses and resumes: no point burning a timer against a
+  // screen nobody's looking at, and resuming here means the clock is already current on
+  // the first frame back rather than up to a second behind.
+  syncRunTimer();
   if(document.visibilityState === "visible"){ renderEta(); renderReset(); }
 });
 

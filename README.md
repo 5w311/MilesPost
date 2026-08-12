@@ -15,7 +15,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.1**
+**Current version: v4.2**
 
 ## Files
 
@@ -55,6 +55,31 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.2
+
+- **RUNNING switch on the Live ETA tab.** Flip it on and the departure clock tracks now
+  while the arrival re-solves against it every second, so the tab stays current between
+  refreshes instead of quietly describing a moment that's passed. Departure and NOW are
+  disabled while it runs (a clock that rewrites itself can't also be hand-set) and hand
+  back frozen at their last value when you switch it off. It's a session mode — always off
+  when you open the app.
+- **RUNNING never uses data.** Not one network call while it ticks. The arrival is
+  re-solved from the quote you already pulled — same drive time, same traffic, but the
+  swap/DOT/fuel overlay re-run from the current moment, which is the part that actually
+  moves as the clock does. **UPDATE LIVE ETA is still the only thing that fetches**, by
+  design: an auto-refresh was considered and rejected on API budget. The tick also pauses
+  on the Predicted tab and while the app is backgrounded.
+- It doesn't extend a quote's life, either. Ten minutes after the fetch the quote goes
+  stale and the arrival clears exactly as it would have — RUNNING keeps the arrival honest,
+  it doesn't keep it alive.
+- **Destination geocoding is cached**, so re-quoting the same city stops re-looking-up
+  coordinates that haven't moved. A repeat refresh now costs one routing call instead of a
+  lookup plus a route — roughly half the transactions. GET MILEAGE benefits too. Changing
+  the destination always re-geocodes, so a new city can never route against the last one's
+  position.
+- Net effect: the Live tab stays current on its own, and the app makes **fewer** API calls
+  than it did before.
 
 ### v4.1
 
