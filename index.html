@@ -112,7 +112,7 @@
   button{transition:background-color .15s ease, color .15s ease, border-color .15s ease,
     transform .12s ease}
   .primary:active,.go:active,.ghost:active,.danger:active,.muted:active,
-  .tabs button:active,.subtabs button:active,.presets button:active{transform:scale(.97)}
+  .tabs button:active,.subtabs button:active{transform:scale(.97)}
   @keyframes helpFade{from{opacity:0} to{opacity:1}}
   @keyframes helpRise{from{transform:translateY(10px)} to{transform:translateY(0)}}
   .helpBackdrop:not(.hide){animation:helpFade .15s ease}
@@ -120,7 +120,7 @@
   @media (prefers-reduced-motion: reduce){
     *{transition:none !important; animation:none !important}
     .primary:active,.go:active,.ghost:active,.danger:active,.muted:active,
-    .tabs button:active,.subtabs button:active,.presets button:active{transform:none}
+    .tabs button:active,.subtabs button:active{transform:none}
   }
 
   *{box-sizing:border-box}
@@ -374,12 +374,6 @@
   .suggest button+button{border-top:1px solid #c8cdd2}
   .suggest button:hover,.suggest button:focus-visible{background:#eef0ee}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-  .presets{display:flex;gap:8px;margin-bottom:12px}
-  .presets button{flex:1;padding:11px 4px;font-family:var(--sans);font-weight:700;
-    font-size:12px;text-transform:uppercase;letter-spacing:.02em;background:#fff;
-    color:var(--ink);border:2px solid var(--ink);border-radius:8px}
-  .presets button[aria-selected=true]{background:var(--panel-green);color:#fff;
-    border-color:var(--panel-green)}
 
   /* Milepost markers between cards — presentational dividers. */
   .mp{display:flex;justify-content:center;margin:-4px 0 12px}
@@ -461,8 +455,8 @@
   <!-- ============================ ETA ============================ -->
   <div id="viewEta">
     <div class="subtabs" role="tablist">
-      <button id="tabQuick" role="tab" aria-selected="true">SIMPLE ETA</button>
-      <button id="tabTuned" role="tab" aria-selected="false">TUNED MODEL ETA</button>
+      <button id="tabQuick" role="tab" aria-selected="true">PREDICTED ETA</button>
+      <button id="tabTuned" role="tab" aria-selected="false">LIVE ETA</button>
     </div>
 
     <div class="card readout">
@@ -560,7 +554,6 @@
         <div class="lbl" id="runLabel">How you run</div>
         <button class="help-btn" id="runHelp" aria-label="What is this?" type="button"><span>?</span></button>
       </div>
-      <div class="presets" id="presets"></div>
       <div class="note" id="runNote" style="margin-top:0"></div>
       <!-- Centered settings link above the full-width primary CTA. display:block + auto
            side margins centers the button itself (it stays shrink-to-fit). -->
@@ -583,7 +576,6 @@
       </div>
       <button class="primary" id="liveBtn" style="margin-top:12px">UPDATE LIVE ETA</button>
       <div class="grid hide" id="tuneGrid">
-        <div><div class="lbl">Cruise</div><div class="fieldwrap"><input id="mph" type="number" inputmode="decimal"><span class="suffix">mph</span></div></div>
         <div><div class="lbl">Fuel every</div><div class="fieldwrap"><input id="fuelEvery" type="number" inputmode="decimal"><span class="suffix">mi</span></div></div>
         <div><div class="lbl">Fuel stop</div><div class="fieldwrap"><input id="fuelMin" type="number" inputmode="decimal"><span class="suffix">min</span></div></div>
         <div><div class="lbl">Swap takes</div><div class="fieldwrap"><input id="swapMin" type="number" inputmode="decimal"><span class="suffix">min</span></div></div>
@@ -677,7 +669,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.0.3</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.1</button>
   </div>
 </div>
 
@@ -694,7 +686,7 @@
 <script type="module">
 import {
   resolvePlace, ZONE_LIST, deviceTz, tzTag, fromWall, toWall, clockOf, dayOf, hm, hms,
-  RATE, PRESETS, PRESET_VERSION, SWAP_DEFAULT, solveEta, shiftAtArrival,
+  RATE, STOP_DEFAULTS, PRESET_VERSION, SWAP_DEFAULT, shiftAtArrival, dotDuration,
   solveEtaLive, liveFresh, LIVE_MAX_AGE_MS, formatPlaceSuggestions, metersToMiles,
   RESET_HOURS, AUTO_CLEAR_MS, autoClearElapsed, icsStamp, esc
 } from "./lib/logic.js";
@@ -775,31 +767,33 @@ document.addEventListener("keydown", e=>{
 });
 
 const HELP = {
-  etaQuick:{ title:"Simple ETA", body:
-    "<p>This assumes dispatch's number: your load's miles divided by a flat 50 mph, "+
-    "nonstop. No stops, no traffic, no truck-legal routing — just a fast, rough guess.</p>"+
+  etaQuick:{ title:"Predicted ETA", body:
+    "<p>This is dispatch's number: your load's miles divided by a flat 50 mph, nonstop. "+
+    "No stops, no traffic, no truck-legal routing.</p>"+
     "<ul><li>Good for sanity-checking dispatch's own ETA.</li>"+
     "<li>It doesn't know about fuel, swaps, or breaks — expect it to run early.</li></ul>" },
-  etaTuned:{ title:"Tuned Model ETA", body:
-    "<p>This runs your actual pace instead of a flat 50: your chosen cruise speed, plus "+
-    "real stops — fuel, driver swaps on the clock, and one DOT break per shift. Closer to "+
-    "what you'll actually see happen.</p>"+
-    "<ul><li>Pick a preset below, or dial in your own numbers under \"TUNE TO YOUR TRUCK.\"</li>"+
-    "<li>Tap \"UPDATE LIVE ETA\" for a truck-legal, traffic-aware read when you've got signal.</li></ul>" },
+  etaTuned:{ title:"Live ETA", body:
+    "<p>A truck-legal, traffic-aware arrival from real routing, with your team stops "+
+    "layered on: fuel, driver swaps on the clock, and one DOT break per shift.</p>"+
+    "<ul><li>Needs signal — tap \"UPDATE LIVE ETA\" to fetch one.</li>"+
+    "<li>The quote goes stale after about 10 minutes, and the arrival clears until you "+
+    "refresh it.</li>"+
+    "<li>Edit your stop rules under \"+ TUNE TO YOUR TRUCK.\"</li></ul>" },
   load:{ title:"Your Load", body:
     "<p>This is the run you're on: miles left, where you're headed, and when you roll out. "+
     "Both ETA lines above read straight from these fields — change a number here and every "+
     "readout updates.</p>"+
-    "<ul><li>Type miles from dispatch, or leave it blank and tap \"GET MILEAGE\" (Simple "+
-    "tab) or \"UPDATE LIVE ETA\" (Tuned tab) to fill it in from the real route.</li>"+
+    "<ul><li>Type miles from dispatch, or leave it blank and tap \"GET MILEAGE\" (either "+
+    "tab) or \"UPDATE LIVE ETA\" (Live tab) to fill it in from the real route.</li>"+
     "<li>Destination just needs a town and state — it sets your time zone and, for live ETA, "+
     "the actual route.</li>"+
     "<li>CLEAR wipes the load but keeps your tuning and swap schedule.</li></ul>" },
   run:{ title:"How You Run", body:
-    "<p>This is your driving profile — how the Tuned Model turns miles into time. Pick a "+
-    "preset, or dial in your own cruise speed, fuel stops, swap length, and DOT break timing.</p>"+
+    "<p>Your stop rules — the team-driver time the router knows nothing about, laid on top "+
+    "of the live drive time. Dial in your own fuel stops, swap length, and DOT break timing "+
+    "under \"+ TUNE TO YOUR TRUCK.\"</p>"+
     "<ul><li>DOT break has a 30-minute floor — the legal minimum, so it won't let you go lower.</li>"+
-    "<li>Changing a preset only touches the pace math — your swap schedule and theme stay put.</li></ul>" },
+    "<li>Changing these only touches the stop math — your swap schedule and theme stay put.</li></ul>" },
   override:{ title:"Override", body:
     "<p>By default, \"Update Live ETA\" only fills in miles when the field is blank, or still "+
     "holds a number the app filled in itself — a mileage you typed (dispatch's number, say) "+
@@ -834,11 +828,11 @@ const loadJSON = (...keys) => {
 };
 
 /* ======================= ETA ======================= */
-/* RATE, PRESETS, PRESET_VERSION, SWAP_DEFAULT, swapTimes, and the solveEta
-   fixed-point solver are imported from ./lib/logic.js. */
+/* RATE, STOP_DEFAULTS, PRESET_VERSION, SWAP_DEFAULT, and solveEtaLive (which runs the
+   team overlay on top of HERE's drive time) are imported from ./lib/logic.js. */
 
 const E = {
-  mode:"quick", preset:"Realistic", p:{...PRESETS.Realistic},
+  mode:"quick", p:{...STOP_DEFAULTS},
   swap:{...SWAP_DEFAULT, times:[...SWAP_DEFAULT.times]},
   originTz:deviceTz(), originName:"Your device", destTz:null, destName:"",
   // Opt-in: when true, UPDATE LIVE ETA always overwrites miles, even a number the driver
@@ -852,7 +846,7 @@ const E = {
   E.mode = s.mode ?? E.mode;
   E.liveOverride = s.liveOverride ?? E.liveOverride;
   if(s.swap && Array.isArray(s.swap.times)) E.swap = s.swap;
-  if(s.pv === PRESET_VERSION){ E.preset = s.preset ?? E.preset; E.p = s.p ?? E.p; }
+  if(s.pv === PRESET_VERSION){ E.p = s.p ?? E.p; }
 })();
 /* ======================= LIVE ETA (HERE truck routing) ======================= */
 /* Single obvious place for the key so it's easy to rotate. Domain-locked to
@@ -1118,7 +1112,7 @@ const renderGetMiBtn = () => {
 $("getMiBtn").onclick = () => getMileageOnly();
 
 const saveEta = () => { try{ localStorage.setItem("milespost.eta",
-  JSON.stringify({pv:PRESET_VERSION, mode:E.mode, preset:E.preset, p:E.p, swap:E.swap,
+  JSON.stringify({pv:PRESET_VERSION, mode:E.mode, p:E.p, swap:E.swap,
     liveOverride:E.liveOverride}));
 }catch{} };
 
@@ -1128,21 +1122,14 @@ ZONE_LIST.forEach(z=>{
     const o=document.createElement("option"); o.value=z; o.textContent=text; $(id).appendChild(o);
   });
 });
-Object.keys(PRESETS).forEach(k=>{
-  const b=document.createElement("button"); b.textContent=k; b.dataset.k=k;
-  b.onclick=()=>{ E.preset=k; E.p={...PRESETS[k]}; syncTune(); saveEta(); renderEta(); };
-  $("presets").appendChild(b);
-});
-const TUNE_KEYS = ["mph","fuelEvery","fuelMin","swapMin","dotMin","dotAt"];
-const syncTune = () => {
-  TUNE_KEYS.forEach(k=>{ $(k).value = E.p[k]; });
-  [...$("presets").children].forEach(b =>
-    b.setAttribute("aria-selected", String(b.dataset.k===E.preset)));
-};
+// The stop rules, and only the stop rules — cruise speed is gone with the preset
+// chooser, since live routing supplies drive time and nothing else reads an mph.
+const TUNE_KEYS = ["fuelEvery","fuelMin","swapMin","dotMin","dotAt"];
+const syncTune = () => { TUNE_KEYS.forEach(k=>{ $(k).value = E.p[k]; }); };
 TUNE_KEYS.forEach(k=>{
   $(k).addEventListener("input", e=>{
     E.p[k] = e.target.value==="" ? "" : Number(e.target.value);
-    E.preset="Custom"; syncTune(); saveEta(); renderEta();
+    syncTune(); saveEta(); renderEta();
   });
 });
 // The DOT break is the federal 30 — snap any sub-30 entry up to 30 once the field is left.
@@ -1287,15 +1274,23 @@ function renderEta(){
 
   // Highway dressing, all from state this pass already has: the milepost marker
   // between cards shows miles remaining; the fuel milepost fronts the run panel
-  // (so it shows/hides with it) with the preset's own fuel interval — never a
-  // number that can disagree with what the run note says.
+  // (so it shows/hides with it) with the tuned fuel interval — never a number
+  // that can disagree with what the run note says.
   show($("mpTopWrap"), M > 0);
   if(M > 0) $("mpTop").textContent = "MILE " + M;
   show($("mpFuelWrap"), E.mode === "tuned");
   $("mpFuel").textContent = Number(E.p.fuelEvery) > 0 ? "MILE " + E.p.fuelEvery + " · FUEL" : "FUEL";
 
+  // The stop rules describe the tuning panel itself, not any one run, so they render on
+  // every pass — including the empty states below, where the panel is still on screen.
+  $("runNote").innerHTML =
+    "fuel every "+E.p.fuelEvery+" mi ("+E.p.fuelMin+" min) · swap "+
+    E.swap.times.join(" / ")+" "+tzTag(E.swap.tz)+" ("+E.p.swapMin+" min) · DOT "+
+    dotDuration(E.p.dotMin)+" min @ "+E.p.dotAt+" h into shift";
+
   ["etaYours","etaShift","liveLine","liveNote","quickNote","strip","stripKey","legend","cushion",
    "etaExit"].forEach(id=>show($(id),false));
+  show($("etaDay"), true);
   renderLiveBtn();
   if(!(M > 0 && start)){
     $("etaClock").textContent = "--:--";
@@ -1303,9 +1298,33 @@ function renderEta(){
     return;
   }
 
-  const { driveH, fuelStops, swaps, dots, dotMin, stopH, totalH, tunedEta, quickH, quickEta } =
-    solveEta({ miles:M, p:E.p, swap:E.swap, startMs:start.getTime() });
-  const eta = E.mode==="quick" ? quickEta : tunedEta;
+  // A live quote is only worth reading while it's fresh — see liveFresh(). Everything the
+  // Live tab shows hangs off this one flag.
+  const liveOn = !!(liveFresh(LIVE.at, Date.now()) && LIVE.res);
+
+  /* The Live tab is strictly live: no fresh quote, no arrival. It does not fall back to an
+     offline miles/mph model — there isn't one anymore — so rather than show a number the
+     road can't back up, it says what to do about it. A failed fetch already explains
+     itself in #liveNote, so the generic prompt stands down instead of stacking with it. */
+  if(E.mode === "tuned" && !liveOn){
+    $("etaClock").textContent = "--:--";
+    if(LIVE.note){
+      show($("liveNote"), true);
+      $("liveNote").textContent = LIVE.note;
+      show($("etaDay"), false);
+    } else {
+      $("etaDay").textContent =
+        "Tap UPDATE LIVE ETA for a truck-legal, traffic-aware arrival. Needs signal.";
+    }
+    return;
+  }
+
+  // Predicted is dispatch's flat miles ÷ 50, nonstop. Live takes drive time, distance and
+  // the whole team overlay straight off the quote — solveEtaLive already ran overlayStops
+  // when it was fetched, and LIVE.at is the departure that solve started from.
+  const quickH = M / RATE;
+  const quickEta = new Date(start.getTime() + quickH*3600e3);
+  const eta = E.mode==="quick" ? quickEta : LIVE.res.liveEta;
 
   $("etaClock").innerHTML = clockWithTz(eta, showTz);
   $("etaDay").textContent = dayOf(eta, showTz);
@@ -1319,22 +1338,39 @@ function renderEta(){
   }
 
   if(E.mode==="quick"){
-    const diffH = (tunedEta-quickEta)/3600e3;
     show($("quickNote"), true);
+    // The dispatch-vs-reality comparison is only worth showing when there's a real read to
+    // compare against — a flat ÷50 against an actual truck-legal, traffic-aware arrival.
+    // With no fresh quote the line is simply absent rather than guessing at the gap.
+    //
+    // The gap is measured between the two RUN TIMES, not the two arrival clocks: dispatch's
+    // number departs from the typed "rolling out", while a live quote departs from whenever
+    // it was fetched. Differencing the arrivals would fold that departure gap into the
+    // answer — type a departure two months out and "behind dispatch" reads in thousands of
+    // hours. Run time against run time is the honest comparison, and it's the same quantity
+    // the old tuned-vs-dispatch line reported, since both of those shared one departure.
     $("quickNote").innerHTML = M+" mi ÷ "+RATE+" = <span style='color:var(--ink)'>"+hm(quickH)+
-      "</span> all-in<br>Tuned model says "+clockOf(tunedEta,showTz)+" "+tzTag(showTz)+
-      " ("+hm(diffH)+" "+(diffH<=0 ? "ahead of" : "behind")+" dispatch)";
+      "</span> all-in"
+      + (liveOn
+          ? (()=>{ const diffH = LIVE.res.totalH - quickH;
+              return "<br>Live says "+clockOf(LIVE.res.liveEta,showTz)+" "+tzTag(showTz)+
+                " ("+hm(diffH)+" "+(diffH<=0 ? "ahead of" : "behind")+" dispatch)"; })()
+          : "");
   } else {
+    // Everything below runs off the quote itself: solveEtaLive already laid the team
+    // overlay on HERE's drive time, and LIVE.at is the moment that solve departed from.
+    const { driveH, fuelStops, swaps, dots, dotMin, stopH, totalH } = LIVE.res;
+    const liveMiles = LIVE.res.miles;
+    const liveStart = LIVE.at;
+
     // Who's behind the wheel when we roll in — swaps run on a fixed clock, so arrival
-    // time picks the shift. Tuned view only; Estimated has no swap concept.
+    // time picks the shift. Live view only; Predicted has no swap concept.
     show($("etaShift"), true);
     $("etaShift").textContent =
       shiftAtArrival(eta, E.swap) === "day" ? "day shift driving" : "night shift driving";
 
-    /* LIVE line: HERE truck route with current traffic, same team overlay on top.
-       Shown only while the quote is fresh; otherwise it just isn't there. */
-    const liveOn = liveFresh(LIVE.at, Date.now()) && LIVE.res;
-    if(liveOn){
+    /* LIVE line: HERE truck route with current traffic, same team overlay on top. */
+    {
       show($("liveLine"), true); show($("liveNote"), true);
       // The clock leads in showTz (destination-local — same tz the main arrival number
       // uses), so it already reads correctly for wherever the truck is headed. When the
@@ -1355,18 +1391,15 @@ function renderEta(){
         + "</span>";
       $("liveNote").textContent = "Traffic is right-now conditions — it mainly shapes the "
         + "next few hours. The truck-legal routing applies to the whole run.";
-    } else if(LIVE.note){
-      show($("liveNote"), true);
-      $("liveNote").textContent = LIVE.note;
     }
 
     // Lay every stop on the timeline: swaps and DOT breaks by clock, fuel by odometer.
     const stops = [];
     swaps.forEach(t => stops.push({k:"swap", min:Number(E.p.swapMin)||0,
-      at:(t-start)/3600e3/totalH}));
+      at:(t-liveStart)/3600e3/totalH}));
     for(let i=1;i<=fuelStops;i++)
-      stops.push({k:"fuel", min:Number(E.p.fuelMin)||0, at:i*Number(E.p.fuelEvery)/M});
-    dots.forEach(t => stops.push({k:"dot", min:dotMin, at:(t-start)/3600e3/totalH}));
+      stops.push({k:"fuel", min:Number(E.p.fuelMin)||0, at:i*Number(E.p.fuelEvery)/liveMiles});
+    dots.forEach(t => stops.push({k:"dot", min:dotMin, at:(t-liveStart)/3600e3/totalH}));
     stops.sort((a,b)=>a.at-b.at);
 
     let html="";
@@ -1377,12 +1410,9 @@ function renderEta(){
     $("strip").innerHTML = html;
     show($("strip"), true); show($("stripKey"), true); show($("legend"), true);
     $("legend").innerHTML = "<span>ROLLING "+hm(driveH)+"</span><span>STOPPED "+hm(stopH)+
-      "</span><span>"+(M/totalH).toFixed(1)+" MPH AVG</span>";
-    $("runNote").innerHTML =
-      E.p.mph+" mph cruise · fuel every "+E.p.fuelEvery+" mi ("+E.p.fuelMin+" min) · swap "+
-      E.swap.times.join(" / ")+" "+tzTag(E.swap.tz)+" ("+E.p.swapMin+" min) · DOT "+dotMin+
-      " min @ "+E.p.dotAt+" h into shift"+
-      "<br>This run: "+swaps.length+" swap"+(swaps.length===1?"":"s")+", "+
+      "</span><span>"+(liveMiles/totalH).toFixed(1)+" MPH AVG</span>";
+    // The rules line is already on screen from every pass; append what this quote solved to.
+    $("runNote").innerHTML += "<br>This run: "+swaps.length+" swap"+(swaps.length===1?"":"s")+", "+
       fuelStops+" fuel stop"+(fuelStops===1?"":"s")+", "+
       dots.length+" DOT break"+(dots.length===1?"":"s");
   }
@@ -1507,7 +1537,7 @@ const etaClearAll = ()=>{
   // Same two shared functions the per-field "×" buttons use — this also fixes a real bug
   // for free: clearDestField() nulls LIVE.res/at/note/trafficS, so a fresh-looking LIVE
   // line can no longer linger on screen for a destination that's no longer set. Tuning
-  // (E.p/E.swap/E.preset) and the live-override flag are untouched, on purpose — this
+  // (E.p/E.swap) and the live-override flag are untouched, on purpose — this
   // clears the load, not the truck.
   clearMilesField();
   clearDestField();

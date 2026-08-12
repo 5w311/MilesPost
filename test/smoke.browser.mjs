@@ -80,25 +80,47 @@ try {
   const etaClock = (await page.textContent("#etaClock"))?.trim();
   if (!/^\d{2}:\d{2} \S+$/.test(etaClock || "") || etaClock === "--:--")
     fail(`expected a computed arrival clock with its own tz suffix, got ${JSON.stringify(etaClock)}`);
-  // Simple ETA's "Tuned model says HH:MM (...)" comparison line needed its own tz code too.
+  // Predicted's cross-model comparison is live-sourced now, so with no quote in hand the
+  // "Live says …" line must be absent entirely — never a stale or fabricated comparison.
+  // (The present-after-a-quote half is asserted on livePage, which has one.)
   const quickNoteText = (await page.textContent("#quickNote")) || "";
-  if (!/Tuned model says \d{2}:\d{2} [A-Z]{2,6} \(/.test(quickNoteText))
-    fail(`quickNote's tuned-model time should carry its own tz code, got ${JSON.stringify(quickNoteText)}`);
+  if (!/÷ 50 =/.test(quickNoteText))
+    fail(`quickNote should still show dispatch's own math, got ${JSON.stringify(quickNoteText)}`);
+  if (/Live says/.test(quickNoteText))
+    fail(`quickNote must not show a "Live says" comparison with no fresh quote, got ${JSON.stringify(quickNoteText)}`);
 
-  // The "who's driving on arrival" line: hidden on Estimated (default), shown on Tuned.
+  // The Live tab is strictly live: with no quote it shows the empty state, not an offline
+  // model. Miles and a departure are entered, so the old build would have had a full run
+  // on screen here — arrival clock, shift line, strip, chips and stat line all populated.
   if (await page.isVisible("#etaShift"))
-    fail("shift line should be hidden on the Estimated sub-tab");
+    fail("shift line should be hidden on the Predicted sub-tab");
   await page.click("#tabTuned");
   await page.waitForTimeout(100);
-  if (!(await page.isVisible("#etaShift")))
-    fail("shift line should be visible on the Tuned sub-tab");
-  const shiftText = (await page.textContent("#etaShift"))?.trim();
-  if (!/^(day|night) shift driving$/.test(shiftText || ""))
-    fail(`expected a shift readout, got ${JSON.stringify(shiftText)}`);
+  const dryClock = (await page.textContent("#etaClock"))?.trim();
+  if (dryClock !== "--:--")
+    fail(`Live tab with no quote should show the placeholder, got ${JSON.stringify(dryClock)}`);
+  const dryDay = (await page.textContent("#etaDay"))?.trim() || "";
+  if (!/UPDATE LIVE ETA/.test(dryDay) || !/signal/i.test(dryDay))
+    fail(`Live tab with no quote should explain what to do, got ${JSON.stringify(dryDay)}`);
+  for (const id of ["etaShift", "strip", "stripKey", "legend", "etaExit", "liveLine"])
+    if (await page.isVisible(`#${id}`))
+      fail(`#${id} must be hidden on the Live tab with no fresh quote`);
   await page.click("#tabQuick");
   await page.waitForTimeout(100);
-  if (await page.isVisible("#etaShift"))
-    fail("shift line should hide again when switching back to Estimated");
+  // Predicted still computes offline, so switching back must restore a real arrival.
+  const backClock = (await page.textContent("#etaClock"))?.trim();
+  if (!/^\d{2}:\d{2} \S+$/.test(backClock || "") || backClock === "--:--")
+    fail(`Predicted tab should still compute offline, got ${JSON.stringify(backClock)}`);
+
+  // The preset chooser is gone — its six-values-at-once shortcut no longer has an mph to
+  // set, and the remaining five are edited individually under "+ TUNE TO YOUR TRUCK".
+  if ((await page.locator("#presets").count()) !== 0)
+    fail("the preset chooser must no longer exist in the DOM");
+  if ((await page.locator("#mph").count()) !== 0)
+    fail("the cruise-speed field must no longer exist in the DOM");
+  for (const id of ["fuelEvery", "fuelMin", "swapMin", "dotMin", "dotAt"])
+    if ((await page.locator(`#${id}`).count()) !== 1)
+      fail(`#${id} must survive the preset removal — it's a stop rule, not a preset`);
 
   // CLEAR button: enabled once there's a load, two-tap arm/confirm empties the load
   // and returns the readout to its placeholder.
@@ -221,6 +243,49 @@ try {
     fail(`LIVE line should lead with an arrival clock, got ${JSON.stringify(liveText)}`);
   if (!liveText.includes("400 mi")) fail(`LIVE line should show the route miles, got ${JSON.stringify(liveText)}`);
   if (!liveText.includes("traffic +20m")) fail(`LIVE line should show the traffic cost, got ${JSON.stringify(liveText)}`);
+  // With a fresh quote the Live tab is a full run again: the arrival is the quote's own
+  // arrival, and the strip/chips/stat line that the empty state suppressed all come back.
+  const liveClock = (await livePage.textContent("#etaClock"))?.trim();
+  if (!/^\d{2}:\d{2} \S+$/.test(liveClock || "") || liveClock === "--:--")
+    fail(`Live tab should show the quote's arrival, got ${JSON.stringify(liveClock)}`);
+  if (!liveText.startsWith("LIVE " + liveClock.split(" ")[0]))
+    fail(`the Live arrival must be the quote's own liveEta, got ${JSON.stringify(liveClock)} vs ${JSON.stringify(liveText)}`);
+  for (const id of ["strip", "stripKey", "legend", "etaShift", "etaExit"])
+    if (!(await livePage.isVisible(`#${id}`)))
+      fail(`#${id} should be visible on the Live tab once a quote lands`);
+  const shiftText = (await livePage.textContent("#etaShift"))?.trim();
+  if (!/^(day|night) shift driving$/.test(shiftText || ""))
+    fail(`expected a shift readout, got ${JSON.stringify(shiftText)}`);
+  if (!/MPH AVG/.test((await livePage.textContent("#legend")) || ""))
+    fail("the stat line should report the run's average speed once a quote lands");
+  // The run panel describes the stop rules on every pass, and appends this run's counts
+  // only when a quote backs them — no cruise speed anywhere, it isn't a setting anymore.
+  const runNoteText = (await livePage.textContent("#runNote")) || "";
+  if (/mph cruise/.test(runNoteText))
+    fail(`the run note must not mention a cruise speed, got ${JSON.stringify(runNoteText)}`);
+  if (!/This run:/.test(runNoteText))
+    fail(`the run note should append this run's stop counts, got ${JSON.stringify(runNoteText)}`);
+  // Predicted's comparison line is present now, sourced from that same quote.
+  await livePage.click("#tabQuick");
+  await livePage.waitForTimeout(100);
+  const liveQuickNote = (await livePage.textContent("#quickNote")) || "";
+  if (!/Live says \d{2}:\d{2} [A-Z]{2,6} \(/.test(liveQuickNote))
+    fail(`quickNote should show the live comparison with its tz code, got ${JSON.stringify(liveQuickNote)}`);
+  // The gap must be run-time vs run-time. Dispatch's number departs from the typed
+  // "rolling out"; the quote departs from when it was fetched. Push the typed departure
+  // months out — differencing the two ARRIVALS would fold that separation into the answer
+  // and report a gap in the thousands of hours. 400 mi ÷ 50 is 8h against a 6h drive plus
+  // stops, so the honest gap stays inside a single-digit hour count either way.
+  await livePage.fill("#depart", "2027-01-20T08:00");
+  await livePage.dispatchEvent("#depart", "input");
+  await livePage.waitForTimeout(150);
+  const skewNote = (await livePage.textContent("#quickNote")) || "";
+  const gap = skewNote.match(/\((\d+)h (\d+)m (ahead of|behind) dispatch\)/);
+  if (!gap) fail(`quickNote should still carry a live comparison, got ${JSON.stringify(skewNote)}`);
+  else if (Number(gap[1]) > 24)
+    fail(`the dispatch gap must compare run times, not arrival clocks — a far-off departure leaked in: ${JSON.stringify(skewNote)}`);
+  await livePage.click("#tabTuned");
+  await livePage.waitForTimeout(100);
   // Route params sanity: the request must be truck mode with the vehicle[...] dimensions —
   // never a silent fall-back to car routing.
   const routeUrl = await livePage.evaluate(() =>
@@ -266,8 +331,10 @@ try {
   await livePage.close();
 
 
-  // Denied path: GPS permission refused -> LIVE line stays hidden, tuned readout intact,
-  // unobtrusive note shown. The UI must never block or error.
+  // Denied path: GPS permission refused -> LIVE line stays hidden and the fetch explains
+  // itself in #liveNote. The Live tab has no offline model to fall back to, so the arrival
+  // is the placeholder — and the generic "tap UPDATE LIVE ETA" prompt stands down rather
+  // than stacking a second, vaguer explanation under the real one. Never blocks or errors.
   const deniedPage = await browser.newPage();
   const deniedErrors = [];
   deniedPage.on("pageerror", e => deniedErrors.push("pageerror: " + e.message));
@@ -290,8 +357,16 @@ try {
   if (!/live unavailable/.test(noteText))
     fail(`denied path should show the unobtrusive fallback note, got ${JSON.stringify(noteText)}`);
   const tunedClock = (await deniedPage.textContent("#etaClock"))?.trim();
-  if (!/^\d{2}:\d{2} \S+$/.test(tunedClock || "") || tunedClock === "--:--")
-    fail("tuned readout must stay intact when live is unavailable");
+  if (tunedClock !== "--:--")
+    fail(`Live arrival must be the placeholder when live is unavailable, got ${JSON.stringify(tunedClock)}`);
+  if (await deniedPage.isVisible("#etaDay"))
+    fail("the generic empty-state prompt must stand down while #liveNote is explaining a real failure");
+  // Predicted is unaffected — it never needed signal.
+  await deniedPage.click("#tabQuick");
+  await deniedPage.waitForTimeout(100);
+  const deniedQuick = (await deniedPage.textContent("#etaClock"))?.trim();
+  if (!/^\d{2}:\d{2} \S+$/.test(deniedQuick || "") || deniedQuick === "--:--")
+    fail("Predicted must still compute with GPS denied");
   if (deniedErrors.length) fail("denied page errors: " + JSON.stringify(deniedErrors, null, 2));
   await deniedPage.close();
 
@@ -451,8 +526,8 @@ try {
   // line — for the OLD destination's route, mislabeled onto the new one. Reproduce that
   // exact sequence: quote live for Nashville, CLEAR, then set a new destination (Laredo)
   // and miles WITHOUT tapping UPDATE LIVE ETA again — the LIVE line must stay hidden.
-  // Tuning (preset/tuned values/swap schedule) must be untouched throughout — CLEAR
-  // empties the load, not the truck.
+  // Tuning (stop rules/swap schedule) must be untouched throughout — CLEAR empties the
+  // load, not the truck.
   const clearLivePage = await browser.newPage();
   const clearLiveErrors = [];
   clearLivePage.on("pageerror", e => clearLiveErrors.push("pageerror: " + e.message));
@@ -461,14 +536,19 @@ try {
   await clearLivePage.fill("#destIn", "Nashville TN");
   await clearLivePage.press("#destIn", "Enter");
   await clearLivePage.click("#tabTuned");
-  await clearLivePage.locator("#presets button").nth(2).click();   // Push — distinct from the default Realistic
+  // Move a stop rule off its default so "CLEAR didn't touch tuning" is a real check and
+  // not just two identical default snapshots. The preset shortcut used to do this.
+  await clearLivePage.click("#tuneToggle");
+  await clearLivePage.fill("#fuelEvery", "500");
+  await clearLivePage.dispatchEvent("#fuelEvery", "input");
+  await clearLivePage.click("#tuneToggle");
+  await clearLivePage.waitForTimeout(100);
   await clearLivePage.click("#liveBtn");
   await clearLivePage.waitForTimeout(300);
   if (!(await clearLivePage.isVisible("#liveLine")))
     fail("LIVE line should be showing before CLEAR (setup check)");
   const tuneBefore = await clearLivePage.evaluate(() => ({
-    preset: [...document.getElementById("presets").children].find(b => b.getAttribute("aria-selected") === "true")?.textContent,
-    tune: ["mph","fuelEvery","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
+    tune: ["fuelEvery","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
     swap: ["swapA","swapB","swapTz"].map(id => document.getElementById(id).value),
   }));
   await clearLivePage.click("#etaClear");                   // arm
@@ -487,8 +567,7 @@ try {
   if (await clearLivePage.isVisible("#liveLine"))
     fail("a brand-new destination must not inherit a stale LIVE quote left over from before CLEAR");
   const tuneAfter = await clearLivePage.evaluate(() => ({
-    preset: [...document.getElementById("presets").children].find(b => b.getAttribute("aria-selected") === "true")?.textContent,
-    tune: ["mph","fuelEvery","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
+    tune: ["fuelEvery","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
     swap: ["swapA","swapB","swapTz"].map(id => document.getElementById(id).value),
   }));
   if (JSON.stringify(tuneBefore) !== JSON.stringify(tuneAfter))
@@ -595,6 +674,24 @@ try {
   await resumePage.waitForTimeout(100);
   if (await resumePage.isVisible("#liveLine"))
     fail("returning to the foreground must drop a LIVE quote that went stale while backgrounded");
+  // And the whole tab goes back to its empty state with it — a stale quote must not leave
+  // an arrival on screen just because the LIVE line beneath it disappeared.
+  const staleClock = (await resumePage.textContent("#etaClock"))?.trim();
+  if (staleClock !== "--:--")
+    fail(`a stale quote should clear the Live arrival, got ${JSON.stringify(staleClock)}`);
+  if (!/UPDATE LIVE ETA/.test((await resumePage.textContent("#etaDay")) || ""))
+    fail("a stale quote should return the Live tab to its empty-state prompt");
+  for (const id of ["strip", "stripKey", "legend", "etaShift"])
+    if (await resumePage.isVisible(`#${id}`))
+      fail(`#${id} must clear along with a stale quote`);
+  // Predicted's "Live says …" comparison is gated on freshness, not merely on a quote
+  // having once existed — a ten-minute-old read compared against dispatch is exactly the
+  // fabricated comparison the line is supposed to avoid.
+  await resumePage.click("#tabQuick");
+  await resumePage.waitForTimeout(100);
+  const staleQuickNote = (await resumePage.textContent("#quickNote")) || "";
+  if (/Live says/.test(staleQuickNote))
+    fail(`a stale quote must not feed the Predicted comparison line, got ${JSON.stringify(staleQuickNote)}`);
   if (resumeErrors.length) fail("resume page errors: " + JSON.stringify(resumeErrors, null, 2));
   await resumePage.close();
 
@@ -835,7 +932,7 @@ try {
   await verUpdatePage.close();
 
   if (!process.exitCode)
-    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Tuned only), CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one (override off) but always overwrites when override is on, live re-quote refreshes its own autofilled miles, CLEAR invalidates a stale LIVE quote without touching tuning, GET MILEAGE fills miles on both tabs without ever producing a live quote, per-field × buttons clear independently, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
+    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Live only), Live tab is strictly live (empty state with no/denied/stale quote, full run once one lands), preset chooser and cruise-speed field gone, CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one (override off) but always overwrites when override is on, live re-quote refreshes its own autofilled miles, CLEAR invalidates a stale LIVE quote without touching tuning, GET MILEAGE fills miles on both tabs without ever producing a live quote, per-field × buttons clear independently, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
 } finally {
   await browser.close();
   server.close();

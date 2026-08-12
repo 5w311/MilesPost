@@ -2,18 +2,20 @@
 
 Team-driver tools. Two questions, two tabs:
 
-**ETA** — when do I get there? Dispatch's `miles ÷ 50`, and a tuned model built from your
-real cruise speed, fuel stops, and the fixed-clock driver swap.
+**ETA** — when do I get there? *Predicted ETA* is dispatch's flat `miles ÷ 50`. *Live ETA* is
+a truck-legal, traffic-aware arrival from real routing, with your team stops layered on —
+fuel, the fixed-clock driver swap, and one DOT break per shift.
 
 **34 RESET** — when am I legal? Set the moment you shut down, get the moment your 70 comes
 back, and hand a real alarm to your phone's Calendar.
 
-Resolves timezones from a town name. Day and night modes. **Runs 100% offline** — no server,
-no API, no signal required. The one exception is the optional **LIVE** ETA line, which needs
-signal to ask HERE for a traffic-aware truck route; with no signal it simply isn't shown and
-everything else works as always.
+Resolves timezones from a town name. Day and night modes. **The app shell runs 100% offline** —
+no server, no signal required to open it, read the 34 reset, or get a Predicted ETA. The
+*Live ETA* tab is the one part that genuinely needs signal: it asks HERE for a traffic-aware
+truck route, and with no fresh quote it says so rather than showing an arrival the road can't
+back up.
 
-**Current version: v4.0.3**
+**Current version: v4.1**
 
 ## Files
 
@@ -53,6 +55,29 @@ worker cached it on first load.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.1
+
+- **The two ETA tabs are now *Predicted ETA* and *Live ETA*.** Predicted is unchanged —
+  dispatch's flat `miles ÷ 50`, same math as ever, just a name that says what it is.
+- **Live ETA is strictly live.** It no longer computes an offline arrival from miles and a
+  cruise speed. It shows a number only while there's a fresh HERE quote; with no signal, no
+  GPS permission, a failed fetch, or a quote older than ten minutes, the arrival clears and
+  the tab tells you to tap UPDATE LIVE ETA instead of showing a guess dressed as a read.
+- **The Conservative / Realistic / Push presets are gone.** They were a shortcut for setting
+  six numbers at once, and live routing now supplies the only one of the six it replaced —
+  cruise speed. The other five are the team-driver stop model the router knows nothing about,
+  so they stay: fuel interval and stop length, swap length, DOT break length and timing, all
+  editable individually under **+ TUNE TO YOUR TRUCK**, along with the swap schedule.
+- **Cruise speed is removed from tuning**, because after this nothing reads it — an editable
+  field that silently affects nothing is worse than no field.
+- **Saved tuning resets to the new defaults** (the old Realistic values, minus mph) —
+  `PRESET_VERSION` bumped, since the stored shape changed. Your swap schedule, theme, origin,
+  and override setting are preserved as always.
+- The Predicted tab's cross-model comparison line is now live-sourced: *"Live says HH:MM TZ
+  (Nh Nm ahead of dispatch)"*, shown only when a fresh quote backs it. Comparing dispatch's
+  ÷50 against a real truck-legal read is the comparison worth having; comparing it against
+  another offline model wasn't.
 
 ### v4.0.3
 
