@@ -472,6 +472,12 @@
       <div class="liveLine hide" id="liveLine"></div>
       <div class="note hide" id="liveNote"></div>
       <div class="note hide" id="quickNote"></div>
+      <!-- The live half of the Predicted readout, on its own board. Must stay AFTER
+           #quickNote: .liveLine fuses itself to a following .note into one joined panel
+           (that's the Live tab's caveat sub-panel), so sitting before #quickNote would
+           swallow dispatch's own math into the board. After it, the next sibling is
+           #strip, which isn't a .note. -->
+      <div class="liveLine hide" id="quickLive"></div>
       <div class="strip hide" id="strip"></div>
       <div class="stripkey hide" id="stripKey">
         <span><i class="dot"></i>DOT</span>
@@ -684,7 +690,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.2.1</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.2.2</button>
   </div>
 </div>
 
@@ -1393,8 +1399,8 @@ function renderEta(){
     E.swap.times.join(" / ")+" "+tzTag(E.swap.tz)+" ("+E.p.swapMin+" min) · DOT "+
     dotDuration(E.p.dotMin)+" min @ "+E.p.dotAt+" h into shift";
 
-  ["etaYours","etaShift","liveLine","liveNote","quickNote","strip","stripKey","legend","cushion",
-   "etaExit"].forEach(id=>show($(id),false));
+  ["etaYours","etaShift","liveLine","liveNote","quickNote","quickLive","strip","stripKey",
+   "legend","cushion","etaExit"].forEach(id=>show($(id),false));
   show($("etaDay"), true);
   renderLiveBtn();
   if(!(M > 0 && start)){
@@ -1454,13 +1460,18 @@ function renderEta(){
     // answer — type a departure two months out and "behind dispatch" reads in thousands of
     // hours. Run time against run time is the honest comparison, and it's the same quantity
     // the old tuned-vs-dispatch line reported, since both of those shared one departure.
+    // Dispatch's own math is not live-sourced, so it stays plain note text; the comparison
+    // is, so it gets the same changeable-message board the Live tab uses. "Live says" is
+    // dropped from the wording — the badge on the board already says exactly that.
     $("quickNote").innerHTML = M+" mi ÷ "+RATE+" = <span style='color:var(--ink)'>"+hm(quickH)+
-      "</span> all-in"
-      + (liveOn
-          ? (()=>{ const diffH = LIVE.res.totalH - quickH;
-              return "<br>Live says "+clockOf(LIVE.res.liveEta,showTz)+" "+tzTag(showTz)+
-                " ("+hm(diffH)+" "+(diffH<=0 ? "ahead of" : "behind")+" dispatch)"; })()
-          : "");
+      "</span> all-in";
+    if(liveOn){
+      const diffH = LIVE.res.totalH - quickH;
+      $("quickLive").innerHTML = "<span class=\"liveBadge\">LIVE</span> "
+        + clockOf(LIVE.res.liveEta, showTz) + " " + tzTag(showTz)
+        + " · " + hm(diffH) + " " + (diffH <= 0 ? "ahead of" : "behind") + " dispatch";
+    }
+    show($("quickLive"), liveOn);
   } else {
     // Everything below runs off the quote itself: solveEtaLive already laid the team
     // overlay on HERE's drive time, and LIVE.at is the moment that solve departed from.
