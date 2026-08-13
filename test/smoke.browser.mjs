@@ -429,13 +429,25 @@ try {
     Object.defineProperty(navigator, "geolocation", { value: {
       getCurrentPosition: ok => ok({ coords: { latitude: 41.8781, longitude: -87.6298 } })
     }});
-    window.__hereCalls = { geocode: 0, route: 0, total: 0 };
+    window.__hereCalls = { geocode: 0, route: 0, suggest: 0, total: 0 };
     const realFetch = window.fetch.bind(window);
     window.fetch = (url, ...rest) => {
       const u = String(url);
       window.__hereCalls.total++;
       if (u.includes("geocode.search.hereapi.com")) window.__hereCalls.geocode++;
       if (u.includes("router.hereapi.com")) window.__hereCalls.route++;
+      // City suggestions were the one HERE endpoint left unmocked, so typing a destination
+      // on any of these pages fired a REAL request — and on a failure the app falls back to
+      // autosuggest, firing a second. Both landed on whatever timing the network gave them,
+      // which is what made the zero-network assertion flaky in CI rather than in the
+      // sandbox, where they fail instantly. Answered here so these pages touch nothing.
+      // Empty items on purpose: a 200 with no results shows no dropdown AND doesn't trip
+      // the autosuggest fallback (that only fires on a non-ok response), so the call count
+      // is exactly one. These tests resolve the destination with Enter, not the dropdown.
+      if (u.includes("autocomplete.search.hereapi.com") || u.includes("autosuggest.search.hereapi.com")) {
+        window.__hereCalls.suggest++;
+        return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+      }
       if (u.includes("geocode.search.hereapi.com"))
         return Promise.resolve(new Response(JSON.stringify(
           { items: [{ position: { lat: 36.1627, lng: -86.7816 } }] })));
@@ -766,7 +778,11 @@ try {
   await runPage.waitForTimeout(2500);
   const callsAfter = await runPage.evaluate(() => ({ ...window.__hereCalls }));
   if (callsAfter.total !== callsBefore.total)
-    fail(`RUNNING must never re-fetch: ${callsBefore.total} calls before ticking, ${callsAfter.total} after`);
+    fail(`RUNNING must never re-fetch: ${JSON.stringify(callsBefore)} before ticking, ${JSON.stringify(callsAfter)} after`);
+  // Every HERE endpoint is answered by the mock, so the count is exact rather than
+  // "whatever the network happened to do" — one suggestion, one geocode, one route.
+  if (callsBefore.total !== 3)
+    fail(`the fetch tally should be deterministic here, got ${JSON.stringify(callsBefore)}`);
   const departRunning = await runPage.inputValue("#depart");
   if (departRunning === departBefore)
     fail(`RUNNING should move the departure clock on its own, still ${JSON.stringify(departBefore)}`);
