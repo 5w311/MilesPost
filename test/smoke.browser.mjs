@@ -98,7 +98,7 @@ try {
   if (await page.isVisible("#quickLive"))
     fail("the Predicted comparison board must be hidden with no fresh quote");
   // Dispatch's own ÷50 math is not live-sourced and must stay out of the board.
-  if (/dispatch\)?$/.test(quickNoteText.trim()) && /LIVE/.test(quickNoteText))
+  if (/\b(ahead|behind)\b/.test(quickNoteText))
     fail(`the comparison must not be inside #quickNote any more, got ${JSON.stringify(quickNoteText)}`);
 
   // The Live tab is strictly live: with no quote it shows the empty state, not an offline
@@ -298,12 +298,12 @@ try {
   if (!(await livePage.isVisible("#quickLive")))
     fail("the Predicted comparison board should appear once a quote backs it");
   const liveQuickNote = (await livePage.textContent("#quickLive")) || "";
-  if (!/^LIVE \d{2}:\d{2} [A-Z]{2,6} · \d+h \d+m (ahead of|behind) dispatch$/.test(liveQuickNote.trim()))
+  if (!/^LIVE \d{2}:\d{2} [A-Z]{2,6} · \d+h \d+m (ahead|behind)$/.test(liveQuickNote.trim()))
     fail(`unexpected Predicted comparison board copy: ${JSON.stringify(liveQuickNote)}`);
   // Dispatch's own ÷50 math is not live-sourced, so it stays out of the board and keeps
   // its plain note styling next door.
   const dispatchNote = (await livePage.textContent("#quickNote")) || "";
-  if (!/÷ 50 =/.test(dispatchNote) || /dispatch$/.test(dispatchNote.trim()))
+  if (!/÷ 50 =/.test(dispatchNote) || /\b(ahead|behind)\b/.test(dispatchNote))
     fail(`#quickNote should hold only dispatch's own math, got ${JSON.stringify(dispatchNote)}`);
   // Cross-check that the Live tab's big number really is the quote's own liveEta — this
   // board is the other reading of LIVE.res.liveEta on screen, so the two must agree.
@@ -332,7 +332,7 @@ try {
   await livePage.dispatchEvent("#depart", "input");
   await livePage.waitForTimeout(150);
   const skewNote = (await livePage.textContent("#quickLive")) || "";
-  const gap = skewNote.match(/(\d+)h (\d+)m (ahead of|behind) dispatch/);
+  const gap = skewNote.match(/(\d+)h (\d+)m (ahead|behind)/);
   if (!gap) fail(`the comparison board should still carry a gap, got ${JSON.stringify(skewNote)}`);
   else if (Number(gap[1]) > 24)
     fail(`the dispatch gap must compare run times, not arrival clocks — a far-off departure leaked in: ${JSON.stringify(skewNote)}`);
@@ -429,13 +429,25 @@ try {
     Object.defineProperty(navigator, "geolocation", { value: {
       getCurrentPosition: ok => ok({ coords: { latitude: 41.8781, longitude: -87.6298 } })
     }});
-    window.__hereCalls = { geocode: 0, route: 0, total: 0 };
+    window.__hereCalls = { geocode: 0, route: 0, suggest: 0, total: 0 };
     const realFetch = window.fetch.bind(window);
     window.fetch = (url, ...rest) => {
       const u = String(url);
       window.__hereCalls.total++;
       if (u.includes("geocode.search.hereapi.com")) window.__hereCalls.geocode++;
       if (u.includes("router.hereapi.com")) window.__hereCalls.route++;
+      // City suggestions were the one HERE endpoint left unmocked, so typing a destination
+      // on any of these pages fired a REAL request — and on a failure the app falls back to
+      // autosuggest, firing a second. Both landed on whatever timing the network gave them,
+      // which is what made the zero-network assertion flaky in CI rather than in the
+      // sandbox, where they fail instantly. Answered here so these pages touch nothing.
+      // Empty items on purpose: a 200 with no results shows no dropdown AND doesn't trip
+      // the autosuggest fallback (that only fires on a non-ok response), so the call count
+      // is exactly one. These tests resolve the destination with Enter, not the dropdown.
+      if (u.includes("autocomplete.search.hereapi.com") || u.includes("autosuggest.search.hereapi.com")) {
+        window.__hereCalls.suggest++;
+        return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+      }
       if (u.includes("geocode.search.hereapi.com"))
         return Promise.resolve(new Response(JSON.stringify(
           { items: [{ position: { lat: 36.1627, lng: -86.7816 } }] })));
@@ -766,7 +778,11 @@ try {
   await runPage.waitForTimeout(2500);
   const callsAfter = await runPage.evaluate(() => ({ ...window.__hereCalls }));
   if (callsAfter.total !== callsBefore.total)
-    fail(`RUNNING must never re-fetch: ${callsBefore.total} calls before ticking, ${callsAfter.total} after`);
+    fail(`RUNNING must never re-fetch: ${JSON.stringify(callsBefore)} before ticking, ${JSON.stringify(callsAfter)} after`);
+  // Every HERE endpoint is answered by the mock, so the count is exact rather than
+  // "whatever the network happened to do" — one suggestion, one geocode, one route.
+  if (callsBefore.total !== 3)
+    fail(`the fetch tally should be deterministic here, got ${JSON.stringify(callsBefore)}`);
   const departRunning = await runPage.inputValue("#depart");
   if (departRunning === departBefore)
     fail(`RUNNING should move the departure clock on its own, still ${JSON.stringify(departBefore)}`);
@@ -1026,7 +1042,7 @@ try {
   if (await resumePage.isVisible("#quickLive"))
     fail("a stale quote must not feed the Predicted comparison board");
   const staleQuickNote = (await resumePage.textContent("#quickNote")) || "";
-  if (/dispatch/.test(staleQuickNote))
+  if (/\b(ahead|behind)\b/.test(staleQuickNote))
     fail(`a stale quote must not leave a comparison in #quickNote either, got ${JSON.stringify(staleQuickNote)}`);
   if (resumeErrors.length) fail("resume page errors: " + JSON.stringify(resumeErrors, null, 2));
   await resumePage.close();

@@ -700,7 +700,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.3</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.3.1</button>
   </div>
 </div>
 
@@ -1508,7 +1508,9 @@ function renderEta(){
       const diffH = LIVE.res.totalH - quickH;
       $("quickLive").innerHTML = "<span class=\"liveBadge\">LIVE</span> "
         + clockOf(LIVE.res.liveEta, showTz) + " " + tzTag(showTz)
-        + " · " + hm(diffH) + " " + (diffH <= 0 ? "ahead of" : "behind") + " dispatch";
+        // Just "ahead"/"behind": the line this board sits under is dispatch's own ÷50 math,
+        // so naming what the gap is measured against was saying it twice.
+        + " · " + hm(diffH) + " " + (diffH <= 0 ? "ahead" : "behind");
     }
     show($("quickLive"), liveOn);
   } else {
