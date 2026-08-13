@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.3**
+**Current version: v4.3.1**
 
 ## Files
 
@@ -78,6 +78,12 @@ the new address with no code change.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.3.1
+
+- The Predicted tab's comparison board drops **"of dispatch"** — it now reads
+  `LIVE 08:02 CDT · 0h 12m ahead`. The line it sits under is dispatch's own `÷ 50` math, so
+  naming what the gap was measured against was saying it twice.
 
 ### v4.3
 

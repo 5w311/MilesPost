@@ -98,7 +98,7 @@ try {
   if (await page.isVisible("#quickLive"))
     fail("the Predicted comparison board must be hidden with no fresh quote");
   // Dispatch's own ÷50 math is not live-sourced and must stay out of the board.
-  if (/dispatch\)?$/.test(quickNoteText.trim()) && /LIVE/.test(quickNoteText))
+  if (/\b(ahead|behind)\b/.test(quickNoteText))
     fail(`the comparison must not be inside #quickNote any more, got ${JSON.stringify(quickNoteText)}`);
 
   // The Live tab is strictly live: with no quote it shows the empty state, not an offline
@@ -298,12 +298,12 @@ try {
   if (!(await livePage.isVisible("#quickLive")))
     fail("the Predicted comparison board should appear once a quote backs it");
   const liveQuickNote = (await livePage.textContent("#quickLive")) || "";
-  if (!/^LIVE \d{2}:\d{2} [A-Z]{2,6} · \d+h \d+m (ahead of|behind) dispatch$/.test(liveQuickNote.trim()))
+  if (!/^LIVE \d{2}:\d{2} [A-Z]{2,6} · \d+h \d+m (ahead|behind)$/.test(liveQuickNote.trim()))
     fail(`unexpected Predicted comparison board copy: ${JSON.stringify(liveQuickNote)}`);
   // Dispatch's own ÷50 math is not live-sourced, so it stays out of the board and keeps
   // its plain note styling next door.
   const dispatchNote = (await livePage.textContent("#quickNote")) || "";
-  if (!/÷ 50 =/.test(dispatchNote) || /dispatch$/.test(dispatchNote.trim()))
+  if (!/÷ 50 =/.test(dispatchNote) || /\b(ahead|behind)\b/.test(dispatchNote))
     fail(`#quickNote should hold only dispatch's own math, got ${JSON.stringify(dispatchNote)}`);
   // Cross-check that the Live tab's big number really is the quote's own liveEta — this
   // board is the other reading of LIVE.res.liveEta on screen, so the two must agree.
@@ -332,7 +332,7 @@ try {
   await livePage.dispatchEvent("#depart", "input");
   await livePage.waitForTimeout(150);
   const skewNote = (await livePage.textContent("#quickLive")) || "";
-  const gap = skewNote.match(/(\d+)h (\d+)m (ahead of|behind) dispatch/);
+  const gap = skewNote.match(/(\d+)h (\d+)m (ahead|behind)/);
   if (!gap) fail(`the comparison board should still carry a gap, got ${JSON.stringify(skewNote)}`);
   else if (Number(gap[1]) > 24)
     fail(`the dispatch gap must compare run times, not arrival clocks — a far-off departure leaked in: ${JSON.stringify(skewNote)}`);
@@ -1026,7 +1026,7 @@ try {
   if (await resumePage.isVisible("#quickLive"))
     fail("a stale quote must not feed the Predicted comparison board");
   const staleQuickNote = (await resumePage.textContent("#quickNote")) || "";
-  if (/dispatch/.test(staleQuickNote))
+  if (/\b(ahead|behind)\b/.test(staleQuickNote))
     fail(`a stale quote must not leave a comparison in #quickNote either, got ${JSON.stringify(staleQuickNote)}`);
   if (resumeErrors.length) fail("resume page errors: " + JSON.stringify(resumeErrors, null, 2));
   await resumePage.close();
