@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.2.3**
+**Current version: v4.3**
 
 ## Files
 
@@ -78,6 +78,23 @@ the new address with no code change.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.3
+
+- **On the Live tab, the contextual button reads GET LIVE ETA and delivers one.** On
+  Predicted it's still GET MILEAGE and still fetches distance only. The label change came
+  with the behaviour: the mileage-only fetch never produces a live arrival, so a button
+  promising one had to run the full live fetch — which fills the mileage on its way past
+  anyway. The label follows the tab live, and the busy state tracks whichever fetch is
+  actually running.
+- **UPDATE LIVE ETA moved into the load card, directly above CLEAR** — with the load it
+  acts on, instead of buried under the run panel. It now also stays put while
+  **+ TUNE TO YOUR TRUCK** is open; it used to hide, because it lived inside the panel
+  those fields expand into.
+- **Running is on by default**, and remembered — switch it off and it stays off. Safe to
+  default on because the tick is purely local: it re-solves the quote you already have and
+  makes no network calls at all. While it's on it owns the departure clock, so **"Rolling
+  out" and NOW start greyed out**; switch Running off to set a departure by hand.
 
 ### v4.2.3
 

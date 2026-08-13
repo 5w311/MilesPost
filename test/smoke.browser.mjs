@@ -35,7 +35,16 @@ const port = server.address().port;
 const launch = {};
 if (process.env.PLAYWRIGHT_EXECUTABLE_PATH) launch.executablePath = process.env.PLAYWRIGHT_EXECUTABLE_PATH;
 const browser = await chromium.launch(launch);
+
+/* RUNNING is on by default and owns the departure clock while it is, so #depart and NOW
+   are disabled on a stock load. Tests that hand-set a departure are standing in for a
+   driver who has switched RUNNING off — seed that saved preference rather than reaching
+   for the switch, which lives on the Live tab and isn't reachable from Predicted. */
+const runningOff = page => page.addInitScript(() =>
+  localStorage.setItem("milespost.eta", JSON.stringify({ running: false })));
+
 const page = await browser.newPage();
+await runningOff(page);
 
 const errors = [];
 // Ignore the browser's automatic /favicon.ico probe — the app never references it.
@@ -212,6 +221,7 @@ try {
   const livePage = await browser.newPage();
   const liveErrors = [];
   livePage.on("pageerror", e => liveErrors.push("pageerror: " + e.message));
+  await runningOff(livePage);
   await livePage.addInitScript(() => {
     Object.defineProperty(navigator, "geolocation", { value: {
       getCurrentPosition: ok => ok({ coords: { latitude: 41.8781, longitude: -87.6298 } })
@@ -360,12 +370,12 @@ try {
   await livePage.click("#tuneToggle");
   await livePage.waitForTimeout(150);
   if (!(await livePage.isVisible("#tuneGrid"))) fail("tuning grid should open");
-  if (await livePage.isVisible("#liveBtn")) fail("LIVE button should be hidden while tuning is open");
+  // The CTA lives in the load card now, so tuning no longer hides it — see the live-CTA
+  // block below, which owns that assertion. The switch rows still step aside.
   if (await livePage.isVisible("#overrideRow")) fail("override row should be hidden while tuning is open");
   await livePage.click("#tuneToggle");
   await livePage.waitForTimeout(150);
   if (await livePage.isVisible("#tuneGrid")) fail("tuning grid should close again");
-  if (!(await livePage.isVisible("#liveBtn"))) fail("LIVE button must come back when tuning closes");
   if (!(await livePage.isVisible("#overrideRow"))) fail("override row must come back when tuning closes");
   if ((await livePage.getAttribute("#overrideBtn", "aria-checked")) !== "true")
     fail("override state must survive being hidden behind tuning, not reset");
@@ -699,36 +709,9 @@ try {
   if (getMiErrors.length) fail("getMi page errors: " + JSON.stringify(getMiErrors, null, 2));
   await getMiPage.close();
 
-  // Same destination-set/miles-blank state on the Tuned tab: GET MILEAGE shows there too,
-  // deliberately sitting alongside UPDATE LIVE ETA as the quicker, narrower action. The
-  // boundary that matters most here is that using it from Tuned still can't fabricate a
-  // live quote — on this tab a set LIVE.res would render the LIVE line, so its continued
-  // absence right where it would appear is the check.
-  const getMiTunedPage = await browser.newPage();
-  const getMiTunedErrors = [];
-  getMiTunedPage.on("pageerror", e => getMiTunedErrors.push("pageerror: " + e.message));
-  await mockHere(getMiTunedPage);
-  await getMiTunedPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
-  await getMiTunedPage.click("#tabTuned");
-  await getMiTunedPage.waitForTimeout(100);
-  if (await getMiTunedPage.isVisible("#getMiBtn"))
-    fail("#getMiBtn should start hidden on the Tuned tab with no destination set");
-  await getMiTunedPage.fill("#destIn", "Nashville TN");
-  await getMiTunedPage.press("#destIn", "Enter");
-  await getMiTunedPage.waitForTimeout(150);
-  if (!(await getMiTunedPage.isVisible("#getMiBtn")))
-    fail("#getMiBtn should appear on the Tuned tab too, once a destination is set and miles is blank");
-  await getMiTunedPage.click("#getMiBtn");
-  await getMiTunedPage.waitForTimeout(300);
-  const getMiTunedMiles = await getMiTunedPage.inputValue("#miles");
-  if (getMiTunedMiles !== "400")
-    fail(`GET MILEAGE on the Tuned tab should fill miles from the real road distance, got ${JSON.stringify(getMiTunedMiles)}`);
-  if (await getMiTunedPage.isVisible("#getMiBtn"))
-    fail("#getMiBtn should hide itself once miles has a value, on the Tuned tab as well");
-  if (await getMiTunedPage.isVisible("#liveLine"))
-    fail("GET MILEAGE from the Tuned tab must not produce a live quote — LIVE line appeared");
-  if (getMiTunedErrors.length) fail("getMi-tuned page errors: " + JSON.stringify(getMiTunedErrors, null, 2));
-  await getMiTunedPage.close();
+  // The Live tab's half of this button is covered by the contextual-button blocks further
+  // down: since v4.3 it reads GET LIVE ETA there and runs the full live fetch, so the old
+  // "must not produce a live quote on Tuned" case is no longer the behaviour to assert.
 
   // RUNNING: keeps the departure clock and the arrival current, and must do it entirely
   // offline. The clock is driven by a controllable Date so a minute of wall time can pass
@@ -754,19 +737,26 @@ try {
   await runPage.click("#liveBtn");
   await runPage.waitForTimeout(300);
   if (!(await runPage.isVisible("#liveLine")))
-    fail("RUNNING setup: a live quote should be in hand before switching it on");
-  // Session mode: off on load, and both departure controls are the driver's until it's on.
-  if ((await runPage.getAttribute("#runningBtn", "aria-checked")) !== "false")
-    fail("RUNNING must start OFF — it's a session mode, never restored");
-  if (await runPage.isDisabled("#depart")) fail("#depart should be the driver's while RUNNING is off");
-  await runPage.click("#runningBtn");
-  await runPage.waitForTimeout(100);
+    fail("RUNNING setup: a live quote should be in hand");
+  // On by default now, with the departure controls already handed over on the first render
+  // rather than only once the switch is touched.
+  if ((await runPage.getAttribute("#runningBtn", "aria-checked")) !== "true")
+    fail("RUNNING should be ON by default");
   if ((await runPage.textContent("#runningState"))?.trim() !== "ON")
-    fail("the RUNNING indicator should read ON once switched");
+    fail("the RUNNING indicator should read ON by default");
   if (!(await runPage.isDisabled("#depart")))
-    fail("#depart must be disabled while RUNNING drives it");
+    fail("#depart must be disabled on load while RUNNING drives it, not just after a toggle");
   if (!(await runPage.isDisabled("#nowBtn")))
-    fail("NOW must be disabled while RUNNING drives the departure");
+    fail("NOW must be disabled on load while RUNNING drives the departure");
+  // Disabled has to LOOK disabled. Neither .go nor a disabled input carried any styling
+  // before, so a dead NOW button was pixel-identical to a live one — tap, nothing, no
+  // reason. Checked as computed opacity so the rule can't be dropped unnoticed.
+  const dimmed = await runPage.evaluate(() => ({
+    now: Number(getComputedStyle(document.getElementById("nowBtn")).opacity),
+    depart: Number(getComputedStyle(document.getElementById("depart")).opacity)
+  }));
+  if (!(dimmed.now < 1)) fail(`a disabled NOW must be visibly stood down, opacity is ${dimmed.now}`);
+  if (!(dimmed.depart < 1)) fail(`a disabled departure field must look disabled, opacity is ${dimmed.depart}`);
 
   // The assertion this whole feature is built around: ticking costs nothing. Let several
   // ticks land and confirm not one of them reached the network — HERE or anything else.
@@ -825,12 +815,131 @@ try {
   const departOff = await runPage.inputValue("#depart");
   if (await runPage.isDisabled("#depart")) fail("#depart must be editable again once RUNNING is off");
   if (await runPage.isDisabled("#nowBtn")) fail("NOW must be usable again once RUNNING is off");
+  const lit = await runPage.evaluate(() => ({
+    now: Number(getComputedStyle(document.getElementById("nowBtn")).opacity),
+    depart: Number(getComputedStyle(document.getElementById("depart")).opacity)
+  }));
+  if (lit.now !== 1 || lit.depart !== 1)
+    fail(`both controls should look live again once RUNNING is off, got ${JSON.stringify(lit)}`);
   await runPage.evaluate(() => { window.__skewMs = 20 * 60 * 1000; });
   await runPage.waitForTimeout(1600);
   if ((await runPage.inputValue("#depart")) !== departOff)
     fail("the departure must stay frozen at its last value once RUNNING is off");
+  // Off is a decision, not a session quirk: it has to survive a relaunch, or the default
+  // would keep overriding a driver who deliberately switched it off.
+  await runPage.reload({ waitUntil: "networkidle" });
+  await runPage.waitForTimeout(200);
+  if ((await runPage.getAttribute("#runningBtn", "aria-checked")) !== "false")
+    fail("RUNNING switched off must stay off across a reload");
+  if (await runPage.isDisabled("#depart"))
+    fail("#depart should be the driver's again after reloading with RUNNING off");
+  await runPage.click("#tabTuned");
+  await runPage.click("#runningBtn");                 // back on
+  await runPage.reload({ waitUntil: "networkidle" });
+  await runPage.waitForTimeout(200);
+  if ((await runPage.getAttribute("#runningBtn", "aria-checked")) !== "true")
+    fail("RUNNING switched back on must also persist");
   if (runErrors.length) fail("running page errors: " + JSON.stringify(runErrors, null, 2));
   await runPage.close();
+
+  // The contextual button says what it will do, and does what it says. On Predicted that's
+  // distance only; on Live it must actually deliver a live ETA, because getMileageOnly()
+  // never populates LIVE.res and a button reading GET LIVE ETA that left the tab in its
+  // empty state would be lying about what just happened.
+  const ctxPage = await browser.newPage();
+  const ctxErrors = [];
+  ctxPage.on("pageerror", e => ctxErrors.push("pageerror: " + e.message));
+  await mockHere(ctxPage);
+  await ctxPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await ctxPage.fill("#destIn", "Nashville TN");
+  await ctxPage.press("#destIn", "Enter");
+  await ctxPage.waitForTimeout(150);
+  if ((await ctxPage.textContent("#getMiBtn"))?.trim() !== "GET MILEAGE")
+    fail(`the Predicted tab's contextual button should read GET MILEAGE, got ${JSON.stringify((await ctxPage.textContent("#getMiBtn"))?.trim())}`);
+  // The label follows the tab without a reload, in both directions.
+  await ctxPage.click("#tabTuned");
+  await ctxPage.waitForTimeout(150);
+  if ((await ctxPage.textContent("#getMiBtn"))?.trim() !== "GET LIVE ETA")
+    fail(`the Live tab's contextual button should read GET LIVE ETA, got ${JSON.stringify((await ctxPage.textContent("#getMiBtn"))?.trim())}`);
+  await ctxPage.click("#tabQuick");
+  await ctxPage.waitForTimeout(150);
+  if ((await ctxPage.textContent("#getMiBtn"))?.trim() !== "GET MILEAGE")
+    fail("the label must switch back on returning to Predicted, without a reload");
+  // Predicted: distance only, no live quote — unchanged from before.
+  await ctxPage.click("#getMiBtn");
+  await ctxPage.waitForTimeout(400);
+  if ((await ctxPage.inputValue("#miles")) !== "400")
+    fail("GET MILEAGE should still fill miles on the Predicted tab");
+  if (await ctxPage.isVisible("#quickLive"))
+    fail("GET MILEAGE must not produce a live quote — the comparison board should stay hidden");
+  await ctxPage.click("#tabTuned");
+  await ctxPage.waitForTimeout(150);
+  if (await ctxPage.isVisible("#liveLine"))
+    fail("GET MILEAGE must not have produced a live quote, checked on the tab that shows one");
+  if (ctxErrors.length) fail("contextual-button page errors: " + JSON.stringify(ctxErrors, null, 2));
+  await ctxPage.close();
+
+  // Live tab: the same button must deliver an actual live ETA, not just a distance.
+  const ctxLivePage = await browser.newPage();
+  const ctxLiveErrors = [];
+  ctxLivePage.on("pageerror", e => ctxLiveErrors.push("pageerror: " + e.message));
+  await mockHere(ctxLivePage);
+  await ctxLivePage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await ctxLivePage.fill("#destIn", "Nashville TN");
+  await ctxLivePage.press("#destIn", "Enter");
+  await ctxLivePage.click("#tabTuned");
+  await ctxLivePage.waitForTimeout(150);
+  if (!(await ctxLivePage.isVisible("#getMiBtn")))
+    fail("the contextual button should be showing on Live with a destination set and miles empty");
+  await ctxLivePage.click("#getMiBtn");
+  await ctxLivePage.waitForTimeout(500);
+  if ((await ctxLivePage.inputValue("#miles")) !== "400")
+    fail("GET LIVE ETA should fill the mileage on its way past");
+  if (!(await ctxLivePage.isVisible("#liveLine")))
+    fail("GET LIVE ETA must actually produce a live ETA — the LIVE board should be showing");
+  const ctxClock = (await ctxLivePage.textContent("#etaClock"))?.trim();
+  if (!/^\d{2}:\d{2} \S+$/.test(ctxClock || "") || ctxClock === "--:--")
+    fail(`GET LIVE ETA must leave a real arrival on screen, not the empty state, got ${JSON.stringify(ctxClock)}`);
+  // Having filled miles, the contextual button has nothing left to do and stands down.
+  if (await ctxLivePage.isVisible("#getMiBtn"))
+    fail("the contextual button should hide once miles has a value");
+  if (ctxLiveErrors.length) fail("contextual-button (live) page errors: " + JSON.stringify(ctxLiveErrors, null, 2));
+  await ctxLivePage.close();
+
+  // The live CTA moved into the load card, so opening tuning must no longer hide it — the
+  // show() that did belonged to its old home inside the panel the tuning fields expand into.
+  const ctaPage = await browser.newPage();
+  const ctaErrors = [];
+  ctaPage.on("pageerror", e => ctaErrors.push("pageerror: " + e.message));
+  await mockHere(ctaPage);
+  await ctaPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  if (await ctaPage.isVisible("#liveBtn"))
+    fail("UPDATE LIVE ETA should not show on the Predicted tab");
+  await ctaPage.click("#tabTuned");
+  await ctaPage.waitForTimeout(150);
+  if (!(await ctaPage.isVisible("#liveBtn")))
+    fail("UPDATE LIVE ETA should show on the Live tab");
+  // It now sits inside the load card, directly above CLEAR.
+  const ctaPlace = await ctaPage.evaluate(() => {
+    const b = document.getElementById("liveBtn");
+    return { next: b.nextElementSibling?.id, card: b.closest(".card") === document.getElementById("panelTuned") };
+  });
+  if (ctaPlace.next !== "etaClear")
+    fail(`UPDATE LIVE ETA should sit directly above CLEAR, next sibling is ${JSON.stringify(ctaPlace.next)}`);
+  if (ctaPlace.card) fail("UPDATE LIVE ETA should no longer live in the run panel");
+  await ctaPage.click("#tuneToggle");
+  await ctaPage.waitForTimeout(200);
+  if (!(await ctaPage.isVisible("#tuneGrid"))) fail("tuning should open");
+  if (!(await ctaPage.isVisible("#liveBtn")))
+    fail("UPDATE LIVE ETA must stay visible while tuning is open — it's not in that panel any more");
+  // The two switch rows still step aside, as before.
+  if (await ctaPage.isVisible("#overrideRow")) fail("the override row should still hide with tuning open");
+  if (await ctaPage.isVisible("#runningRow")) fail("the running row should still hide with tuning open");
+  await ctaPage.click("#tuneToggle");
+  await ctaPage.waitForTimeout(200);
+  if (!(await ctaPage.isVisible("#liveBtn"))) fail("UPDATE LIVE ETA should still be there after closing tuning");
+  if (ctaErrors.length) fail("live-CTA page errors: " + JSON.stringify(ctaErrors, null, 2));
+  await ctaPage.close();
 
   // Geocode caching: a town's coordinates don't move between refreshes, so re-quoting the
   // same destination should spend a routing call and nothing else. Changing the destination
