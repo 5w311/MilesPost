@@ -261,6 +261,12 @@
   .danger.armed{border-color:#F5F6F4;box-shadow:0 0 0 3px var(--late)}
   .muted.armed{background:var(--ink);color:#fff;border-color:var(--ink)}
   .danger:disabled,.muted:disabled{opacity:.35;cursor:default}
+  /* RUNNING takes the departure clock over and disables both of its controls. Neither the
+     NOW button nor a disabled input had any styling to say so, which made a live control
+     and a dead one look identical — tap it, nothing happens, no reason given. Same
+     stood-down look the other buttons already use. */
+  .go:disabled{opacity:.35;cursor:default}
+  input:disabled,select:disabled{opacity:.45;cursor:default}
   .link{background:none;border:none;color:var(--ink);font-size:11px;padding:0;
     text-decoration:underline;font-family:var(--mono);font-weight:600}
 
@@ -550,7 +556,12 @@
         <input id="appt" type="datetime-local">
       </div>
 
-      <button class="muted" id="etaClear">CLEAR</button>
+      <!-- The live CTA sits with the load it acts on, not down in the run panel. Visibility
+           is driven from renderEta() (Live tab only, as before the move) — renderLiveBtn()
+           still sets text/disabled only, so a fetch finishing while the tab is elsewhere
+           comes back in the right state. -->
+      <button class="primary hide" id="liveBtn" style="margin-top:6px">UPDATE LIVE ETA</button>
+      <button class="muted" id="etaClear" style="margin-top:10px">CLEAR</button>
     </div>
 
     <div class="mp hide" id="mpFuelWrap"><span id="mpFuel"></span></div>
@@ -595,7 +606,6 @@
           </div>
         </div>
       </div>
-      <button class="primary" id="liveBtn" style="margin-top:12px">UPDATE LIVE ETA</button>
       <div class="grid hide" id="tuneGrid">
         <div><div class="lbl">Fuel every</div><div class="fieldwrap"><input id="fuelEvery" type="number" inputmode="decimal"><span class="suffix">mi</span></div></div>
         <div><div class="lbl">Fuel stop</div><div class="fieldwrap"><input id="fuelMin" type="number" inputmode="decimal"><span class="suffix">min</span></div></div>
@@ -690,7 +700,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.2.3</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.3</button>
   </div>
 </div>
 
@@ -830,8 +840,10 @@ const HELP = {
     "you already pulled, so the drive time and traffic in it stay as of that fetch.</li>"+
     "<li>Once that quote is more than ten minutes old it goes stale like always, and the "+
     "arrival clears until you pull a new one.</li>"+
-    "<li>Starts off every time you open the app, and pauses while you're on another tab "+
-    "or another app.</li></ul>" },
+    "<li>On by default, and it remembers — switch it off and it stays off. Pauses while "+
+    "you're on another tab or another app.</li>"+
+    "<li>While it's on, the departure clock is its to set, so \"Rolling out\" and NOW are "+
+    "greyed out. Switch it off to enter a departure by hand.</li></ul>" },
   reset:{ title:"Legal At", body:
     "<p>This tracks your 34-hour restart. Set the moment you shut down, and this shows the "+
     "exact time you're legal to run again — 34 real hours later, DST accounted for.</p>"+
@@ -870,13 +882,18 @@ const E = {
   // Opt-in: when true, UPDATE LIVE ETA always overwrites miles, even a number the driver
   // typed. Default false — the safe, existing behavior (autofill only, never clobber a
   // typed number) is unchanged unless the driver turns this on. Persisted like tuning.
-  liveOverride:false
+  liveOverride:false,
+  // RUNNING (see below): on by default, because a Live ETA that quietly describes a moment
+  // that has passed is the wrong default. Persisted rather than hard-coded true, so a
+  // driver who deliberately switches it off doesn't get it forced back on next launch.
+  running:true
 };
 (()=>{
   const s = loadJSON("milespost.eta", "teamEta");
   if(!s) return;
   E.mode = s.mode ?? E.mode;
   E.liveOverride = s.liveOverride ?? E.liveOverride;
+  E.running = s.running ?? E.running;
   if(s.swap && Array.isArray(s.swap.times)) E.swap = s.swap;
   if(s.pv === PRESET_VERSION){ E.p = s.p ?? E.p; }
 })();
@@ -1124,6 +1141,9 @@ async function updateLive(){
 const renderLiveBtn = () => {
   $("liveBtn").textContent = LIVE.pending ? "UPDATING LIVE…" : "UPDATE LIVE ETA";
   $("liveBtn").disabled = LIVE.pending;
+  // On the Live tab the contextual button runs the same fetch, so it shares this one's
+  // in-flight state and has to be refreshed alongside it.
+  renderGetMiBtn();
 };
 $("liveBtn").onclick = () => updateLive();
 
@@ -1157,15 +1177,28 @@ async function getMileageOnly(){
   }
   getMiPending = false; renderGetMiBtn(); renderEta();
 }
+/* The contextual button says what it will actually do, which differs by tab. On Predicted
+   it fetches distance and nothing else. On Live it says GET LIVE ETA and therefore has to
+   deliver one — getMileageOnly() never touches LIVE.res, so a button with that label
+   calling it would leave the tab in its empty state, having promised an arrival. It calls
+   updateLive() instead, which fills the mileage on the way past anyway.
+
+   Each path has its own in-flight flag (getMiPending vs LIVE.pending), so the busy state
+   reads whichever one is actually driving the button in this mode — otherwise a live fetch
+   would leave it sitting enabled and labelled as if nothing were happening. */
 const renderGetMiBtn = () => {
-  $("getMiBtn").textContent = getMiPending ? "GETTING MILEAGE…" : "GET MILEAGE";
-  $("getMiBtn").disabled = getMiPending;
+  const liveMode = E.mode === "tuned";
+  const busy = liveMode ? LIVE.pending : getMiPending;
+  $("getMiBtn").textContent = busy
+    ? (liveMode ? "GETTING LIVE ETA…" : "GETTING MILEAGE…")
+    : (liveMode ? "GET LIVE ETA" : "GET MILEAGE");
+  $("getMiBtn").disabled = busy;
 };
-$("getMiBtn").onclick = () => getMileageOnly();
+$("getMiBtn").onclick = () => E.mode === "tuned" ? updateLive() : getMileageOnly();
 
 const saveEta = () => { try{ localStorage.setItem("milespost.eta",
   JSON.stringify({pv:PRESET_VERSION, mode:E.mode, p:E.p, swap:E.swap,
-    liveOverride:E.liveOverride}));
+    liveOverride:E.liveOverride, running:E.running}));
 }catch{} };
 
 ZONE_LIST.forEach(z=>{
@@ -1203,13 +1236,12 @@ $("milesClear").onclick = clearMilesField;
 $("tuneToggle").onclick = ()=>{
   const on = $("tuneGrid").classList.contains("hide");
   show($("tuneGrid"), on); show($("swapBox"), on);
-  // The LIVE CTA (and the override row above it) step aside while tuning is open, so the
-  // fields sit directly under the toggle that revealed them instead of being split off
-  // below the button. Only this handler touches liveBtn's visibility — renderLiveBtn()
-  // sets text/disabled only, so a fetch that finishes while it's hidden still comes back
-  // in the right state. Hiding overrideRow doesn't touch E.liveOverride or overrideBtn's
-  // aria-checked — it's still there, just off-screen, and reappears exactly as it was.
-  show($("liveBtn"), !on);
+  // The two switch rows step aside while tuning is open, so the fields sit directly under
+  // the toggle that revealed them instead of being split off below. The LIVE CTA no longer
+  // does: it lives in the load card now, not in the panel these fields expand into, so
+  // hiding it here would strand the driver with no way to refresh while tuning is open.
+  // Hiding overrideRow doesn't touch E.liveOverride or overrideBtn's aria-checked — it's
+  // still there, just off-screen, and reappears exactly as it was.
   show($("overrideRow"), !on);
   show($("runningRow"), !on);
   $("tuneToggle").textContent = on ? "− HIDE TUNING" : "+ TUNE TO YOUR TRUCK";
@@ -1228,8 +1260,9 @@ $("overrideBtn").onclick = () => { E.liveOverride = !E.liveOverride; renderOverr
 renderOverrideBtn();
 
 /* RUNNING: keeps the departure clock on "now" and the arrival re-solved against it, once a
-   second. Deliberately a session mode — never persisted, always OFF on load — because it's
-   about what the driver is doing right now, not how they've set the app up.
+   second. On by default and remembered across launches (E.running) — a Live ETA that
+   silently describes a moment that has already passed is the wrong thing to open on.
+   Defaulting it on is only safe because the tick is purely local: see below.
 
    It never touches the network. The tick re-runs solveEtaLive over LIVE.raw, the exact
    numbers the last fetch already returned, against a new departure: same drive time and
@@ -1240,7 +1273,6 @@ renderOverrideBtn();
    It does not touch LIVE.at either, so it can't extend a quote's life: ten minutes after
    the fetch the quote goes stale and the Live tab shows its empty state exactly as it
    would have, RUNNING on or off. */
-let running = false;
 let runTimer = null;
 
 // Re-solve the arrival from the cached raw quote against a new departure. No-op with no
@@ -1261,24 +1293,27 @@ const runTick = () => {
 const syncRunTimer = () => {
   clearInterval(runTimer);
   runTimer = null;
-  if(running && E.mode === "tuned" && document.visibilityState === "visible")
+  if(E.running && E.mode === "tuned" && document.visibilityState === "visible")
     runTimer = setInterval(runTick, 1000);
 };
 const renderRunningBtn = () => {
-  $("runningBtn").setAttribute("aria-checked", String(running));
-  $("runningState").textContent = running ? "ON" : "OFF";
-  $("runningState").classList.toggle("on", running);
+  $("runningBtn").setAttribute("aria-checked", String(E.running));
+  $("runningState").textContent = E.running ? "ON" : "OFF";
+  $("runningState").classList.toggle("on", E.running);
   // A departure that re-writes itself every second can't also be hand-set. Turning RUNNING
   // off hands both controls back with the clock left wherever it stopped.
-  $("depart").disabled = running;
-  $("nowBtn").disabled = running;
+  $("depart").disabled = E.running;
+  $("nowBtn").disabled = E.running;
 };
 $("runningBtn").onclick = () => {
-  running = !running;
+  E.running = !E.running;
   renderRunningBtn();
+  saveEta();
   syncRunTimer();
-  if(running) runTick();      // land on "now" immediately rather than up to a second late
+  if(E.running) runTick();    // land on "now" immediately rather than up to a second late
 };
+// Runs at load, not only on toggle, so a default-on start really does disable #depart and
+// NOW rather than leaving them live but overwritten a second later.
 renderRunningBtn();
 
 const doDest = ()=>{
@@ -1377,6 +1412,10 @@ function renderEta(){
   show($("getMiBtn"), showGetMi);
   if(!showGetMi) show($("getMiNote"), false);
   const start = fromWall($("depart").value, E.originTz);
+
+  // The live CTA moved into this shared load card, so its Live-tab-only visibility — which
+  // used to come free from living inside #panelTuned — is now stated here.
+  show($("liveBtn"), E.mode === "tuned");
 
   // Inert until the load has something in it — nothing to clear otherwise.
   const hasLoad = M > 0 || !!E.destTz || !!$("appt").value;
