@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.3.1**
+**Current version: v4.3.2**
 
 ## Files
 
@@ -78,6 +78,18 @@ the new address with no code change.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.3.2
+
+- **Fixed: entering a shutdown time whose 34 had already finished silently wiped itself.**
+  The value landed in the field and then blanked a second later with **Legal at** still
+  reading `--:--` and nothing said — the auto-clear that retires a finished reset couldn't
+  tell a stale entry from a running one that had aged out, and ate it on the next tick.
+  Such an entry is now refused up front with a message naming when that 34 finished, and
+  **what you typed stays in the field** so it can be corrected rather than retyped.
+- The ordinary case is untouched: a shutdown in the past whose 34 is **still running** —
+  "I shut down last night" — commits exactly as before. Only entries already past the
+  auto-clear window are refused, and a running reset still retires itself on its own.
 
 ### v4.3.1
 
