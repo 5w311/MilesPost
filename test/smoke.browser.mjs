@@ -214,6 +214,72 @@ try {
   if (((await page.textContent("#rsClock"))?.trim()) !== "--:--")
     fail("auto-cleared reset should show the placeholder readout, not a stale time");
 
+  /* Entering a shutdown whose 34 has ALREADY finished used to look like the app eating the
+     input: the value committed, then renderReset()'s 1s auto-clear wiped it on the next
+     tick and Legal At stayed "--:--" with nothing said. It's refused up front now. The
+     boundary matters — a past shutdown whose 34 is still running is the normal case and
+     must still commit. Three shutdowns, one on each side of the line plus the ordinary one. */
+  const rsPad = n => String(n).padStart(2, "0");
+  const asWall = ms => { const d = new Date(ms);
+    return `${d.getFullYear()}-${rsPad(d.getMonth()+1)}-${rsPad(d.getDate())}T${rsPad(d.getHours())}:${rsPad(d.getMinutes())}`; };
+
+  const rsPage = await browser.newPage();
+  const rsErrors = [];
+  rsPage.on("pageerror", e => rsErrors.push("pageerror: " + e.message));
+  await rsPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await rsPage.click("#tabReset");
+  await rsPage.waitForTimeout(100);
+  // Match the app's own zone so the wall-clock string round-trips to the instant intended.
+  await rsPage.evaluate(() => {
+    document.getElementById("rsDev").click();
+  });
+  await rsPage.waitForTimeout(100);
+
+  // (a) Shut down two hours ago — the 34 is still running. Must commit exactly as before.
+  await rsPage.fill("#shut", asWall(Date.now() - 2 * 3600e3));
+  await rsPage.click("#rsSetShut");
+  await rsPage.waitForTimeout(150);
+  if (await rsPage.isVisible("#rsErr"))
+    fail("a shutdown whose 34 is still running must be accepted, not refused");
+  if (((await rsPage.textContent("#rsClock"))?.trim()) === "--:--")
+    fail("a still-running 34 should render a legal-at time");
+  await rsPage.click("#rsClear"); await rsPage.click("#rsClear");
+  await rsPage.waitForTimeout(150);
+
+  // (b) Shut down two days ago — that 34 finished ~14h ago, well past the auto-clear
+  // window. Refused with a reason, and nothing committed.
+  const staleWall = asWall(Date.now() - 48 * 3600e3);
+  await rsPage.fill("#shut", staleWall);
+  await rsPage.click("#rsSetShut");
+  await rsPage.waitForTimeout(1400);            // well past a 1s auto-clear tick
+  if (!(await rsPage.isVisible("#rsErr")))
+    fail("a 34 that already finished should be refused with a message, not silently swallowed");
+  const rsErrText = (await rsPage.textContent("#rsErr"))?.trim() || "";
+  if (!/already finished/.test(rsErrText) || !/tap NOW/.test(rsErrText))
+    fail(`the refusal should explain itself and offer a way forward, got ${JSON.stringify(rsErrText)}`);
+  if (!/\d{2}:\d{2} [A-Z]{2,6} /.test(rsErrText))
+    fail(`the refusal should name when that 34 finished, with its tz, got ${JSON.stringify(rsErrText)}`);
+  if (((await rsPage.textContent("#rsClock"))?.trim()) !== "--:--")
+    fail("a refused shutdown must not produce a legal-at time");
+  if (!(await rsPage.isVisible("#rsInputCard")))
+    fail("the input must stay up when the entry is refused");
+  // The whole point: what they typed is still there to edit, not blanked.
+  if ((await rsPage.inputValue("#shut")) !== staleWall)
+    fail(`a refused entry must stay in the field, got ${JSON.stringify(await rsPage.inputValue("#shut"))}`);
+  if (await rsPage.evaluate(() => !!JSON.parse(localStorage.getItem("milespost.reset") || "{}").shutMs))
+    fail("a refused shutdown must not be committed to storage");
+
+  // (c) Correcting it to something valid clears the refusal and commits.
+  await rsPage.fill("#shut", asWall(Date.now() - 3600e3));
+  await rsPage.click("#rsSetShut");
+  await rsPage.waitForTimeout(150);
+  if (await rsPage.isVisible("#rsErr"))
+    fail("a valid entry after a refused one must clear the error");
+  if (((await rsPage.textContent("#rsClock"))?.trim()) === "--:--")
+    fail("the corrected shutdown should commit and render");
+  if (rsErrors.length) fail("reset-entry page errors: " + JSON.stringify(rsErrors, null, 2));
+  await rsPage.close();
+
   if (errors.length) fail("page errors: " + JSON.stringify(errors, null, 2));
 
   // ---- LIVE ETA wiring: mocked HERE fetch + mocked geolocation. No real key, no network.

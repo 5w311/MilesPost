@@ -700,7 +700,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.3.1</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.3.2</button>
   </div>
 </div>
 
@@ -1622,6 +1622,22 @@ const applyRsTz = (tz,name)=>{
 const rsSetShut = ()=>{
   const d = fromWall($("shut").value, R.tz);
   if(!d) return;                          // nothing chosen yet — leave the input up
+  /* A shutdown whose 34 finished longer ago than the auto-clear window can't be committed:
+     renderReset()'s 1-second tick would clear it on the very next pass, so the value
+     appeared to land and then blanked itself with Legal At still reading "--:--" — which
+     reads as the app being broken rather than as the entry being refused. Say why instead,
+     and leave what they typed in the field so it can be edited rather than retyped.
+     A past shutdown whose 34 is still running is untouched by this — that's the ordinary
+     "I shut down last night" case and the main way this screen is used. */
+  if(autoClearElapsed(d.getTime(), Date.now())){
+    const done = new Date(d.getTime() + RESET_HOURS*3600e3);
+    show($("rsErr"), true);
+    $("rsErr").textContent = "That 34 already finished " + clockOf(done, R.tz) + " "
+      + tzTag(R.tz) + " " + dayOf(done, R.tz)
+      + " — it's done. Enter a later shutdown, or tap NOW.";
+    return;
+  }
+  show($("rsErr"), false);                // clear any earlier refusal or zone-lookup error
   R.shutMs = d.getTime();
   saveReset(); renderReset();
 };
