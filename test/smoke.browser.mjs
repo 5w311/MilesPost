@@ -856,20 +856,39 @@ try {
   if (!(await runPage.isVisible("#liveLine")))
     fail("the LIVE line should survive ticking (the quote is still fresh)");
 
-  // Leaving the Live tab stops the clock; coming back resumes it. The switch itself stays on.
+  // The clock keeps running across the ETA sub-tabs. Predicted solves from the departure
+  // too, so it has exactly as much use for a current one — and the switch itself now lives
+  // in the load card, so it's on screen and reachable from both.
   await runPage.click("#tabQuick");
   await runPage.waitForTimeout(100);
+  if (!(await runPage.isVisible("#runningRow")))
+    fail("the RUNNING switch must be reachable from the Predicted tab, not Live-only");
   const departOnQuick = await runPage.inputValue("#depart");
   await runPage.evaluate(() => { window.__skewMs = 6 * 60 * 1000; });
   await runPage.waitForTimeout(1600);
-  if ((await runPage.inputValue("#depart")) !== departOnQuick)
-    fail("the RUNNING clock must stop while the Predicted tab is in front");
-  await runPage.click("#tabTuned");
-  await runPage.waitForTimeout(1600);
   if ((await runPage.inputValue("#depart")) === departOnQuick)
-    fail("the RUNNING clock must resume on returning to the Live tab");
+    fail("the RUNNING clock must keep running on the Predicted tab");
+  if (!(await runPage.isDisabled("#depart")))
+    fail("#depart must stay disabled on Predicted while RUNNING drives it");
+  await runPage.click("#tabTuned");
+  await runPage.waitForTimeout(100);
   if ((await runPage.getAttribute("#runningBtn", "aria-checked")) !== "true")
-    fail("switching tabs must stop the timer without flipping the switch off");
+    fail("switching sub-tabs must not flip the switch off");
+
+  // It does stand down on the 34 RESET view, though — nothing there for it to re-render.
+  await runPage.click("#tabReset");
+  await runPage.waitForTimeout(100);
+  const departOnReset = await runPage.inputValue("#depart");
+  await runPage.evaluate(() => { window.__skewMs = 9 * 60 * 1000; });
+  await runPage.waitForTimeout(1600);
+  if ((await runPage.inputValue("#depart")) !== departOnReset)
+    fail("the RUNNING clock must pause on the 34 RESET view");
+  await runPage.click("#tabEta");
+  await runPage.waitForTimeout(1600);
+  if ((await runPage.inputValue("#depart")) === departOnReset)
+    fail("the RUNNING clock must resume on returning to the ETA view");
+  await runPage.click("#tabTuned");
+  await runPage.waitForTimeout(100);
 
   // Backgrounding does the same. visibilityState is read-only, so stub the getter.
   await runPage.evaluate(() => {
@@ -1014,9 +1033,12 @@ try {
   if (!(await ctaPage.isVisible("#tuneGrid"))) fail("tuning should open");
   if (!(await ctaPage.isVisible("#liveBtn")))
     fail("UPDATE LIVE ETA must stay visible while tuning is open — it's not in that panel any more");
-  // The two switch rows still step aside, as before.
+  // Override still steps aside — it's still in that panel. Running isn't any more, and
+  // must stay put for the same reason the CTA does: it's in the load card now, and hiding
+  // it would take the only unlock for the greyed-out departure off screen.
   if (await ctaPage.isVisible("#overrideRow")) fail("the override row should still hide with tuning open");
-  if (await ctaPage.isVisible("#runningRow")) fail("the running row should still hide with tuning open");
+  if (!(await ctaPage.isVisible("#runningRow")))
+    fail("the RUNNING switch must stay visible while tuning is open — it's not in that panel any more");
   await ctaPage.click("#tuneToggle");
   await ctaPage.waitForTimeout(200);
   if (!(await ctaPage.isVisible("#liveBtn"))) fail("UPDATE LIVE ETA should still be there after closing tuning");

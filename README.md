@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.3.2**
+**Current version: v4.4**
 
 ## Files
 
@@ -78,6 +78,17 @@ the new address with no code change.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.4
+
+- **The Running switch is on both ETA tabs now**, moved out of the run panel and into the
+  load card directly under "Rolling out" — next to the clock it takes over, and the reason
+  that field and NOW are greyed out. Parked in the run panel it was Live-only, so a driver
+  on Predicted met a disabled departure with no visible way to free it. It also stays put
+  while **+ TUNE TO YOUR TRUCK** is open, for the same reason.
+- **The clock runs on Predicted too.** Predicted solves from the departure just as Live
+  does, so it has exactly as much use for a current one. Still no network calls, and it
+  still stands down on the 34 RESET tab and while the app is in the background.
 
 ### v4.3.2
 
