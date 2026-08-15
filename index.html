@@ -549,7 +549,28 @@
         </div>
         <div class="err hide" id="origErr"></div>
         <select id="origPick" class="hide" style="margin-top:8px"></select>
+        <!-- Running belongs to the clock it takes over: it governs "Rolling out" above, and
+             it's why that field and NOW are greyed out. Inside this group so the spacing
+             binds it upward. Living in the load card also puts it on BOTH ETA tabs — parked
+             in the run panel it was Live-only, so a driver on Predicted met a disabled
+             departure with no visible way to free it. -->
+        <div id="runningRow">
+          <div class="lbl-row" style="margin-top:10px;margin-bottom:0">
+          <div style="display:flex;align-items:center;gap:2px">
+            <div class="lbl" style="margin-bottom:0">Running</div>
+            <button class="help-btn" id="runningHelp" aria-label="What is this?" type="button"><span>?</span></button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="overrideState" id="runningState">OFF</span>
+            <button class="switch" id="runningBtn" role="switch" aria-checked="false"
+                    aria-label="Keep the departure clock and arrival current">
+              <i class="knob"></i>
+            </button>
+          </div>
+        </div>
       </div>
+      </div>
+
 
       <div class="group">
         <label for="appt" id="apptLbl">Appointment (optional)</label>
@@ -586,21 +607,6 @@
             <span class="overrideState" id="overrideState">OFF</span>
             <button class="switch" id="overrideBtn" role="switch" aria-checked="false"
                     aria-label="Always overwrite mileage with the live route distance">
-              <i class="knob"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-      <div id="runningRow">
-        <div class="lbl-row" style="margin-top:14px;margin-bottom:0">
-          <div style="display:flex;align-items:center;gap:2px">
-            <div class="lbl" style="margin-bottom:0">Running</div>
-            <button class="help-btn" id="runningHelp" aria-label="What is this?" type="button"><span>?</span></button>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="overrideState" id="runningState">OFF</span>
-            <button class="switch" id="runningBtn" role="switch" aria-checked="false"
-                    aria-label="Keep the departure clock and arrival current">
               <i class="knob"></i>
             </button>
           </div>
@@ -700,7 +706,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.3.2</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.4</button>
   </div>
 </div>
 
@@ -833,15 +839,15 @@ const HELP = {
     "road distance, even one you typed yourself.</li>"+
     "<li>Off by default, and remembered across sessions once you change it.</li></ul>" },
   running:{ title:"Running", body:
-    "<p>Keeps the Live ETA current on its own — the departure clock tracks now and the "+
-    "arrival re-solves against it. Doesn't use data; tap \"UPDATE LIVE ETA\" to pull a "+
+    "<p>Keeps your arrival current on its own — the departure clock tracks now and both "+
+    "tabs re-solve against it. Doesn't use data; tap \"UPDATE LIVE ETA\" to pull a "+
     "fresh quote.</p>"+
     "<ul><li>Nothing is re-fetched while it runs: the arrival is re-solved from the quote "+
     "you already pulled, so the drive time and traffic in it stay as of that fetch.</li>"+
     "<li>Once that quote is more than ten minutes old it goes stale like always, and the "+
     "arrival clears until you pull a new one.</li>"+
     "<li>On by default, and it remembers — switch it off and it stays off. Pauses while "+
-    "you're on another tab or another app.</li>"+
+    "you're on the 34 RESET tab or in another app.</li>"+
     "<li>While it's on, the departure clock is its to set, so \"Rolling out\" and NOW are "+
     "greyed out. Switch it off to enter a departure by hand.</li></ul>" },
   reset:{ title:"Legal At", body:
@@ -1243,7 +1249,6 @@ $("tuneToggle").onclick = ()=>{
   // Hiding overrideRow doesn't touch E.liveOverride or overrideBtn's aria-checked — it's
   // still there, just off-screen, and reappears exactly as it was.
   show($("overrideRow"), !on);
-  show($("runningRow"), !on);
   $("tuneToggle").textContent = on ? "− HIDE TUNING" : "+ TUNE TO YOUR TRUCK";
 };
 
@@ -1287,13 +1292,17 @@ const runTick = () => {
   resolveLiveFromRaw(Date.now());
   renderEta();
 };
-// The timer only exists while it can actually be seen doing something: RUNNING on, the Live
-// tab in front, and the app in the foreground. Always torn down first, so no path can leave
-// two intervals running.
+// Which of the two top-level views is up. The tick re-renders the ETA screen, so it has
+// nothing to do while the 34 RESET view is in front (that screen runs its own timer).
+let activeView = "eta";
+// The timer only exists while it can actually be seen doing something: RUNNING on, an ETA
+// tab in front, and the app in the foreground. Not gated on the Live sub-tab — Predicted
+// solves from the departure too, so a running clock keeps its arrival current in exactly
+// the same way. Always torn down first, so no path can leave two intervals running.
 const syncRunTimer = () => {
   clearInterval(runTimer);
   runTimer = null;
-  if(E.running && E.mode === "tuned" && document.visibilityState === "visible")
+  if(E.running && activeView === "eta" && document.visibilityState === "visible")
     runTimer = setInterval(runTick, 1000);
 };
 const renderRunningBtn = () => {
@@ -1374,7 +1383,6 @@ const setEtaMode = m => {
   $("tabTuned").setAttribute("aria-selected", String(m==="tuned"));
   show($("panelTuned"), m==="tuned");
   renderEta();
-  syncRunTimer();     // the running clock belongs to the Live tab; leaving it stops the tick
   // On-demand refresh, never a timer: opening the Tuned tab refreshes a stale quote,
   // but only after the driver has asked for live once (no surprise GPS prompt).
   if(m==="tuned" && LIVE.tried && E.destName && !LIVE.pending && !liveFresh(LIVE.at, Date.now()))
@@ -1825,6 +1833,8 @@ const setView = v => {
   $("tabReset").setAttribute("aria-selected", String(v==="reset"));
   show($("viewEta"), v==="eta");
   show($("viewReset"), v==="reset");
+  activeView = v;
+  syncRunTimer();          // nothing for the ETA tick to do while 34 RESET is in front
   try{ localStorage.setItem("milespost.view", v); }catch{}
 };
 $("tabEta").onclick = ()=> setView("eta");
