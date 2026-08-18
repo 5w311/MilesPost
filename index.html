@@ -706,7 +706,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.4</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.4.1</button>
   </div>
 </div>
 
@@ -722,7 +722,8 @@
 
 <script type="module">
 import {
-  resolvePlace, ZONE_LIST, deviceTz, tzTag, fromWall, toWall, clockOf, dayOf, hm, hms,
+  resolvePlace, splitStateNeedingZone, ZONE_LIST, deviceTz, tzTag, fromWall, toWall,
+  clockOf, dayOf, hm, hms,
   RATE, STOP_DEFAULTS, PRESET_VERSION, SWAP_DEFAULT, shiftAtArrival, dotDuration,
   solveEtaLive, liveFresh, LIVE_MAX_AGE_MS, formatPlaceSuggestions, metersToMiles,
   RESET_HOURS, AUTO_CLEAR_MS, autoClearElapsed, icsStamp, esc
@@ -1325,15 +1326,47 @@ $("runningBtn").onclick = () => {
 // NOW rather than leaving them live but overwritten a second later.
 renderRunningBtn();
 
+/* Two different failures used to wear the same "couldn't place that" message. A town we
+   genuinely don't know is one thing; a town in Kentucky or Tennessee is another — those are
+   the only two states with no default zone (deliberately: they're cut in half, and guessing
+   would put an appointment an hour out), so the built-in city list is the only way to place
+   one. That second case told the driver to add a state they had just typed, then offered all
+   seven zones when exactly two are possible. Fills the picker with whichever set applies and
+   hands back the split-state details so each field can word its own question.
+
+   The leading "pick one" option matters: with the list narrowed to two, the right zone is
+   the pre-selected one half the time, and selecting an already-selected option fires no
+   change event — the tap would do nothing. */
+const fillZonePick = (id, zones) => {
+  const sel = $(id);
+  sel.innerHTML = "";
+  const ph = document.createElement("option");
+  ph.value = ""; ph.textContent = "Pick a zone…";
+  sel.appendChild(ph);
+  zones.forEach(z => {
+    const o = document.createElement("option");
+    o.value = z; o.textContent = tzTag(z)+" — "+z;
+    sel.appendChild(o);
+  });
+};
+const askZone = (raw, errId, pickId) => {
+  const need = splitStateNeedingZone(raw);
+  fillZonePick(pickId, need ? need.zones : ZONE_LIST);
+  show($(errId), true); show($(pickId), true);
+  return need;
+};
+
 const doDest = ()=>{
   const raw = $("destIn").value.trim();
   if(!raw) return;
   const r = resolvePlace(raw);
   if(r){ E.destTz=r.tz; E.destName=r.place; show($("destErr"),false); show($("destPick"),false); }
   else {
-    show($("destErr"),true);
-    $("destErr").textContent = "Couldn't place that. Add the state (\"Laredo, TX\"), or pick a zone:";
-    show($("destPick"),true);
+    const need = askZone(raw, "destErr", "destPick");
+    $("destErr").textContent = need
+      ? need.place+" — "+need.state+" runs on two clocks and this town isn't in the built-in "
+        +"list. Pick the one you're headed for:"
+      : "Couldn't place that. Add the state (\"Laredo, TX\"), or pick a zone:";
   }
   renderEta();
 };
@@ -1344,7 +1377,8 @@ $("destIn").addEventListener("keydown", e=>{ if(e.key==="Enter") doDest(); });
 // Same pattern as miles/appt/depart: renderEta() on every keystroke so #destClear's
 // visibility (tied to $("destIn").value in renderEta) tracks typing live, not just on commit.
 $("destIn").addEventListener("input", renderEta);
-$("destPick").onchange = e=>{ E.destTz=e.target.value; E.destName="";
+$("destPick").onchange = e=>{ if(!e.target.value) return;   // the "Pick a zone…" placeholder
+  E.destTz=e.target.value; E.destName="";
   show($("destErr"),false); show($("destPick"),false); renderEta(); };
 attachPlaceSuggest($("destIn"), $("destSuggest"), doDest);
 $("destClear").onclick = clearDestField;
@@ -1366,15 +1400,17 @@ const doOrig = ()=>{
   const r = resolvePlace(raw);
   if(r) setOrigin(r.tz, r.place);
   else {
-    show($("origErr"),true);
-    $("origErr").textContent = "Couldn't place that — add the state, or pick a zone:";
-    show($("origPick"),true);
+    const need = askZone(raw, "origErr", "origPick");
+    $("origErr").textContent = need
+      ? need.place+" — "+need.state+" runs on two clocks and this town isn't in the built-in "
+        +"list. Pick the one you're in:"
+      : "Couldn't place that — add the state, or pick a zone:";
   }
 };
 $("origSet").onclick = doOrig;
 $("origIn").addEventListener("keydown", e=>{ if(e.key==="Enter") doOrig(); });
 $("origDev").onclick = ()=> setOrigin(deviceTz(), "Your device");
-$("origPick").onchange = e=> setOrigin(e.target.value, "Manual");
+$("origPick").onchange = e=>{ if(e.target.value) setOrigin(e.target.value, "Manual"); };
 attachPlaceSuggest($("origIn"), $("origSuggest"), doOrig);
 
 const setEtaMode = m => {
@@ -1667,16 +1703,18 @@ const doRs = ()=>{
   const r = resolvePlace(raw);
   if(r) applyRsTz(r.tz, r.place);
   else {
-    show($("rsErr"),true);
-    $("rsErr").textContent = "Couldn't place that. Add the state (\"Laredo, TX\"), or pick a zone:";
-    show($("rsPick"),true);
+    const need = askZone(raw, "rsErr", "rsPick");
+    $("rsErr").textContent = need
+      ? need.place+" — "+need.state+" runs on two clocks and this town isn't in the built-in "
+        +"list. Pick the one you shut down in:"
+      : "Couldn't place that. Add the state (\"Laredo, TX\"), or pick a zone:";
   }
 };
 $("rsSet").onclick = doRs;
 $("rsIn").addEventListener("keydown", e=>{ if(e.key==="Enter") doRs(); });
 attachPlaceSuggest($("rsIn"), $("rsSuggest"), doRs);
 $("rsDev").onclick = ()=> applyRsTz(deviceTz(), "Your device");
-$("rsPick").onchange = e=> applyRsTz(e.target.value, "Manual");
+$("rsPick").onchange = e=>{ if(e.target.value) applyRsTz(e.target.value, "Manual"); };
 
 // Only meaningful if a 34 is actually running. Starting one is what NOW is for.
 const rsRestart = ()=>{ if(!R.shutMs) return; rsSetNow(); };
