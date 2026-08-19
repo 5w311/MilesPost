@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.4**
+**Current version: v4.4.1**
 
 ## Files
 
@@ -78,6 +78,21 @@ the new address with no code change.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.4.1
+
+- **Fixed: a correctly typed Kentucky or Tennessee town could be rejected as unplaceable.**
+  Those two are the only split states with no default zone — deliberately, since both are cut
+  in half and guessing would put an appointment an hour out — so any town outside the
+  built-in list came back the same as gibberish. Type "Independence, KY" (which the
+  suggestion dropdown itself offers) and the app told you to *add the state you had just
+  typed*, then handed you all seven zones.
+- It now says what's actually wrong — *"Independence, KY — Kentucky runs on two clocks and
+  this town isn't in the built-in list. Pick the one you're headed for:"* — and offers only
+  the two zones that state spans. Applies to the destination, origin, and 34-reset fields.
+- The zone picker leads with a "Pick a zone…" placeholder, so choosing either option
+  registers. Narrowed to two, the right one was already selected half the time, and
+  re-selecting it fired nothing.
 
 ### v4.4
 

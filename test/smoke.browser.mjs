@@ -1184,6 +1184,55 @@ try {
   if (destClearErrors.length) fail("destClear page errors: " + JSON.stringify(destClearErrors, null, 2));
   await destClearPage.close();
 
+  /* Split state with no default zone. "Independence, KY" is a real town, correctly typed
+     with its state, and HERE's own suggestion dropdown offers it — but it isn't in the
+     built-in KY city list, and KY has no default zone (deliberately: guessing would put an
+     appointment an hour out). It came back from resolvePlace() as null, indistinguishable
+     from gibberish, so the driver was told to "add the state" they had just typed and handed
+     all seven zones. It now says what's actually wrong and offers the two zones KY spans. */
+  const splitPage = await browser.newPage();
+  const splitErrors = [];
+  splitPage.on("pageerror", e => splitErrors.push("pageerror: " + e.message));
+  await splitPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await splitPage.fill("#destIn", "Independence, KY");
+  await splitPage.press("#destIn", "Enter");
+  await splitPage.waitForTimeout(150);
+  if (!(await splitPage.isVisible("#destErr")))
+    fail("an unplaceable split-state town should still ask for a zone");
+  const splitMsg = (await splitPage.textContent("#destErr"))?.trim() || "";
+  if (/Add the state/i.test(splitMsg))
+    fail(`must not tell the driver to add a state they already typed, got ${JSON.stringify(splitMsg)}`);
+  if (!/Kentucky/.test(splitMsg) || !/Independence, KY/.test(splitMsg))
+    fail(`the message should name the town and the state, got ${JSON.stringify(splitMsg)}`);
+  // Two zones plus the placeholder, not the whole list.
+  const opts = await splitPage.evaluate(() =>
+    [...document.getElementById("destPick").options].map(o => o.value));
+  if (opts[0] !== "")
+    fail(`the picker should lead with a placeholder so either choice fires a change, got ${JSON.stringify(opts)}`);
+  const zoneOpts = opts.slice(1);
+  if (zoneOpts.length !== 2 || !zoneOpts.includes("America/New_York") || !zoneOpts.includes("America/Chicago"))
+    fail(`Kentucky should offer exactly its two zones, got ${JSON.stringify(zoneOpts)}`);
+  // Picking one commits it and clears the ask.
+  await splitPage.selectOption("#destPick", "America/New_York");
+  await splitPage.waitForTimeout(150);
+  if (await splitPage.isVisible("#destErr")) fail("picking a zone should clear the prompt");
+  if (!/Destination/.test((await splitPage.textContent("#etaLabel")) || ""))
+    fail("picking a zone should set the destination timezone");
+
+  // A genuinely unknown place still gets the original message and the full list.
+  await splitPage.fill("#destIn", "Zzyzx Nowhere");
+  await splitPage.press("#destIn", "Enter");
+  await splitPage.waitForTimeout(150);
+  const unknownMsg = (await splitPage.textContent("#destErr"))?.trim() || "";
+  if (!/Add the state/i.test(unknownMsg))
+    fail(`an unknown place should still be told to add a state, got ${JSON.stringify(unknownMsg)}`);
+  const allOpts = await splitPage.evaluate(() =>
+    [...document.getElementById("destPick").options].length);
+  if (allOpts <= 3)
+    fail(`an unknown place should offer the full zone list, got ${allOpts} options`);
+  if (splitErrors.length) fail("split-state page errors: " + JSON.stringify(splitErrors, null, 2));
+  await splitPage.close();
+
   // ---- City suggestions (destIn/origIn/rsIn share one mechanism — test destIn as the
   // representative case). The primary source is HERE Autocomplete (types=city), which
   // returns cities only — including same-named cities in different states. Mocked items
