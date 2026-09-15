@@ -706,7 +706,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.4.1</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.5</button>
   </div>
 </div>
 
@@ -825,6 +825,9 @@ const HELP = {
     "tab) or \"UPDATE LIVE ETA\" (Live tab) to fill it in from the real route.</li>"+
     "<li>Destination just needs a town and state — it sets your time zone and, for live ETA, "+
     "the actual route.</li>"+
+    "<li>\"Rolling out\" normally routes from wherever your phone is. Tap \"change\" and "+
+    "set a town to start the route there instead — for pricing a run before you're on it, "+
+    "or for getting a live ETA with location turned off. The chip says which you're on.</li>"+
     "<li>CLEAR wipes the load but keeps your tuning and swap schedule.</li></ul>" },
   run:{ title:"How You Run", body:
     "<p>Your stop rules — the team-driver time the router knows nothing about, laid on top "+
@@ -886,6 +889,11 @@ const E = {
   mode:"quick", p:{...STOP_DEFAULTS},
   swap:{...SWAP_DEFAULT, times:[...SWAP_DEFAULT.times]},
   originTz:deviceTz(), originName:"Your device", destTz:null, destName:"",
+  // The town routes should start from, or null to start from wherever the phone is. Only a
+  // town the driver actually resolved sets this — "Your device" and a bare timezone pick
+  // leave it null, because neither gives a place to route from. Kept apart from originName
+  // so the routing decision never turns on matching a display string.
+  originPlace:null,
   // Opt-in: when true, UPDATE LIVE ETA always overwrites miles, even a number the driver
   // typed. Default false — the safe, existing behavior (autofill only, never clobber a
   // typed number) is unchanged unless the driver turns this on. Persisted like tuning.
@@ -1064,25 +1072,42 @@ const hereErr = async (label, res) => {
    the exact destination string means a new city simply misses and re-geocodes rather than
    ever routing against the last city's position. Only the geocode is cached; the route
    itself is re-fetched every time, since that's the half that changes with traffic. */
-let geoCache = null;                        // { dest, pos } for the last destination geocoded
-const clearGeoCache = () => { geoCache = null; };
+const geoCache = new Map();                 // town string -> {lat,lng}, newest last
+const GEO_CACHE_MAX = 8;
+const clearGeoCache = () => { geoCache.clear(); };
 
-async function fetchTruckRoute(destName){
-  const here = await geoPos();
-  let pos = geoCache && geoCache.dest === destName ? geoCache.pos : null;
-  if(!pos){
-    const g = await fetch("https://geocode.search.hereapi.com/v1/geocode?q="
-      + encodeURIComponent(destName) + "&apikey=" + HERE_API_KEY);
-    if(!g.ok) throw await hereErr("geocode", g);
-    const gj = await g.json();
-    pos = gj.items && gj.items[0] && gj.items[0].position;
-    if(!pos) throw new Error("geocode: no match for "+destName);
-    geoCache = { dest: destName, pos };
-  }
+/* A town's coordinates don't move, so look each one up once. Keyed on the exact string, so
+   a different town simply misses rather than ever routing against the last one's position.
+   Bounded because both ends of the route come through here now — origin as well as
+   destination — and a long day shouldn't grow it without limit. */
+async function geocodeTown(name, label){
+  if(geoCache.has(name)) return geoCache.get(name);
+  const g = await fetch("https://geocode.search.hereapi.com/v1/geocode?q="
+    + encodeURIComponent(name) + "&apikey=" + HERE_API_KEY);
+  if(!g.ok) throw await hereErr(label, g);
+  const gj = await g.json();
+  const pos = gj.items && gj.items[0] && gj.items[0].position;
+  if(!pos) throw new Error(label+": no match for "+name);
+  if(geoCache.size >= GEO_CACHE_MAX) geoCache.delete(geoCache.keys().next().value);
+  geoCache.set(name, pos);
+  return pos;
+}
+
+/* originPlace is a town to start from, or null for "wherever the phone is". Setting a town
+   under "Rolling out" is what supplies one: routes then start there instead of at the GPS
+   fix, which is what makes it possible to price a run you haven't started — and to get a
+   live ETA at all with location permission refused. A failed origin lookup is an error, not
+   a quiet fall back to GPS: a route silently starting somewhere else would be wrong by
+   however far apart the two are, with nothing on screen to say so. */
+async function fetchTruckRoute(destName, originPlace){
+  const from = originPlace
+    ? await geocodeTown(originPlace, "origin").then(p => p.lat + "," + p.lng)
+    : await geoPos().then(c => c.latitude + "," + c.longitude);
+  const pos = await geocodeTown(destName, "geocode");
 
   const q = new URLSearchParams({
     transportMode:"truck",
-    origin: here.latitude + "," + here.longitude,
+    origin: from,
     destination: pos.lat + "," + pos.lng,
     return: "summary",
     apikey: HERE_API_KEY
@@ -1105,7 +1130,7 @@ async function updateLive(){
   if(!E.destName){ LIVE.note = "set a destination to get a live ETA"; renderEta(); return; }
   LIVE.pending = true; renderLiveBtn();
   try{
-    const { duration, length, base } = await fetchTruckRoute(E.destName);
+    const { duration, length, base } = await fetchTruckRoute(E.destName, E.originPlace);
     const startMs = Date.now();             // live means from where the truck sits right now
     // Kept raw as well as solved: RUNNING re-solves these same numbers against a moving
     // departure, which is what lets the arrival stay current without another fetch.
@@ -1169,7 +1194,7 @@ async function getMileageOnly(){
   if(getMiPending || !E.destName) return;
   getMiPending = true; renderGetMiBtn();
   try{
-    const { length } = await fetchTruckRoute(E.destName);
+    const { length } = await fetchTruckRoute(E.destName, E.originPlace);
     const milesEl = $("miles");
     LIVE.autoMiles = String(Math.round(metersToMiles(length)));
     milesEl.value = LIVE.autoMiles;
@@ -1388,8 +1413,8 @@ $("origToggle").onclick = ()=>{
   show($("origEdit"), on);
   $("origToggle").textContent = on ? "close" : "change";
 };
-const setOrigin = (tz,name)=>{
-  E.originTz=tz; E.originName=name;
+const setOrigin = (tz,name,place=null)=>{
+  E.originTz=tz; E.originName=name; E.originPlace=place;
   $("origIn").value=""; show($("origEdit"),false); $("origToggle").textContent="change";
   show($("origErr"),false); show($("origPick"),false);
   renderEta();
@@ -1398,7 +1423,7 @@ const doOrig = ()=>{
   const raw = $("origIn").value.trim();
   if(!raw) return;
   const r = resolvePlace(raw);
-  if(r) setOrigin(r.tz, r.place);
+  if(r) setOrigin(r.tz, r.place, r.place);
   else {
     const need = askZone(raw, "origErr", "origPick");
     $("origErr").textContent = need

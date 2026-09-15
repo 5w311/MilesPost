@@ -496,9 +496,12 @@ try {
       getCurrentPosition: ok => ok({ coords: { latitude: 41.8781, longitude: -87.6298 } })
     }});
     window.__hereCalls = { geocode: 0, route: 0, suggest: 0, total: 0 };
+    window.__hereUrls = [];
+    window.__geocoded = [];
     const realFetch = window.fetch.bind(window);
     window.fetch = (url, ...rest) => {
       const u = String(url);
+      window.__hereUrls.push(u);
       window.__hereCalls.total++;
       if (u.includes("geocode.search.hereapi.com")) window.__hereCalls.geocode++;
       if (u.includes("router.hereapi.com")) window.__hereCalls.route++;
@@ -514,9 +517,23 @@ try {
         window.__hereCalls.suggest++;
         return Promise.resolve(new Response(JSON.stringify({ items: [] })));
       }
-      if (u.includes("geocode.search.hereapi.com"))
+      if (u.includes("geocode.search.hereapi.com")) {
+        // Distinct coordinates per town, so a test can tell which end of the route a
+        // position ended up as. Anything unlisted falls back to Nashville's, which is what
+        // every case that doesn't care about coordinates was already getting.
+        const q = decodeURIComponent((u.match(/[?&]q=([^&]*)/) || [])[1] || "").toLowerCase();
+        const towns = {
+          nashville: { lat: 36.1627, lng: -86.7816 },
+          redlands:  { lat: 34.0556, lng: -117.1825 },
+          carson:    { lat: 33.8317, lng: -118.2820 },
+          coppell:   { lat: 32.9546, lng: -96.9900 },
+          laredo:    { lat: 27.5306, lng: -99.4803 }
+        };
+        const hit = Object.keys(towns).find(t => q.includes(t));
+        window.__geocoded.push(q);
         return Promise.resolve(new Response(JSON.stringify(
-          { items: [{ position: { lat: 36.1627, lng: -86.7816 } }] })));
+          { items: [{ position: towns[hit] || towns.nashville }] })));
+      }
       if (u.includes("router.hereapi.com"))
         return Promise.resolve(new Response(JSON.stringify(
           // 6h drive, 20min of it traffic, 400 mi (643,738 m). Length is overridable via
@@ -1090,6 +1107,7 @@ try {
   const resumePage = await browser.newPage();
   const resumeErrors = [];
   resumePage.on("pageerror", e => resumeErrors.push("pageerror: " + e.message));
+  await runningOff(resumePage);   // the 1s tick would re-render and win the race below
   await mockHere(resumePage);
   await resumePage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await resumePage.fill("#miles", "400");
@@ -1183,6 +1201,158 @@ try {
     fail("#destClear must not touch the miles field");
   if (destClearErrors.length) fail("destClear page errors: " + JSON.stringify(destClearErrors, null, 2));
   await destClearPage.close();
+
+  /* Routing origin. "Rolling out" used to set a timezone and nothing else — the route
+     always started at the GPS fix — so a driver who typed where they were rolling out from
+     got a mileage measured from somewhere else entirely. Setting a town there now starts
+     the route there; leaving it on "Your device" keeps the GPS behaviour exactly. */
+  const originPage = await browser.newPage();
+  const originErrors = [];
+  originPage.on("pageerror", e => originErrors.push("pageerror: " + e.message));
+  await mockHere(originPage);
+  await originPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  const routeOrigin = () => originPage.evaluate(() => {
+    const u = [...window.__hereUrls].reverse().find(x => x.includes("router.hereapi.com"));
+    return decodeURIComponent((u.match(/[?&]origin=([^&]*)/) || [])[1] || "");
+  });
+  await originPage.fill("#destIn", "Nashville TN");
+  await originPage.press("#destIn", "Enter");
+  await originPage.click("#tabTuned");
+  await originPage.click("#liveBtn");
+  await originPage.waitForTimeout(400);
+  // Default: the phone's own fix, as before.
+  if ((await routeOrigin()) !== "41.8781,-87.6298")
+    fail(`with no town set the route must start at the GPS fix, got ${JSON.stringify(await routeOrigin())}`);
+
+  // Now set a town to roll out from. Redlands is nowhere near the mocked GPS fix, so the
+  // origin param can only match if the typed town actually drove it.
+  await originPage.click("#origToggle");
+  await originPage.fill("#origIn", "Redlands, CA");
+  await originPage.click("#origSet");
+  await originPage.waitForTimeout(150);
+  if (!/Redlands, CA/.test((await originPage.textContent("#origChip")) || ""))
+    fail("the chip should name the town routes now start from");
+  await originPage.click("#liveBtn");
+  await originPage.waitForTimeout(400);
+  if ((await routeOrigin()) !== "34.0556,-117.1825")
+    fail(`the route must start at the town set under Rolling out, got ${JSON.stringify(await routeOrigin())}`);
+
+  // DEVICE hands it back to the GPS fix.
+  await originPage.click("#origToggle");
+  await originPage.click("#origDev");
+  await originPage.waitForTimeout(150);
+  await originPage.click("#liveBtn");
+  await originPage.waitForTimeout(400);
+  if ((await routeOrigin()) !== "41.8781,-87.6298")
+    fail("DEVICE should put the route back on the phone's own fix");
+
+  // A bare timezone pick gives no town to route from, so it must NOT change the origin.
+  await originPage.click("#origToggle");          // setOrigin closed the editor behind us
+  await originPage.fill("#origIn", "Zzyzx Nowhere");
+  await originPage.click("#origSet");
+  await originPage.waitForTimeout(150);
+  await originPage.selectOption("#origPick", "America/Denver");
+  await originPage.waitForTimeout(150);
+  await originPage.click("#liveBtn");
+  await originPage.waitForTimeout(400);
+  if ((await routeOrigin()) !== "41.8781,-87.6298")
+    fail("picking a bare timezone gives no place to route from — the fix must still be used");
+  if (originErrors.length) fail("origin page errors: " + JSON.stringify(originErrors, null, 2));
+  await originPage.close();
+
+  /* The payoff case: location refused. A live ETA was impossible without GPS; with a town
+     set under Rolling out there's nothing left to ask the phone for. */
+  const noGpsPage = await browser.newPage();
+  const noGpsErrors = [];
+  noGpsPage.on("pageerror", e => noGpsErrors.push("pageerror: " + e.message));
+  await noGpsPage.addInitScript(() => {
+    // Denial AND the HERE mocks in one script: navigator.geolocation can only be defined
+    // once, so layering this on top of mockHere's own definition throws and takes the fetch
+    // mock down with it.
+    Object.defineProperty(navigator, "geolocation", { value: {
+      getCurrentPosition: (_ok, err) => err({ code: 1, message: "denied" })
+    }});
+    window.__hereUrls = [];
+    const realFetch = window.fetch.bind(window);
+    const towns = { coppell: { lat: 32.9546, lng: -96.9900 }, carson: { lat: 33.8317, lng: -118.2820 } };
+    window.fetch = (url, ...rest) => {
+      const u = String(url);
+      window.__hereUrls.push(u);
+      if (u.includes("geocode.search.hereapi.com")) {
+        const q = decodeURIComponent((u.match(/[?&]q=([^&]*)/) || [])[1] || "").toLowerCase();
+        const hit = Object.keys(towns).find(t => q.includes(t));
+        return Promise.resolve(new Response(JSON.stringify({ items: [{ position: towns[hit] || towns.coppell }] })));
+      }
+      if (u.includes("router.hereapi.com"))
+        return Promise.resolve(new Response(JSON.stringify(
+          { routes: [{ sections: [{ summary: { duration: 21600, baseDuration: 20400, length: 643738 } }] }] })));
+      if (u.includes("hereapi.com")) return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+      return realFetch(url, ...rest);
+    };
+  });
+  await noGpsPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await noGpsPage.fill("#destIn", "Coppell TX");
+  await noGpsPage.press("#destIn", "Enter");
+  await noGpsPage.click("#tabTuned");
+  await noGpsPage.click("#origToggle");
+  await noGpsPage.fill("#origIn", "Carson, CA");
+  await noGpsPage.click("#origSet");
+  await noGpsPage.waitForTimeout(150);
+  await noGpsPage.click("#liveBtn");
+  await noGpsPage.waitForTimeout(500);
+  if (!(await noGpsPage.isVisible("#liveLine")))
+    fail("a live ETA should work with location refused once a town is set to roll out from");
+  const noGpsOrigin = await noGpsPage.evaluate(() => {
+    const u = [...window.__hereUrls].reverse().find(x => x.includes("router.hereapi.com"));
+    return decodeURIComponent((u.match(/[?&]origin=([^&]*)/) || [])[1] || "");
+  });
+  if (noGpsOrigin !== "33.8317,-118.282")
+    fail(`the route should start at Carson, got ${JSON.stringify(noGpsOrigin)}`);
+  if (noGpsErrors.length) fail("no-gps page errors: " + JSON.stringify(noGpsErrors, null, 2));
+  await noGpsPage.close();
+
+  /* An origin that can't be geocoded must fail loudly. Quietly starting from the GPS fix
+     instead would put the mileage out by however far apart the two are, with nothing on
+     screen saying the town was ignored. */
+  const badOriginPage = await browser.newPage();
+  const badOriginErrors = [];
+  badOriginPage.on("pageerror", e => badOriginErrors.push("pageerror: " + e.message));
+  await badOriginPage.addInitScript(() => {
+    Object.defineProperty(navigator, "geolocation", { value: {
+      getCurrentPosition: ok => ok({ coords: { latitude: 41.8781, longitude: -87.6298 } })
+    }});
+    const realFetch = window.fetch.bind(window);
+    window.fetch = (url, ...rest) => {
+      const u = String(url);
+      if (u.includes("geocode.search.hereapi.com"))
+        // No match for anything — stands in for a town HERE can't place.
+        return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+      if (u.includes("router.hereapi.com"))
+        return Promise.resolve(new Response(JSON.stringify(
+          { routes: [{ sections: [{ summary: { duration: 21600, baseDuration: 20400, length: 643738 } }] }] })));
+      if (u.includes("hereapi.com")) return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+      return realFetch(url, ...rest);
+    };
+  });
+  await badOriginPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await badOriginPage.fill("#miles", "500");
+  await badOriginPage.dispatchEvent("#miles", "input");
+  await badOriginPage.fill("#destIn", "Nashville TN");
+  await badOriginPage.press("#destIn", "Enter");
+  await badOriginPage.click("#tabTuned");
+  await badOriginPage.click("#origToggle");
+  await badOriginPage.fill("#origIn", "Redlands, CA");
+  await badOriginPage.click("#origSet");
+  await badOriginPage.waitForTimeout(150);
+  await badOriginPage.click("#liveBtn");
+  await badOriginPage.waitForTimeout(500);
+  if (await badOriginPage.isVisible("#liveLine"))
+    fail("an origin that can't be placed must not produce a route at all");
+  const badNote = (await badOriginPage.textContent("#liveNote"))?.trim() || "";
+  if (!/origin/.test(badNote))
+    fail(`the failure should name the origin as the problem, got ${JSON.stringify(badNote)}`);
+  if (badOriginErrors.length) fail("bad-origin page errors: " + JSON.stringify(badOriginErrors, null, 2));
+  await badOriginPage.close();
 
   /* Split state with no default zone. "Independence, KY" is a real town, correctly typed
      with its state, and HERE's own suggestion dropdown offers it — but it isn't in the
