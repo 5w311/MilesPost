@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.4.1**
+**Current version: v4.5**
 
 ## Files
 
@@ -78,6 +78,21 @@ the new address with no code change.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.5
+
+- **"Rolling out" can now set where the route starts, not just what clock it's in.** Tap
+  *change*, set a town, and live mileage is measured from there instead of from your phone's
+  GPS. Leave it on **Your device** and nothing changes — that's still the default and still
+  the GPS fix. The chip tells you which you're on.
+- Two things that buys you: **pricing a run before you're on it** (sitting at home, quote
+  Carson → Coppell rather than home → Coppell), and **a live ETA with location turned off**,
+  which previously wasn't possible at all — no GPS fix, no route.
+- A town that can't be placed is now an error rather than a quiet fall back to the GPS fix.
+  Starting the route somewhere else without saying so would put the mileage out by however
+  far apart the two are, with nothing on screen to show it.
+- Both ends of the route share one bounded geocode cache, so an origin you keep re-quoting
+  from is looked up once, same as the destination.
 
 ### v4.4.1
 
