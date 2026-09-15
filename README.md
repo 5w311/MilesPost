@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.5**
+**Current version: v4.6**
 
 ## Files
 
@@ -78,6 +78,22 @@ the new address with no code change.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.6
+
+- **Fixed: changing the city left the old route's numbers on screen wearing the new city's
+  name.** Quote Nashville, then type Laredo, and the chip and the arrival label said Laredo
+  while the mileage and the LIVE board were still Nashville's — 400 miles and a Nashville
+  arrival, relabelled. The same stale-quote inheritance CLEAR was fixed for, reached by
+  changing the destination directly instead of clearing first.
+- **Changing either end of the route now refreshes it.** Destination or "Rolling out" — both
+  define the route since v4.5. The old quote is dropped, and re-fetched automatically if
+  you've used live at least once, on the same terms the Live tab's own auto-refresh already
+  used. If you haven't, nothing is fetched behind your back; the stale mileage still clears,
+  which puts **GET MILEAGE / GET LIVE ETA** back on screen — the same refresh, one tap.
+- **A mileage you typed still survives it.** Only a number the app filled in itself is
+  cleared. Re-entering the same city is not a change and costs no fetch.
+- The origin and 34-reset town fields now read **"City, State"** instead of "Town, ST".
 
 ### v4.5
 

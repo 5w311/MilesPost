@@ -534,12 +534,16 @@ try {
         return Promise.resolve(new Response(JSON.stringify(
           { items: [{ position: towns[hit] || towns.nashville }] })));
       }
-      if (u.includes("router.hereapi.com"))
+      if (u.includes("router.hereapi.com")) {
+        // window.__blockRoute makes routing fail, so a test can prove a LIVE line that
+        // appears could only have come from a leftover quote rather than a fresh one.
+        if (window.__blockRoute) return Promise.resolve(new Response("no", { status: 503 }));
         return Promise.resolve(new Response(JSON.stringify(
           // 6h drive, 20min of it traffic, 400 mi (643,738 m). Length is overridable via
           // window.__routeMeters so a test can simulate re-quoting a different destination.
           { routes: [{ sections: [{ summary: { duration: 21600, baseDuration: 20400,
             length: window.__routeMeters || 643738 } }] }] })));
+      }
       return realFetch(url, ...rest);
     };
   });
@@ -750,16 +754,19 @@ try {
   await clearLivePage.waitForTimeout(150);
   if (await clearLivePage.isVisible("#liveLine"))
     fail("CLEAR should hide a showing LIVE line immediately (miles is 0, so this is the easy part)");
-  // Now the real check: a new destination, never live-quoted, must not inherit Nashville's
-  // stale LIVE.res — set miles directly (bypassing UPDATE LIVE ETA) so only a leftover
-  // LIVE.res/at could possibly make the line reappear.
+  // Now the real check: a new destination must not inherit Nashville's stale LIVE.res.
+  // Setting one re-quotes it since v4.6, so routing is cut off first — with no new quote
+  // possible, a LIVE line appearing could only be the old city's leftovers.
+  await clearLivePage.evaluate(() => { window.__blockRoute = true; });
   await clearLivePage.fill("#destIn", "Laredo TX");
   await clearLivePage.press("#destIn", "Enter");
   await clearLivePage.fill("#miles", "900");
   await clearLivePage.dispatchEvent("#miles", "input");
   await clearLivePage.waitForTimeout(150);
+  await clearLivePage.waitForTimeout(400);           // let the blocked re-quote fail
   if (await clearLivePage.isVisible("#liveLine"))
     fail("a brand-new destination must not inherit a stale LIVE quote left over from before CLEAR");
+  await clearLivePage.evaluate(() => { window.__blockRoute = false; });
   const tuneAfter = await clearLivePage.evaluate(() => ({
     tune: ["fuelEvery","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
     swap: ["swapA","swapB","swapTz"].map(id => document.getElementById(id).value),
@@ -1083,12 +1090,11 @@ try {
     fail(`two refreshes should cost two routing calls, got ${sameDest.route}`);
   if (sameDest.geocode !== 1)
     fail(`re-quoting the same destination should geocode once, got ${sameDest.geocode}`);
-  // A different city must re-geocode rather than reuse Nashville's position.
+  // A different city must re-geocode rather than reuse Nashville's position. Committing the
+  // new destination re-quotes it on its own since v4.6, so no explicit tap is needed.
   await geoPage.fill("#destIn", "Laredo TX");
   await geoPage.press("#destIn", "Enter");
-  await geoPage.waitForTimeout(100);
-  await geoPage.click("#liveBtn");
-  await geoPage.waitForTimeout(300);
+  await geoPage.waitForTimeout(600);
   const newDest = await geoPage.evaluate(() => ({ ...window.__hereCalls }));
   if (newDest.geocode !== 2)
     fail(`a new destination must re-geocode, got ${newDest.geocode} geocode calls`);
@@ -1201,6 +1207,104 @@ try {
     fail("#destClear must not touch the miles field");
   if (destClearErrors.length) fail("destClear page errors: " + JSON.stringify(destClearErrors, null, 2));
   await destClearPage.close();
+
+  /* Changing a city used to leave the previous route's numbers on screen wearing the new
+     city's name: the chip and the arrival label said Laredo while the mileage and the LIVE
+     board were still Nashville's. Same stale-quote inheritance CLEAR was fixed for, reached
+     by changing the destination directly instead. The quote is dropped now, and refreshed
+     on the same terms the Live tab's own auto-refresh uses. */
+  const swapPage = await browser.newPage();
+  const swapErrors = [];
+  swapPage.on("pageerror", e => swapErrors.push("pageerror: " + e.message));
+  await mockHere(swapPage);
+  await swapPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await swapPage.fill("#destIn", "Nashville TN");
+  await swapPage.press("#destIn", "Enter");
+  await swapPage.click("#tabTuned");
+  await swapPage.click("#liveBtn");
+  await swapPage.waitForTimeout(400);
+  if ((await swapPage.inputValue("#miles")) !== "400")
+    fail("swap setup: the first quote should fill 400 miles");
+  const routesBefore = await swapPage.evaluate(() => window.__hereCalls.route);
+
+  // Different road distance for the new city, so a mileage that failed to refresh is visible.
+  await swapPage.evaluate(() => { window.__routeMeters = 1931200; });   // ~1200 mi
+  await swapPage.fill("#destIn", "Laredo TX");
+  await swapPage.press("#destIn", "Enter");
+  await swapPage.waitForTimeout(700);
+  if ((await swapPage.evaluate(() => window.__hereCalls.route)) !== routesBefore + 1)
+    fail("changing the destination should re-quote once, having already used live");
+  const swapMiles = await swapPage.inputValue("#miles");
+  if (swapMiles !== "1200")
+    fail(`the mileage must follow the new city, got ${JSON.stringify(swapMiles)}`);
+  if (!/Laredo, TX/.test((await swapPage.textContent("#destChip")) || ""))
+    fail("the chip should name the new city");
+
+  // Re-committing the same city is not a change and must not spend another fetch.
+  const routesSettled = await swapPage.evaluate(() => window.__hereCalls.route);
+  await swapPage.press("#destIn", "Enter");
+  await swapPage.waitForTimeout(500);
+  if ((await swapPage.evaluate(() => window.__hereCalls.route)) !== routesSettled)
+    fail("re-entering the same city must not re-quote");
+
+  // A mileage the driver typed is theirs — changing the city must not wipe it.
+  await swapPage.fill("#miles", "1450");
+  await swapPage.dispatchEvent("#miles", "input");
+  await swapPage.waitForTimeout(150);
+  await swapPage.evaluate(() => { window.__routeMeters = 643738; });
+  await swapPage.fill("#destIn", "Nashville TN");
+  await swapPage.press("#destIn", "Enter");
+  await swapPage.waitForTimeout(700);
+  if ((await swapPage.inputValue("#miles")) !== "1450")
+    fail(`a typed mileage must survive a city change, got ${JSON.stringify(await swapPage.inputValue("#miles"))}`);
+
+  // Changing the origin is a route change too, now that it is one end of the route.
+  const routesPreOrigin = await swapPage.evaluate(() => window.__hereCalls.route);
+  await swapPage.click("#origToggle");
+  await swapPage.fill("#origIn", "Redlands, CA");
+  await swapPage.click("#origSet");
+  await swapPage.waitForTimeout(700);
+  if ((await swapPage.evaluate(() => window.__hereCalls.route)) !== routesPreOrigin + 1)
+    fail("changing where the route starts should re-quote as well");
+  if (swapErrors.length) fail("city-swap page errors: " + JSON.stringify(swapErrors, null, 2));
+  await swapPage.close();
+
+  /* Never asked for live? Changing the city must not spring a location prompt. The stale
+     mileage still goes — it belongs to the old route — which puts GET MILEAGE back on
+     screen, the same refresh one tap away. */
+  const swapQuietPage = await browser.newPage();
+  const swapQuietErrors = [];
+  swapQuietPage.on("pageerror", e => swapQuietErrors.push("pageerror: " + e.message));
+  await mockHere(swapQuietPage);
+  await swapQuietPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await swapQuietPage.fill("#destIn", "Nashville TN");
+  await swapQuietPage.press("#destIn", "Enter");
+  await swapQuietPage.waitForTimeout(150);
+  await swapQuietPage.click("#getMiBtn");            // GET MILEAGE — distance only, never a live quote
+  await swapQuietPage.waitForTimeout(400);
+  if ((await swapQuietPage.inputValue("#miles")) !== "400")
+    fail("quiet setup: GET MILEAGE should fill the mileage");
+  const quietRoutes = await swapQuietPage.evaluate(() => window.__hereCalls.route);
+  await swapQuietPage.fill("#destIn", "Laredo TX");
+  await swapQuietPage.press("#destIn", "Enter");
+  await swapQuietPage.waitForTimeout(700);
+  if ((await swapQuietPage.evaluate(() => window.__hereCalls.route)) !== quietRoutes)
+    fail("a driver who has never asked for live must not get an automatic fetch");
+  if ((await swapQuietPage.inputValue("#miles")) !== "")
+    fail("the old route's mileage must not survive the city change");
+  if (!(await swapQuietPage.isVisible("#getMiBtn")))
+    fail("blanking the mileage should bring the contextual button back to refresh it");
+  if (swapQuietErrors.length) fail("quiet-swap page errors: " + JSON.stringify(swapQuietErrors, null, 2));
+  await swapQuietPage.close();
+
+  // Placeholders name what they want in full.
+  const phPage = await browser.newPage();
+  await phPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  for (const id of ["origIn", "rsIn"]) {
+    const ph = await phPage.getAttribute(`#${id}`, "placeholder");
+    if (ph !== "City, State") fail(`#${id} placeholder should read "City, State", got ${JSON.stringify(ph)}`);
+  }
+  await phPage.close();
 
   /* Routing origin. "Rolling out" used to set a timezone and nothing else — the route
      always started at the GPS fix — so a driver who typed where they were rolling out from

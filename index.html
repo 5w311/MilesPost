@@ -542,7 +542,7 @@
           <button class="link" id="origToggle">change</button>
         </div>
         <div class="row hide" id="origEdit" style="margin-top:8px;position:relative">
-          <input id="origIn" placeholder="Town, ST" autocomplete="off">
+          <input id="origIn" placeholder="City, State" autocomplete="off">
           <button class="go" id="origSet">SET</button>
           <button id="origDev" style="padding:0 12px">DEVICE</button>
           <div class="suggest hide" id="origSuggest"></div>
@@ -663,7 +663,7 @@
           <button class="link" id="rsToggle">change</button>
         </div>
         <div class="row hide" id="rsEdit" style="margin-top:8px;position:relative">
-          <input id="rsIn" placeholder="Town, ST" autocomplete="off">
+          <input id="rsIn" placeholder="City, State" autocomplete="off">
           <button class="go" id="rsSet">SET</button>
           <button id="rsDev" style="padding:0 12px">DEVICE</button>
           <div class="suggest hide" id="rsSuggest"></div>
@@ -706,7 +706,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.5</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.6</button>
   </div>
 </div>
 
@@ -1179,6 +1179,30 @@ const renderLiveBtn = () => {
 };
 $("liveBtn").onclick = () => updateLive();
 
+/* A route has two ends — the destination, and since v4.5 the origin — so changing either
+   leaves the quote in hand describing a trip nobody is taking. Doing nothing was worse than
+   stale: the board kept the old city's arrival and its mileage while the chip and the label
+   directly above them named the new one. So the quote goes, and the mileage goes with it if
+   it's the number we filled in ourselves; one the driver typed is theirs and is never
+   touched, same rule as everywhere else.
+
+   Then refresh — but only on the terms the Live tab already uses for its own auto-refresh:
+   once the driver has asked for live at least once, so changing a city can't spring a
+   location prompt on someone who never has. When it doesn't fire, the blanked mileage brings
+   GET MILEAGE / GET LIVE ETA back on screen, which is the same refresh one tap away. */
+const routeChanged = () => {
+  LIVE.res = null; LIVE.at = null; LIVE.trafficS = 0; LIVE.note = ""; LIVE.raw = null;
+  const milesEl = $("miles");
+  if(LIVE.autoMiles !== null && milesEl.value === LIVE.autoMiles){
+    milesEl.value = "";
+    LIVE.autoMiles = null;
+    milesEl.dispatchEvent(new Event("input", {bubbles:true}));
+    repaintField(milesEl);                  // the same Mobile Safari repaint the autofill needs
+  }
+  renderEta();
+  if(LIVE.tried && E.destName && !LIVE.pending) updateLive();
+};
+
 /* Simple tab only: a destination is set but miles is still blank, so there's a real road
    distance to fetch but no ETA math has anything to chew on yet. This is deliberately
    narrow — it fills #miles and nothing else. Unlike updateLive() it never touches
@@ -1384,6 +1408,7 @@ const askZone = (raw, errId, pickId) => {
 const doDest = ()=>{
   const raw = $("destIn").value.trim();
   if(!raw) return;
+  const was = E.destName;
   const r = resolvePlace(raw);
   if(r){ E.destTz=r.tz; E.destName=r.place; show($("destErr"),false); show($("destPick"),false); }
   else {
@@ -1393,7 +1418,8 @@ const doDest = ()=>{
         +"list. Pick the one you're headed for:"
       : "Couldn't place that. Add the state (\"Laredo, TX\"), or pick a zone:";
   }
-  renderEta();
+  // Re-committing the same town is not a change and must not spend a fetch on itself.
+  if(E.destName !== was) routeChanged(); else renderEta();
 };
 // No SET button on this field — resolving happens on Enter (enterkeyhint="done" labels
 // the mobile keyboard's return key accordingly) or by tapping a suggestion, which already
@@ -1404,7 +1430,7 @@ $("destIn").addEventListener("keydown", e=>{ if(e.key==="Enter") doDest(); });
 $("destIn").addEventListener("input", renderEta);
 $("destPick").onchange = e=>{ if(!e.target.value) return;   // the "Pick a zone…" placeholder
   E.destTz=e.target.value; E.destName="";
-  show($("destErr"),false); show($("destPick"),false); renderEta(); };
+  show($("destErr"),false); show($("destPick"),false); routeChanged(); };
 attachPlaceSuggest($("destIn"), $("destSuggest"), doDest);
 $("destClear").onclick = clearDestField;
 
@@ -1414,10 +1440,13 @@ $("origToggle").onclick = ()=>{
   $("origToggle").textContent = on ? "close" : "change";
 };
 const setOrigin = (tz,name,place=null)=>{
+  const was = E.originPlace;
   E.originTz=tz; E.originName=name; E.originPlace=place;
   $("origIn").value=""; show($("origEdit"),false); $("origToggle").textContent="change";
   show($("origErr"),false); show($("origPick"),false);
-  renderEta();
+  // Only the end the route starts from matters here — picking a different timezone for the
+  // same place (or none) changes what clock is displayed, not where the truck sets off.
+  if(place !== was) routeChanged(); else renderEta();
 };
 const doOrig = ()=>{
   const raw = $("origIn").value.trim();
