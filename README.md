@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.6**
+**Current version: v4.6.1**
 
 ## Files
 
@@ -78,6 +78,17 @@ the new address with no code change.
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.6.1
+
+- **Changing the city now refreshes the mileage for GET MILEAGE users too.** v4.6 only
+  refreshed if you'd used UPDATE LIVE ETA at least once, so anyone working the Predicted tab
+  with GET MILEAGE got the stale mileage cleared but not replaced. It now refreshes using
+  whichever fetch you've already used — and a GET MILEAGE refresh stays a mileage fetch, it
+  doesn't conjure a live quote.
+- Still nothing fetched behind your back: having used neither button, a city change fetches
+  nothing, so it can never be the thing that first asks for your location. There's no
+  mileage to update in that state anyway.
 
 ### v4.6
 

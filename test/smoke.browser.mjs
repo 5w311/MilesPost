@@ -1269,9 +1269,39 @@ try {
   if (swapErrors.length) fail("city-swap page errors: " + JSON.stringify(swapErrors, null, 2));
   await swapPage.close();
 
-  /* Never asked for live? Changing the city must not spring a location prompt. The stale
-     mileage still goes — it belongs to the old route — which puts GET MILEAGE back on
-     screen, the same refresh one tap away. */
+  /* GET MILEAGE on its own is enough to get the refresh: a driver working the Predicted tab
+     who has never touched UPDATE LIVE ETA still expects the mileage to follow the city.
+     It refreshes with the same mechanism they used — no live quote appears. */
+  const swapMiPage = await browser.newPage();
+  const swapMiErrors = [];
+  swapMiPage.on("pageerror", e => swapMiErrors.push("pageerror: " + e.message));
+  await mockHere(swapMiPage);
+  await swapMiPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await swapMiPage.fill("#destIn", "Nashville TN");
+  await swapMiPage.press("#destIn", "Enter");
+  await swapMiPage.waitForTimeout(150);
+  await swapMiPage.click("#getMiBtn");              // GET MILEAGE — distance only, never a live quote
+  await swapMiPage.waitForTimeout(400);
+  if ((await swapMiPage.inputValue("#miles")) !== "400")
+    fail("GET-MILEAGE setup: the first fetch should fill the mileage");
+  await swapMiPage.evaluate(() => { window.__routeMeters = 1931200; });   // ~1200 mi
+  await swapMiPage.fill("#destIn", "Laredo TX");
+  await swapMiPage.press("#destIn", "Enter");
+  await swapMiPage.waitForTimeout(800);
+  const swapMiMiles = await swapMiPage.inputValue("#miles");
+  if (swapMiMiles !== "1200")
+    fail(`GET MILEAGE alone should still refresh the mileage on a city change, got ${JSON.stringify(swapMiMiles)}`);
+  // Refreshed the way they were working — a mileage-only fetch, not a live quote.
+  await swapMiPage.click("#tabTuned");
+  await swapMiPage.waitForTimeout(200);
+  if (await swapMiPage.isVisible("#liveLine"))
+    fail("refreshing after GET MILEAGE must not conjure a live quote");
+  if (swapMiErrors.length) fail("getmi-swap page errors: " + JSON.stringify(swapMiErrors, null, 2));
+  await swapMiPage.close();
+
+  /* Fetched nothing at all? Then a city change fetches nothing either — it must never be
+     the thing that first asks for location. There's no mileage to update in that state
+     anyway; the contextual button is right there. */
   const swapQuietPage = await browser.newPage();
   const swapQuietErrors = [];
   swapQuietPage.on("pageerror", e => swapQuietErrors.push("pageerror: " + e.message));
@@ -1279,21 +1309,16 @@ try {
   await swapQuietPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await swapQuietPage.fill("#destIn", "Nashville TN");
   await swapQuietPage.press("#destIn", "Enter");
-  await swapQuietPage.waitForTimeout(150);
-  await swapQuietPage.click("#getMiBtn");            // GET MILEAGE — distance only, never a live quote
-  await swapQuietPage.waitForTimeout(400);
-  if ((await swapQuietPage.inputValue("#miles")) !== "400")
-    fail("quiet setup: GET MILEAGE should fill the mileage");
+  await swapQuietPage.waitForTimeout(200);
   const quietRoutes = await swapQuietPage.evaluate(() => window.__hereCalls.route);
+  if (quietRoutes !== 0) fail(`setting a first destination should not fetch on its own, got ${quietRoutes}`);
   await swapQuietPage.fill("#destIn", "Laredo TX");
   await swapQuietPage.press("#destIn", "Enter");
   await swapQuietPage.waitForTimeout(700);
-  if ((await swapQuietPage.evaluate(() => window.__hereCalls.route)) !== quietRoutes)
-    fail("a driver who has never asked for live must not get an automatic fetch");
-  if ((await swapQuietPage.inputValue("#miles")) !== "")
-    fail("the old route's mileage must not survive the city change");
+  if ((await swapQuietPage.evaluate(() => window.__hereCalls.route)) !== 0)
+    fail("a driver who has fetched nothing must not get an automatic fetch from a city change");
   if (!(await swapQuietPage.isVisible("#getMiBtn")))
-    fail("blanking the mileage should bring the contextual button back to refresh it");
+    fail("the contextual button should be there to fetch the first mileage");
   if (swapQuietErrors.length) fail("quiet-swap page errors: " + JSON.stringify(swapQuietErrors, null, 2));
   await swapQuietPage.close();
 

@@ -706,7 +706,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.6</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.6.1</button>
   </div>
 </div>
 
@@ -1200,7 +1200,14 @@ const routeChanged = () => {
     repaintField(milesEl);                  // the same Mobile Safari repaint the autofill needs
   }
   renderEta();
-  if(LIVE.tried && E.destName && !LIVE.pending) updateLive();
+  // Refresh with the strongest mechanism the driver has already run: live if they've asked
+  // for a live ETA, otherwise the mileage-only fetch if they've used GET MILEAGE. Either way
+  // it's a route they've already fetched once, so nothing here can be the first thing to
+  // prompt for location. Having used neither, there's no mileage to update anyway — the
+  // cleared field just brings the button back.
+  if(!E.destName || LIVE.pending || getMiPending) return;
+  if(LIVE.tried) updateLive();
+  else if(getMiTried) getMileageOnly();
 };
 
 /* Simple tab only: a destination is set but miles is still blank, so there's a real road
@@ -1214,8 +1221,13 @@ const routeChanged = () => {
    so if the driver later switches to Tuned and taps that button, it's correctly free to
    refresh this same figure rather than treating it as hand-typed. */
 let getMiPending = false;
+// Whether the driver has fetched a mileage this way at all — the counterpart to LIVE.tried,
+// and for the same purpose: a refresh may only reuse a mechanism they have already run, so
+// it can never be the thing that first asks for their location.
+let getMiTried = false;
 async function getMileageOnly(){
   if(getMiPending || !E.destName) return;
+  getMiTried = true;
   getMiPending = true; renderGetMiBtn();
   try{
     const { length } = await fetchTruckRoute(E.destName, E.originPlace);
