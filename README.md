@@ -1,9 +1,9 @@
 # MilesPost
 
-### → **https://5w311.github.io/MilesPost/**
+### → **https://milespost.figari.dev/**
 
-That capitalisation is load-bearing. GitHub Pages paths are case-sensitive, so the old
-lowercase `…/milespost/` address is a 404 — see [Moving off the old URL](#moving-off-the-old-url).
+Installed it from an older address? It won't update from there — see
+[Moving to the current address](#moving-to-the-current-address).
 
 Team-driver tools. Two questions, two tabs:
 
@@ -32,34 +32,45 @@ back up.
 | `manifest.webmanifest` | Makes it installable to the home screen. |
 | `icon-192.png` `icon-512.png` `apple-touch-icon.png` `shield.png` | App icons (opaque) and the transparent in-app masthead mark. |
 | `.nojekyll` | Tells GitHub Pages to serve the files as-is. Don't delete it. |
+| `CNAME` | Points GitHub Pages at the custom domain, `milespost.figari.dev`. Don't delete it — the app's address depends on it. |
 | `fonts/` | Vendored Overpass + Overpass Mono (woff2, SIL OFL — licenses included). No fonts CDN: the shell stays fully offline. |
 | `design/highway-reference.html` | The driver-approved Highway mockup — design source of truth for v4.0. Not shipped to the app (not in `sw.js` ASSETS). |
 
 ## Install it to the home screen
 
-**iPhone:** open **https://5w311.github.io/MilesPost/** in Safari → Share → *Add to Home Screen*.
+**iPhone:** open **https://milespost.figari.dev/** in Safari → Share → *Add to Home Screen*.
 **Android:** open it in Chrome → menu → *Install app* / *Add to Home Screen*.
 
 Own icon, fullscreen, no browser bars, and it works in a dead zone because the service
 worker cached it on first load.
 
-## Moving off the old URL
+## Moving to the current address
 
-The repository was renamed `milespost` → `MilesPost`, and GitHub Pages paths are
-case-sensitive, so the site moved with it. The old lowercase address now returns 404.
+MilesPost has lived at three addresses, and a copy installed from either of the first two is
+stranded:
 
-**A copy installed from the old address will never update again.** It won't look broken —
-that's the trap. The service worker serves the whole app from its cache, so it keeps
-launching and working perfectly while every request to the dead origin 404s silently,
-leaving it frozen at whatever version it last cached.
+| Address | Now |
+|---|---|
+| `https://5w311.github.io/milespost/` | **404.** The repo was renamed `MilesPost`, and Pages paths are case-sensitive. |
+| `https://5w311.github.io/MilesPost/` | Redirects to the custom domain below. |
+| **`https://milespost.figari.dev/`** | **Current.** |
+
+**A stranded copy won't look broken — that's the trap.** The service worker serves the whole
+app from its cache, so it keeps launching and working normally while it silently never
+updates again, frozen at whatever version it last cached.
 
 Nothing in this repo can repoint it: a home-screen app's start URL is captured at install
-time, on the device. The only fix is to **remove it from the home screen and add it again
-from the new address above.** Do that once and it resumes updating normally.
+time, on the device. **Remove it from the home screen and add it again from
+`https://milespost.figari.dev/`.** Do that once and it updates normally from then on.
 
-Nothing in the app itself hardcodes a URL — every path is relative and the HERE key is
-locked to the `5w311.github.io` domain rather than a path — so the app runs correctly at
-the new address with no code change.
+**Saved settings don't come with it.** A phone keeps each site's saved data separately by
+domain, and the custom domain is a new one — swap schedule, theme, Running, Override and
+tuning all start at their defaults. Note your swap times before removing the old copy.
+
+The custom domain is decoupled from the repo's name, so renaming the repo again can't strand
+installed copies the way the first rename did. Nothing in the app hardcodes a URL — every
+path is relative — and the HERE key is locked to trusted domains that include
+`milespost.figari.dev`, so live mileage and ETAs work there with no code change.
 
 ## Notes
 
