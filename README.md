@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.6.3**
+**Current version: v4.6.4**
 
 ## Files
 
@@ -90,6 +90,17 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.6.4
+
+- **Fixed: the masthead looked blurred on iPhone.** As a home-screen app, MilesPost draws
+  under the status bar, and iOS softens and dims a band reaching about 35pt below the bar
+  so the clock stays readable. The page started only 16pt below the bar, so the top of the
+  masthead sat inside that band even scrolled all the way up — "MILESPOST" and the marker
+  rendered soft while the status bar above them was sharp.
+- The page now starts 24pt further down whenever there's a status bar to clear, putting
+  the masthead below the band. In a regular Safari tab nothing moves. Content scrolling up
+  under the bar still softens as it passes — that's iOS working as intended.
 
 ### v4.6.3
 
