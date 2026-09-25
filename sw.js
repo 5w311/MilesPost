@@ -1,6 +1,6 @@
 // Build marker, NOT the app version. Bump it on every single deploy, or installed
 // phones will decide they're already current and quietly ignore the new build.
-const CACHE = "milespost-v4.6.1";
+const CACHE = "milespost-v4.6.2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const ASSETS = [
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
+  "./icon-1024.png",
   "./apple-touch-icon.png",
   "./shield.png",
   // Vendored Overpass (see fonts/LICENSE-*): cached like everything else so the
