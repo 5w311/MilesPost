@@ -130,9 +130,18 @@
      background-color so html still paints the base. */
   html,body{margin:0;color:var(--page-ink);font-family:var(--sans);
     -webkit-text-size-adjust:100%}
+  /* The top clearance has two parts. env(safe-area-inset-top) gets content out from under
+     the status bar; the min(24px, inset) on top of it gets it clear of iOS's edge effect,
+     which blurs and dims whatever sits just BELOW the status bar too — a feathered band
+     roughly 35pt deep. At a bare 16px the masthead sat inside that band even scrolled to
+     the top, so its top half rendered soft. The extra only applies where there IS a
+     status-bar inset (a home-screen app, drawn under the bar); in a Safari tab the inset is
+     0, min() gives 0, and the page keeps its plain 16px. Content scrolling up under the bar
+     still blurs as it passes — that part is iOS working as intended. */
   body{min-height:100vh; min-height:100dvh; position:relative;
     padding:16px calc(14px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom))
-    calc(14px + env(safe-area-inset-left)); padding-top:calc(16px + env(safe-area-inset-top))}
+    calc(14px + env(safe-area-inset-left));
+    padding-top:calc(16px + env(safe-area-inset-top) + min(24px, env(safe-area-inset-top)))}
   body::before{content:"";position:fixed;inset:0;background-color:var(--asphalt);
     z-index:-1;pointer-events:none}
   .wrap{max-width:470px;margin:0 auto}
@@ -707,7 +716,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.6.3</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.6.4</button>
   </div>
 </div>
 
