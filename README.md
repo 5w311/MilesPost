@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.6.2**
+**Current version: v4.6.3**
 
 ## Files
 
@@ -30,8 +30,8 @@ back up.
 | `lib/logic.js` | The pure logic — timezone resolver, ETA solver, 34-reset and ICS math. No DOM, no dependencies. Imported by the app and covered by the test suite. |
 | `sw.js` | Service worker. Caches everything so it works with zero bars. |
 | `manifest.webmanifest` | Makes it installable to the home screen. |
-| `icon-192.png` `icon-512.png` `icon-1024.png` `apple-touch-icon.png` | Home-screen and install icons — the MILE 34 marker. Full-bleed and opaque, as iOS requires. |
-| `shield.png` | The transparent MILES/POST interstate mark in the app's masthead. |
+| `icon-192.png` `icon-512.png` `icon-1024.png` `apple-touch-icon.png` | Home-screen and install icons — the green MILE 34 marker. Full-bleed and opaque, as iOS requires. |
+| `marker.png` | The MILE 34 marker with a transparent background, for the app's masthead. 70×132 — three times the 44px it's shown at. |
 | `.nojekyll` | Tells GitHub Pages to serve the files as-is. Don't delete it. |
 | `CNAME` | Points GitHub Pages at the custom domain, `milespost.figari.dev`. Don't delete it — the app's address depends on it. |
 | `fonts/` | Vendored Overpass + Overpass Mono (woff2, SIL OFL — licenses included). No fonts CDN: the shell stays fully offline. |
@@ -90,6 +90,20 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.6.3
+
+- **The MILE 34 marker goes green**, matching the app's green guide-sign panels. All four
+  icon files replaced in place — 180, 192, 512 and 1024 — full-bleed and opaque, as iOS
+  requires.
+- **The masthead now matches the home-screen icon**: the same green marker, replacing the
+  MILES/POST interstate shield. It has a transparent background, so it sits cleanly on both
+  the day and night themes rather than in a box. Shown at 44px tall, a little larger than
+  the old shield, so "MILE 34" stays readable beside the name; stored at three times that
+  for sharp screens — 12 KB, where the original artwork was 284 KB for every phone to cache.
+- **To see the new home-screen icon you have to re-add the app** — iOS freezes a home-screen
+  icon at install. If you're moving to `milespost.figari.dev` anyway, that re-add covers it.
+  The masthead updates on its own.
 
 ### v4.6.2
 

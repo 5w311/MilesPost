@@ -427,11 +427,12 @@
 <div class="wrap">
   <div class="brand">
     <div class="shield">
-      <!-- Same interstate mark as the home-screen icons, cut out with alpha so the day
-           theme doesn't get a dark box behind it. The h1 beside it carries the name, so
-           the mark is decorative: empty alt. Height only — the asset is 509x512, and
-           forcing a square would stretch it. -->
-      <img src="shield.png" alt="" height="36" style="display:block;flex:none">
+      <!-- The MILE 34 marker, same as the home-screen icons but cut out with alpha so the
+           day theme doesn't get a dark box behind it. The h1 beside it carries the name, so
+           the mark is decorative: empty alt. Height only — the asset is 70x132 (3x of the
+           44px it's shown at), and forcing a width would stretch it. 44px keeps "MILE 34"
+           legible beside a ~31px name block; 36px was too small to read. -->
+      <img src="marker.png" alt="" height="44" style="display:block;flex:none">
       <div>
         <h1>MILESPOST</h1>
         <div class="motto">WHEELS NEVER STOP</div>
@@ -706,7 +707,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.6.2</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.6.3</button>
   </div>
 </div>
 
