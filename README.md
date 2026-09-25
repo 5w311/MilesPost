@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.6.1**
+**Current version: v4.6.2**
 
 ## Files
 
@@ -30,7 +30,8 @@ back up.
 | `lib/logic.js` | The pure logic — timezone resolver, ETA solver, 34-reset and ICS math. No DOM, no dependencies. Imported by the app and covered by the test suite. |
 | `sw.js` | Service worker. Caches everything so it works with zero bars. |
 | `manifest.webmanifest` | Makes it installable to the home screen. |
-| `icon-192.png` `icon-512.png` `apple-touch-icon.png` `shield.png` | App icons (opaque) and the transparent in-app masthead mark. |
+| `icon-192.png` `icon-512.png` `icon-1024.png` `apple-touch-icon.png` | Home-screen and install icons — the MILE 34 marker. Full-bleed and opaque, as iOS requires. |
+| `shield.png` | The transparent MILES/POST interstate mark in the app's masthead. |
 | `.nojekyll` | Tells GitHub Pages to serve the files as-is. Don't delete it. |
 | `CNAME` | Points GitHub Pages at the custom domain, `milespost.figari.dev`. Don't delete it — the app's address depends on it. |
 | `fonts/` | Vendored Overpass + Overpass Mono (woff2, SIL OFL — licenses included). No fonts CDN: the shell stays fully offline. |
@@ -89,6 +90,15 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.6.2
+
+- **New app icon: the MILE 34 marker** — a pale-blue mile-marker sign on a navy field. All
+  three icon files replaced in place, plus a new 1024×1024 for installs that ask for a large
+  one. The in-app masthead keeps the MILES/POST interstate shield for now.
+- **To see it on your home screen you have to re-add the app** — iOS freezes a home-screen
+  icon when you install it. If you're moving to `milespost.figari.dev` anyway (see *Moving to
+  the current address*), that re-add picks up the new icon too.
 
 ### v4.6.1
 
