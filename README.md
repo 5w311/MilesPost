@@ -7,20 +7,22 @@ Installed it from an older address? It won't update from there — see
 
 Team-driver tools. Two questions, two tabs:
 
-**ETA** — when do I get there? *Predicted ETA* is dispatch's flat `miles ÷ 50`. *Live ETA* is
-a truck-legal, traffic-aware arrival from real routing, with your team stops layered on —
-fuel, the fixed-clock driver swap, and one DOT break per shift.
+**ETA** — when do I get there? One panel, both answers side by side. *Predicted* is
+dispatch's flat `miles ÷ 50`; *Live* is a truck-legal, traffic-aware arrival from real
+routing, with your team stops layered on — fuel, the fixed-clock driver swap, and one DOT
+break per shift. The board between them is the gap: how far ahead of or behind dispatch you
+actually are.
 
 **34 RESET** — when am I legal? Set the moment you shut down, get the moment your 70 comes
 back, and hand a real alarm to your phone's Calendar.
 
 Resolves timezones from a town name. Day and night modes. **The app shell runs 100% offline** —
-no server, no signal required to open it, read the 34 reset, or get a Predicted ETA. The
-*Live ETA* tab is the one part that genuinely needs signal: it asks HERE for a traffic-aware
-truck route, and with no fresh quote it says so rather than showing an arrival the road can't
-back up.
+no server, no signal required to open it, read the 34 reset, or get a Predicted arrival. The
+live half is the one part that genuinely needs signal: it asks HERE for a traffic-aware truck
+route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
+road can't back up. Predicted holds its place either way.
 
-**Current version: v4.6.5**
+**Current version: v4.7**
 
 ## Files
 
@@ -90,6 +92,27 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.7
+
+- **The two ETA sub-tabs are gone — both arrivals now share one panel.** *Predicted* and
+  *Live* sat behind a tab switch, so the one thing worth knowing — the gap between them —
+  could only ever be read one half at a time. They're side by side now: Predicted anchors
+  the panel as the big number, Live rides alongside it in the same amber as the message
+  board below.
+- **Predicted anchors it because it never needs the network.** It's arithmetic on numbers
+  already in hand, so with no signal, a denied location, a failed fetch or a stale quote,
+  the big number keeps its place and its size — only the live slot goes quiet, saying
+  "needs signal" or "unavailable". The panel holds its shape instead of emptying out,
+  which is what the old strictly-live tab couldn't do.
+- **The LIVE board now carries the gap** — `LIVE 1h 08m ahead · traffic +56m`. "Truck
+  route" came off it: the slot above already says that. As before, the gap is measured
+  between the two *run times*, never the two arrival clocks, so a departure set far in the
+  future can't leak into the answer.
+- **"day shift driving @ arrival."** On a run with swaps, the old wording read as who's
+  driving right now, which was never what the line reported.
+- The contextual button reads **GET LIVE ETA** and delivers one; the run panel and the
+  live CTA are no longer tab-gated, since there are no ETA tabs left to gate them.
 
 ### v4.6.5
 
