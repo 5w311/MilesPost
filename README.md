@@ -99,6 +99,8 @@ path is relative — and the HERE key is locked to trusted domains that include
   stays light. Tapping outside or pressing Escape still closes it, exactly as before.
 - With the phone's **Reduce Transparency** setting on, or on a browser that can't blur,
   it falls back to the plain dark dim.
+- **Removed the "Assumes nonstop team running. Doesn't track HOS — check your clocks."
+  note** from the bottom of the ETA tab.
 
 ### v4.6.4
 
