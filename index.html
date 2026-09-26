@@ -490,6 +490,10 @@
   #verFoot{display:inline-block;width:auto;background:transparent;color:var(--mute);
     border:2px solid var(--line);border-radius:6px;padding:4px 12px;
     font-family:var(--mono);font-weight:600;font-size:11px;letter-spacing:.03em}
+  /* An update is downloaded and waiting on the tap: the plate lights up so it's noticed. */
+  #verFoot.ready{color:var(--amber-hi);border-color:var(--amber-hi)}
+  /* Amber text washes out on the light road — on day it's a solid advisory plate instead. */
+  [data-theme="day"] #verFoot.ready{background:var(--amber-hi);color:#15181b}
   select.centered{text-align:center;text-align-last:center}
 
   /* Reduced transparency: no frost, back to the flat dim in both themes. */
@@ -2106,8 +2110,8 @@ setInterval(renderReset, 1000);      // the countdown has to tick
    Note renderReset() isn't purely a paint: past the auto-clear window it calls
    rsClearAll(), which writes storage. That's the same thing the 1s tick above already
    does (and what the auto-clear was designed to do on reopen) — this only makes it land
-   on the first frame rather than up to a second in. Deliberately no polling or update
-   checks here; the tap-to-update footer stays strictly manual. */
+   on the first frame rather than up to a second in. No polling here — the quiet update
+   check on coming back to the front lives with the updater at the bottom of this script. */
 document.addEventListener("visibilitychange", () => {
   // Also where the RUNNING tick pauses and resumes: no point burning a timer against a
   // screen nobody's looking at, and resuming here means the clock is already current on
@@ -2116,63 +2120,150 @@ document.addEventListener("visibilitychange", () => {
   if(document.visibilityState === "visible"){ renderEta(); renderReset(); }
 });
 
-// Module-scope (not block-scoped inside the `if` below) so the version-footer click
-// handler elsewhere in this script can reach it via closure once it's populated.
+/* ======================= updates: check, offer, apply on the tap =======================
+   Modeled on FuelPost. The app checks on its own — on launch and every time it comes back
+   to the front — and when a new build has finished downloading, the version footer says so
+   and names it: "UPDATE AVAILABLE (v4.8.1) — TAP TO RELOAD". It never reloads by itself:
+   miles, destination and departure aren't saved, so an unprompted reload could wipe a load
+   mid-entry. The driver picks the moment.
+
+   The download itself is the service worker's: a new sw.js installs in the background,
+   caching every file, then waits (see sw.js). The tap tells the waiting build to take over
+   ("skipWaiting"), and the controllerchange that follows reloads into it. Offline stays
+   exactly as it was — nothing here is needed to open the app with zero bars.
+
+   Module-scope so the footer handler below can reach them. */
 let swReg = null;
+let applyingUpdate = false;       // the driver tapped TAP TO RELOAD; a handover now reloads
+const verFoot = $("verFoot");
+const verFootDefault = verFoot.textContent.trim();
+const VER_CHECK_MS = 8000;        // how long to wait on a check before calling it dead
+const VER_SETTLE_MS = 800;        // grace for a late updatefound after update() resolves
+const VER_DOWNLOAD_MS = 45000;    // how long "DOWNLOADING UPDATE…" may stand on weak signal
+const VER_HANDOVER_MS = 10000;    // how long a tapped update may take to hand over
+let verFootBusy = false;          // a tapped check is showing its own progress or result
+let verCheckId = 0;               // which tapped check a late timer belongs to
+let updateOffer = null;           // { version } once a new build is ready to take over
+
+// Idle face of the footer: the offer if there is one, otherwise the version stamp.
+const paintVerFoot = () => {
+  verFoot.classList.toggle("ready", !!updateOffer);
+  verFoot.textContent = updateOffer
+    ? "UPDATE AVAILABLE" + (updateOffer.version ? " (" + updateOffer.version + ")" : "") + " — TAP TO RELOAD"
+    : verFootDefault;
+};
+const verFootRest = () => { verFootBusy = false; if(!applyingUpdate) paintVerFoot(); };
+const verFootSay = (msg, ms = 2500) => { verFoot.textContent = msg; setTimeout(verFootRest, ms); };
+
+// Ask a build which version it is (sw.js answers with its CACHE). Two seconds, then give up
+// and offer the update unnamed rather than not at all.
+const askVersion = w => new Promise(res => {
+  if(!w) return res(null);
+  const ch = new MessageChannel();
+  const t = setTimeout(() => res(null), 2000);
+  ch.port1.onmessage = e => { clearTimeout(t); res(typeof e.data === "string" ? e.data : null); };
+  try{ w.postMessage("version", [ch.port2]); }catch{ clearTimeout(t); res(null); }
+});
+const offerUpdate = async w => {
+  const version = await askVersion(w);
+  if(applyingUpdate) return;
+  updateOffer = { version };
+  verFootBusy = false;              // the offer outranks any check still on screen
+  paintVerFoot();
+};
+
+// A build that finishes installing while this page is controlled is an update, waiting on
+// the tap. (With no controller it's the very first install, which just takes over.)
+const watchInstall = w => {
+  if(!w) return;
+  const settle = () => {
+    if(w.state === "installed" && navigator.serviceWorker.controller) offerUpdate(w);
+    // Died mid-download (signal dropped): say so if the driver is watching a tapped check.
+    // A newer build replacing this one isn't a failure, so only when nothing's left.
+    else if(w.state === "redundant" && verFootBusy && !updateOffer
+            && !swReg.installing && !swReg.waiting)
+      verFootSay("COULDN'T DOWNLOAD — NO SIGNAL?");
+  };
+  if(w.state === "installed") settle(); else w.addEventListener("statechange", settle);
+};
+
+// Quiet check: on launch and on every return to the foreground, the way FuelPost does it.
+// Costs one small sw.js fetch; a failure (no signal) is simply no news. Anything it finds
+// arrives through watchInstall as an offer — it never reloads.
+let quietChecking = false;
+const checkQuietly = () => {
+  if(!swReg || quietChecking || applyingUpdate) return;
+  quietChecking = true;
+  Promise.race([swReg.update().catch(() => {}), new Promise(r => setTimeout(r, VER_CHECK_MS))])
+    .then(() => { quietChecking = false; });
+};
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "visible") checkQuietly();
+});
+
 if("serviceWorker" in navigator){
-  /* Live state, NOT a snapshot. The point of the check is to skip the reload on the very
-     first handover — a worker claiming a page that just downloaded the newest content has
-     nothing to reload for. But frozen at parse time it also swallowed every LATER handover
-     on that same page: install the worker on this load (a first launch, or after iOS has
-     evicted it), tap check-for-update, and the new version would install and activate while
-     the page sat there showing the old one. Updating it as soon as we're controlled means
-     the first handover is skipped and every real update after it still reloads. */
+  /* Live state, NOT a snapshot: the first handover — a worker claiming a page that just
+     downloaded the newest content — has nothing to reload for, and must be skipped even
+     when it happens on this load (a first launch, or after iOS evicted the worker). */
   let hadController = !!navigator.serviceWorker.controller;
   let reloading = false;
   navigator.serviceWorker.addEventListener("controllerchange", ()=>{
     if(reloading) return;
     if(!hadController){ hadController = true; return; }
-    reloading = true;
-    location.reload();
+    if(applyingUpdate){ reloading = true; location.reload(); return; }
+    // A new build took over without the tap (it replaced a pre-v4.8 worker, or iOS dropped
+    // the old one's cache). Same rule: offer it, don't reload under the driver.
+    offerUpdate(navigator.serviceWorker.controller);
   });
   // updateViaCache:"none" is a client-side guarantee that sw.js itself is never served
   // from HTTP cache on an update check — doesn't depend on assuming anything about GitHub
-  // Pages' own cache headers. The registration is kept so the version footer (below) can
-  // call swReg.update() on demand instead of waiting on the browser's own check schedule.
+  // Pages' own cache headers.
   window.addEventListener("load", ()=>
     navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
-      .then(r => { swReg = r; })
+      .then(r => {
+        swReg = r;
+        // Downloaded on an earlier visit and never applied: offer it straight away.
+        if(r.waiting && navigator.serviceWorker.controller) offerUpdate(r.waiting);
+        watchInstall(r.installing);
+        r.addEventListener("updatefound", () => watchInstall(r.installing));
+        checkQuietly();
+      })
       .catch(()=>{})
   );
 }
 
-/* Manual, driver-initiated update check — no polling/background timer. Browsers (iOS
-   Safari especially) check for a new sw.js on their own schedule, which can lag well
-   behind an actual deploy; this asks right now instead of waiting on that schedule.
-   Everything downstream already works (skipWaiting/clients.claim in sw.js, the
-   controllerchange reload above) — this only ever triggers the check itself. */
-const verFoot = $("verFoot");
-const verFootDefault = verFoot.textContent.trim();
-const VER_CHECK_MS = 8000;      // how long to wait on the check before calling it dead
-const VER_SETTLE_MS = 800;      // grace for a late updatefound after update() resolves
-const VER_HELD_MS = 10000;      // how long "UPDATING…" may stand before we admit it stalled
-let verFootBusy = false;
-const verFootRest = () => { verFoot.textContent = verFootDefault; verFootBusy = false; };
+// The tap on "TAP TO RELOAD": hand over to the waiting build and reload into it. If the new
+// build already controls the page (see controllerchange), there's nothing to hand over —
+// just reload. A handover that never comes still ends in a reload, not a stuck label.
+const applyUpdate = () => {
+  applyingUpdate = true;
+  verFoot.classList.remove("ready");
+  verFoot.textContent = "UPDATING…";
+  const w = swReg && swReg.waiting;
+  if(!w){ location.reload(); return; }
+  w.postMessage("skipWaiting");
+  setTimeout(() => location.reload(), VER_HANDOVER_MS);
+};
 
+/* Tap the footer: with an update on offer, apply it; otherwise check right now instead of
+   waiting for the next launch or foreground. Every path ends in a definite answer. */
 verFoot.onclick = async () => {
+  if(applyingUpdate) return;
+  if(updateOffer){ applyUpdate(); return; }
   if(!swReg || verFootBusy) return;   // SW unsupported/not ready, or a check already running
   verFootBusy = true;
+  const id = ++verCheckId;
   verFoot.textContent = "CHECKING FOR UPDATES…";
   let found = false;
-  const onFound = () => { found = true; verFoot.textContent = "UPDATING…"; };
+  const onFound = () => {
+    found = true;
+    if(verFootBusy && !updateOffer) verFoot.textContent = "DOWNLOADING UPDATE…";
+  };
   swReg.addEventListener("updatefound", onFound, { once:true });
 
   /* Race the check against a deadline. update() can reject — the site's URL is gone, a
-     captive portal answered instead of the server — but it can also simply never settle on
-     a dead connection, and the old fallback was scheduled AFTER `await swReg.update()`, so
-     in that case it was never even created: the label sat on "CHECKING FOR UPDATES…"
-     forever with nothing to tell the driver why. Every path below ends in a definite
-     answer, and a failed check says so instead of claiming you're up to date. */
+     captive portal answered instead of the server — but it can also simply never settle
+     on a dead connection. A failed check says so instead of claiming you're up to date. */
   let timer;
   const outcome = await Promise.race([
     swReg.update().then(() => "checked", () => "failed"),
@@ -2183,16 +2274,15 @@ verFoot.onclick = async () => {
   if(!found && outcome === "checked") await new Promise(r => setTimeout(r, VER_SETTLE_MS));
   swReg.removeEventListener("updatefound", onFound);
 
+  if(updateOffer || !verFootBusy) return;   // the offer (or a failed download) has the footer
   if(found){
-    // Leave "UPDATING…" up: the controllerchange listener above reloads the page once the
-    // new worker takes over, which normally lands within a second. If it somehow doesn't,
-    // don't leave the driver staring at a label that never resolves — a reload that does
-    // happen navigates away and takes this timer with it.
-    setTimeout(() => { if(verFootBusy) verFootRest(); }, VER_HELD_MS);
+    // Downloading: watchInstall puts the offer up the moment it's ready. On a crawl of a
+    // signal that can take a while — past this, stand the label down; a download that
+    // finishes later still raises the offer on its own.
+    setTimeout(() => { if(id === verCheckId && verFootBusy && !updateOffer) verFootRest(); }, VER_DOWNLOAD_MS);
     return;
   }
-  verFoot.textContent = outcome === "checked" ? "YOU'RE UP TO DATE" : "COULDN'T CHECK — NO SIGNAL?";
-  setTimeout(verFootRest, 2500);
+  verFootSay(outcome === "checked" ? "YOU'RE UP TO DATE" : "COULDN'T CHECK — NO SIGNAL?");
 };
 </script>
 </body>

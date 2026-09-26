@@ -47,6 +47,13 @@ road can't back up. Predicted holds its place either way.
 Own icon, fullscreen, no browser bars, and it works in a dead zone because the service
 worker cached it on first load.
 
+**Updates.** MilesPost checks for a new version by itself whenever you open it or come back
+to it. When one is ready, the version plate at the bottom lights up amber and says
+**UPDATE AVAILABLE (v…) — TAP TO RELOAD**. Tap it when it suits you; it never reloads on
+its own, so a load you're halfway through typing is never wiped. Tapping the plate at any
+other time checks right then. Close the app instead and, when you reopen it, it's either
+already on the new version or the plate is lit and waiting.
+
 ## Moving to the current address
 
 MilesPost has lived at three addresses, and a copy installed from either of the first two is
@@ -124,6 +131,25 @@ path is relative — and the HERE key is locked to trusted domains that include
 - Internal: `solveEta` and the `PRESETS` fixture are gone — dead since v4.1. `overlayStops`
   takes explicit fuel positions instead of an interval, and `runSchedule()` is the new pure
   function that merges the odometer and the wall clock into one ordered list.
+
+### v4.8
+
+- **Updates work like FuelPost's now.** MilesPost checks for a new version on its own —
+  every time you open it or switch back to it — instead of only when you tapped the version
+  number. When one has downloaded, the version plate at the bottom turns amber and names
+  it: **UPDATE AVAILABLE (v4.8.1) — TAP TO RELOAD**.
+- **It never reloads by itself anymore.** Before, a new version took over the moment it
+  arrived and the app reloaded under you — wiping miles, destination and departure if you
+  were mid-entry. Now nothing happens until you tap the plate.
+- **Still works with zero bars.** The update downloads in the background and waits; the
+  offline copy is untouched until you tap.
+- **Fixed: two deploys close together could deliver the old version.** The phone's web
+  cache keeps files for ten minutes, and a new version could pick up the previous
+  version's page from it — then show the old version number and believe it was current.
+  Updates now always check each file with the server.
+- **One last automatic switch.** Your phone is running the old updater, which can't show
+  the new plate — so getting v4.8 onto it happens the old way, once (tap the version
+  number, or close and reopen the app). Every update after that waits for your tap.
 
 ### v4.7.2
 
@@ -898,7 +924,8 @@ Presets retuned to real team numbers:
 
 - Saved settings are versioned (`PRESET_VERSION`), so new defaults actually reach phones that
   already had the app instead of being overridden by `localStorage`.
-- App auto-reloads when a new version is deployed.
+- New versions are checked for on launch and on every return to the app, then offered on the
+  version footer — never applied without a tap (v4.8; before that the app auto-reloaded).
 
 ### v1.0
 
@@ -935,3 +962,16 @@ Three things have to happen or the update won't reach phones that already instal
 2. **Bump `PRESET_VERSION` in `index.html`** — but *only* if you changed the presets.
    Otherwise saved settings will override your new defaults.
 3. **Update the version stamp** at the bottom of `index.html`.
+
+How a deploy reaches a phone (v4.8): the page runs `registration.update()` on launch and on
+every `visibilitychange` to visible, and when the footer is tapped. A changed `sw.js`
+installs in the background, re-fetching every file in `ASSETS` with `cache: "no-cache"` so
+GitHub Pages' `max-age=600` can't hand it the previous build's files, then **waits**. The
+page asks the waiting worker its version (a `"version"` message, answered with `CACHE`
+minus the `milespost-` prefix — so keep `CACHE` as `milespost-v<version>`) and shows
+"UPDATE AVAILABLE (v…) — TAP TO RELOAD". The tap posts `"skipWaiting"`; the
+`controllerchange` that follows reloads that page. A `controllerchange` the driver didn't
+ask for raises the offer instead of reloading. `TAP_FLAG` in `sw.js` (an empty cache named
+`milespost-tap`, created when a tap-aware build takes over) tells a new build the phone
+already works this way; without it (a pre-v4.8 page can't send the tap) the new build takes
+over on its own that one time.
