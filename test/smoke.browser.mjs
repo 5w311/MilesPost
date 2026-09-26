@@ -933,8 +933,8 @@ try {
   await ctxPage.fill("#destIn", "Nashville TN");
   await ctxPage.press("#destIn", "Enter");
   await ctxPage.waitForTimeout(150);
-  if ((await ctxPage.textContent("#getMiBtn"))?.trim() !== "GET LIVE ETA")
-    fail(`the contextual button should read GET LIVE ETA, got ${JSON.stringify((await ctxPage.textContent("#getMiBtn"))?.trim())}`);
+  if ((await ctxPage.textContent("#getMiBtn"))?.trim() !== "GET ETA")
+    fail(`the contextual button should read GET ETA, got ${JSON.stringify((await ctxPage.textContent("#getMiBtn"))?.trim())}`);
   await ctxPage.click("#getMiBtn");
   await ctxPage.waitForTimeout(400);
   if ((await ctxPage.inputValue("#miles")) !== "400")
@@ -983,6 +983,9 @@ try {
   // it doesn't belong on.
   if (!(await ctaPage.isVisible("#liveBtn")))
     fail("UPDATE LIVE ETA should be on screen with the ETA view");
+  // Labelled without "LIVE": the panel's own Live slot already says where the number comes from.
+  if ((await ctaPage.textContent("#liveBtn"))?.trim() !== "UPDATE ETA")
+    fail(`the live CTA should read UPDATE ETA, got ${JSON.stringify((await ctaPage.textContent("#liveBtn"))?.trim())}`);
   // It now sits inside the load card, directly above CLEAR.
   const ctaPlace = await ctaPage.evaluate(() => {
     const b = document.getElementById("liveBtn");

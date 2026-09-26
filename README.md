@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v4.7**
+**Current version: v4.7.1**
 
 ## Files
 
@@ -92,6 +92,14 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.7.1
+
+- **The buttons drop "LIVE":** GET LIVE ETA is now **GET ETA**, and UPDATE LIVE ETA is now
+  **UPDATE ETA** (GETTING ETA… / UPDATING… while they work). The Live slot in the panel
+  already says where the number comes from.
+- Help text caught up with v4.7: no more pointers to a "Live tab", "either tab" or the old
+  GET MILEAGE button.
 
 ### v4.7
 
