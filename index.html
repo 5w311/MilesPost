@@ -554,7 +554,7 @@
                stays available there too. Compact secondary action, not the full-width
                .primary CTA that button uses. Visibility driven from renderEta() below,
                same pattern as milesClear/destClear. -->
-          <button type="button" class="go hide" id="getMiBtn" style="margin-top:8px">GET MILEAGE</button>
+          <button type="button" class="go hide" id="getMiBtn" style="margin-top:8px">GET ETA</button>
           <div class="err hide" id="getMiNote"></div>
         </div>
       </div>
@@ -623,7 +623,7 @@
            is driven from renderEta() (Live tab only, as before the move) — renderLiveBtn()
            still sets text/disabled only, so a fetch finishing while the tab is elsewhere
            comes back in the right state. -->
-      <button class="primary" id="liveBtn" style="margin-top:6px">UPDATE LIVE ETA</button>
+      <button class="primary" id="liveBtn" style="margin-top:6px">UPDATE ETA</button>
       <button class="muted" id="etaClear" style="margin-top:10px">CLEAR</button>
     </div>
 
@@ -743,7 +743,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.7</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.7.1</button>
   </div>
 </div>
 
@@ -851,15 +851,15 @@ const HELP = {
     "<ul><li>The board under them is the gap between the two — how far ahead of or behind "+
     "dispatch you actually are.</li>"+
     "<li>Predicted always works; it's arithmetic on numbers you already have.</li>"+
-    "<li>Live needs signal — tap \"GET LIVE ETA\" to fetch one. It goes stale after about "+
+    "<li>Live needs signal — tap \"GET ETA\" or \"UPDATE ETA\" to fetch one. It goes stale after about "+
     "ten minutes, and that half clears until you pull a new one.</li>"+
     "<li>Edit your stop rules under \"+ TUNE TO YOUR TRUCK.\"</li></ul>" },
   load:{ title:"Your Load", body:
     "<p>This is the run you're on: miles left, where you're headed, and when you roll out. "+
     "Both ETA lines above read straight from these fields — change a number here and every "+
     "readout updates.</p>"+
-    "<ul><li>Type miles from dispatch, or leave it blank and tap \"GET MILEAGE\" (either "+
-    "tab) or \"UPDATE LIVE ETA\" (Live tab) to fill it in from the real route.</li>"+
+    "<ul><li>Type miles from dispatch, or leave it blank and tap \"GET ETA\" "+
+    "to fill it in from the real route.</li>"+
     "<li>Destination just needs a town and state — it sets your time zone and, for live ETA, "+
     "the actual route.</li>"+
     "<li>\"Rolling out\" normally routes from wherever your phone is. Tap \"change\" and "+
@@ -873,15 +873,15 @@ const HELP = {
     "<ul><li>DOT break has a 30-minute floor — the legal minimum, so it won't let you go lower.</li>"+
     "<li>Changing these only touches the stop math — your swap schedule and theme stay put.</li></ul>" },
   override:{ title:"Override", body:
-    "<p>By default, \"Update Live ETA\" only fills in miles when the field is blank, or still "+
+    "<p>By default, \"Update ETA\" only fills in miles when the field is blank, or still "+
     "holds a number the app filled in itself — a mileage you typed (dispatch's number, say) "+
     "is never touched.</p>"+
-    "<ul><li>Turn this on and \"Update Live ETA\" always overwrites miles with the real "+
+    "<ul><li>Turn this on and \"Update ETA\" always overwrites miles with the real "+
     "road distance, even one you typed yourself.</li>"+
     "<li>Off by default, and remembered across sessions once you change it.</li></ul>" },
   running:{ title:"Running", body:
     "<p>Keeps your arrival current on its own — the departure clock tracks now and both "+
-    "tabs re-solve against it. Doesn't use data; tap \"UPDATE LIVE ETA\" to pull a "+
+    "arrivals re-solve against it. Doesn't use data; tap \"UPDATE ETA\" to pull a "+
     "fresh quote.</p>"+
     "<ul><li>Nothing is re-fetched while it runs: the arrival is re-solved from the quote "+
     "you already pulled, so the drive time and traffic in it stay as of that fetch.</li>"+
@@ -1204,7 +1204,7 @@ async function updateLive(){
   renderLiveBtn(); renderEta();
 }
 const renderLiveBtn = () => {
-  $("liveBtn").textContent = LIVE.pending ? "UPDATING LIVE…" : "UPDATE LIVE ETA";
+  $("liveBtn").textContent = LIVE.pending ? "UPDATING…" : "UPDATE ETA";
   $("liveBtn").disabled = LIVE.pending;
   // On the Live tab the contextual button runs the same fetch, so it shares this one's
   // in-flight state and has to be refreshed alongside it.
@@ -1281,13 +1281,13 @@ async function getMileageOnly(){
 /* The contextual button says what it will actually do. With both arrivals in one panel
    there's no mode left to switch on: a driver who has typed a town but no mileage wants
    the live read, and updateLive() fills the mileage on the way past anyway — so it says
-   GET LIVE ETA and delivers one. getMileageOnly() is deliberately not used here: it never
+   GET ETA and delivers one. getMileageOnly() is deliberately not used here: it never
    touches LIVE.res, so a button with that label calling it would leave the live slot
    empty, having promised an arrival. The busy state reads LIVE.pending for the same
    reason — otherwise a live fetch would leave it sitting enabled and labelled as if
    nothing were happening. */
 const renderGetMiBtn = () => {
-  $("getMiBtn").textContent = LIVE.pending ? "GETTING LIVE ETA…" : "GET LIVE ETA";
+  $("getMiBtn").textContent = LIVE.pending ? "GETTING ETA…" : "GET ETA";
   $("getMiBtn").disabled = LIVE.pending;
 };
 $("getMiBtn").onclick = () => updateLive();
