@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v4.7.1**
+**Current version: v4.7.2**
 
 ## Files
 
@@ -92,6 +92,15 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.7.2
+
+- **Fixed: the device-timezone line showed the wrong arrival.** It sits under the big
+  Predicted number, but once a live quote landed it quietly switched to the *Live* arrival
+  converted to your clock. It now always shows Predicted in your device's timezone.
+- **The Live slot names its day when it lands on a different day than Predicted.** The
+  date line and the day tab belong to Predicted, so a Live "01:10" next to "Sun, Sep 27"
+  read as the same Sunday. It now reads e.g. `MON · truck route`. Same day, nothing added.
 
 ### v4.7.1
 
