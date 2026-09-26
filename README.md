@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v4.7.2**
+**Current version: v5.0**
 
 ## Files
 
@@ -92,6 +92,38 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v5.0
+
+- **The tank replaces "fuel every N miles."** That one number was doing two jobs — how far
+  the tank goes (a truck fact) and how far you'll run before stopping (a decision) — so
+  there was nowhere to say you're rolling out on a half tank, and every plan assumed a full
+  one. Now range comes off the truck (**gallons × loaded mpg**, 200 × 6 = 1200 mi), and a
+  gauge says what's aboard right now.
+- **Two floors, because "don't plan on it" and "can't use it" are different claims.** A
+  plan never spends the bottom quarter; nothing ever spends the last eighth — that's limp
+  fuel and it stays the driver's. Adapted from FuelPost's `lib/gauge.js`, which worked this
+  out first.
+- **On the gauge** — eighths, E to F, in the two bands. Tapping it re-solves from the quote
+  already in hand, so it costs nothing and needs no signal. Deliberately **not remembered
+  between sessions**: what's in the tank goes stale the moment the truck moves, and a
+  remembered level would be confidently wrong more often than right.
+- **Roll out low enough and the first stop lands at mile 0 — fuel before you roll.**
+  Knowing that at the yard beats any arrival time on the screen, and the old model could
+  never say it.
+- **The stop schedule.** The run now lists its stops — what, when, and at what mile. The
+  app always computed those positions to draw the run strip and then threw them away; a
+  driver plans against the stop, not the count. The strip and the list read the same solved
+  schedule, so a notch and a row can never disagree.
+- The DOT/Fuel/Swap legend chips came out: every row in the schedule already names its own
+  colour, so the chips were explaining something the list explains better.
+- **Card order is now Arrival → Your Load → How You Run** — what the run is, what you told
+  it, then how you run it.
+- Tuning swaps "Fuel every" for **Tank (gal)** and **Loaded (mpg)**. `PRESET_VERSION` bumps
+  to 6, so saved tuning reseeds from the new defaults; swap schedule and theme survive.
+- Internal: `solveEta` and the `PRESETS` fixture are gone — dead since v4.1. `overlayStops`
+  takes explicit fuel positions instead of an interval, and `runSchedule()` is the new pure
+  function that merges the odometer and the wall clock into one ordered list.
 
 ### v4.7.2
 

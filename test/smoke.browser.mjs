@@ -60,7 +60,7 @@ try {
   // The module must have loaded and be importable in-page.
   const moduleOk = await page.evaluate(async () => {
     const m = await import("./lib/logic.js");
-    return typeof m.solveEta === "function" && typeof m.resolvePlace === "function";
+    return typeof m.solveEtaLive === "function" && typeof m.resolvePlace === "function";
   });
   if (!moduleOk) fail("./lib/logic.js did not load as a module in the page");
 
@@ -112,7 +112,7 @@ try {
   if (!(await page.locator("#liveSide.dead").count()))
     fail("the live slot should carry its dimmed 'dead' state with no quote");
   // Everything read off a live solve stays hidden until there is one.
-  for (const id of ["etaShift", "strip", "stripKey", "legend", "liveLine"])
+  for (const id of ["etaShift", "strip", "stopList", "legend", "liveLine"])
     if (await page.isVisible(`#${id}`))
       fail(`#${id} must be hidden with no fresh quote`);
   // The run panel is no longer tab-gated — its stop rules apply to every live quote.
@@ -125,9 +125,9 @@ try {
     fail("the preset chooser must no longer exist in the DOM");
   if ((await page.locator("#mph").count()) !== 0)
     fail("the cruise-speed field must no longer exist in the DOM");
-  for (const id of ["fuelEvery", "fuelMin", "swapMin", "dotMin", "dotAt"])
+  for (const id of ["gal", "mpg", "fuelMin", "swapMin", "dotMin", "dotAt"])
     if ((await page.locator(`#${id}`).count()) !== 1)
-      fail(`#${id} must survive the preset removal — it's a stop rule, not a preset`);
+      fail(`#${id} must be in the tuning grid — it's a stop rule, not a preset`);
 
   // CLEAR button: enabled once there's a load, two-tap arm/confirm empties the load
   // and returns the readout to its placeholder.
@@ -334,7 +334,7 @@ try {
     fail("the live and predicted arrivals should be distinct readings, not the same clock");
   if (await livePage.locator("#liveSide.dead").count())
     fail("the live slot must drop its dimmed state once a quote lands");
-  for (const id of ["strip", "stripKey", "legend", "etaShift", "etaExit"])
+  for (const id of ["strip", "stopList", "legend", "etaShift", "etaExit"])
     if (!(await livePage.isVisible(`#${id}`)))
       fail(`#${id} should be visible once a quote lands`);
   // "@ arrival" is load-bearing: on a run with swaps, a bare "day shift driving" reads as
@@ -744,8 +744,8 @@ try {
   // Move a stop rule off its default so "CLEAR didn't touch tuning" is a real check and
   // not just two identical default snapshots. The preset shortcut used to do this.
   await clearLivePage.click("#tuneToggle");
-  await clearLivePage.fill("#fuelEvery", "500");
-  await clearLivePage.dispatchEvent("#fuelEvery", "input");
+  await clearLivePage.fill("#gal", "150");
+  await clearLivePage.dispatchEvent("#gal", "input");
   await clearLivePage.click("#tuneToggle");
   await clearLivePage.waitForTimeout(100);
   await clearLivePage.click("#liveBtn");
@@ -753,7 +753,7 @@ try {
   if (!(await clearLivePage.isVisible("#liveLine")))
     fail("LIVE line should be showing before CLEAR (setup check)");
   const tuneBefore = await clearLivePage.evaluate(() => ({
-    tune: ["fuelEvery","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
+    tune: ["gal","mpg","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
     swap: ["swapA","swapB","swapTz"].map(id => document.getElementById(id).value),
   }));
   await clearLivePage.click("#etaClear");                   // arm
@@ -775,7 +775,7 @@ try {
     fail("a brand-new destination must not inherit a stale LIVE quote left over from before CLEAR");
   await clearLivePage.evaluate(() => { window.__blockRoute = false; });
   const tuneAfter = await clearLivePage.evaluate(() => ({
-    tune: ["fuelEvery","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
+    tune: ["gal","mpg","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
     swap: ["swapA","swapB","swapTz"].map(id => document.getElementById(id).value),
   }));
   if (JSON.stringify(tuneBefore) !== JSON.stringify(tuneAfter))
@@ -1119,7 +1119,7 @@ try {
     fail(`a stale quote should clear the live slot, got ${JSON.stringify(staleLive)}`);
   if (!(await resumePage.locator("#liveSide.dead").count()))
     fail("a stale quote should return the live slot to its dimmed state");
-  for (const id of ["strip", "stripKey", "legend", "etaShift", "liveLine"])
+  for (const id of ["strip", "stopList", "legend", "etaShift", "liveLine"])
     if (await resumePage.isVisible(`#${id}`))
       fail(`#${id} must clear along with a stale quote`);
   // The gap is gated on freshness, not merely on a quote having once existed — a
