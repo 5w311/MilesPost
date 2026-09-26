@@ -743,7 +743,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.7.1</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.7.2</button>
   </div>
 </div>
 
@@ -1608,7 +1608,12 @@ function renderEta(){
   $("liveSide").classList.toggle("dead", !liveOn);
   if(liveOn){
     $("liveClock").innerHTML = clockWithTz(LIVE.res.liveEta, showTz);
-    $("liveSub").textContent = "truck route";
+    // The date line and the exit tab belong to Predicted. When Live lands on a different
+    // day, a bare "01:10" beside "Sun, Sep 27" would read as the same Sunday — so the slot
+    // names its own day, in the exit tab's shorthand. Same day: nothing to add.
+    const liveDay = dayOf(LIVE.res.liveEta, showTz);
+    $("liveSub").textContent = (liveDay !== dayOf(quickEta, showTz)
+      ? liveDay.split(",")[0].toUpperCase() + " · " : "") + "truck route";
   } else {
     $("liveClock").textContent = "--:--";
     $("liveSub").textContent = LIVE.note ? "unavailable" : "needs signal";
@@ -1620,7 +1625,9 @@ function renderEta(){
 
   if(E.destTz && E.destTz !== E.originTz){
     show($("etaYours"), true);
-    $("etaYours").textContent = clockOf(eta, E.originTz)+" "+tzTag(E.originTz)+" · current device timezone";
+    // Sits under the Predicted number and its date, so it reads as Predicted on the
+    // driver's own clock — and has to be exactly that, never the live arrival converted.
+    $("etaYours").textContent = clockOf(quickEta, E.originTz)+" "+tzTag(E.originTz)+" · current device timezone";
   }
 
   if(!liveOn){

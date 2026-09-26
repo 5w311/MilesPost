@@ -646,11 +646,42 @@ try {
     fail(`the device-clock line should be labelled as such when origin/destination tz differ, got ${JSON.stringify(mismatchLine)}`);
   if (!mismatchLine.includes("PDT") && !mismatchLine.includes("PST"))
     fail(`the device-clock reading should be in the origin's (Pacific) tz, got ${JSON.stringify(mismatchLine)}`);
+  // It sits under the Predicted number, so it must BE Predicted on the device clock —
+  // not the live arrival converted. Nashville (Central) is always 2h ahead of LA (Pacific).
+  const predCentral = (await tzPage.textContent("#etaClock"))?.trim().slice(0, 5) || "";
+  const [ph, pm] = predCentral.split(":").map(Number);
+  const predPacific = String((ph + 22) % 24).padStart(2, "0") + ":" + String(pm).padStart(2, "0");
+  if (!mismatchLine.startsWith(predPacific))
+    fail(`the device-clock line should be Predicted (${predCentral} Central = ${predPacific} Pacific), got ${JSON.stringify(mismatchLine)}`);
   // And the board must not say it a second time an inch below.
   if (/current device timezone/.test((await tzPage.textContent("#liveLine")) || ""))
     fail("the LIVE board must not repeat the device-clock reading that sits above it");
   if (tzErrors.length) fail("tz-mismatch page errors: " + JSON.stringify(tzErrors, null, 2));
   await tzCtx.close();
+
+  // Live on a different day from Predicted: the date line and exit tab are Predicted's, so
+  // the live slot has to name its own day. Rolling out three days from now puts Predicted
+  // days past a live quote that departs from the moment it was fetched.
+  const dayCtx = await browser.newContext({ timezoneId: "America/Chicago" });
+  const dayPage = await dayCtx.newPage();
+  await runningOff(dayPage);
+  await mockHere(dayPage);
+  await dayPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  const later = await dayPage.evaluate(() => {
+    const d = new Date(Date.now() + 3 * 864e5), z = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T08:00`;
+  });
+  await dayPage.fill("#depart", later);
+  await dayPage.fill("#destIn", "Nashville TN");
+  await dayPage.press("#destIn", "Enter");
+  await dayPage.click("#liveBtn");
+  await dayPage.waitForTimeout(300);
+  const daySub = (await dayPage.textContent("#liveSub"))?.trim() || "";
+  const predDay = ((await dayPage.textContent("#etaDay"))?.trim() || "").split(",")[0].toUpperCase();
+  const m2 = /^([A-Z]{3}) · truck route$/.exec(daySub);
+  if (!m2) fail(`a live arrival on another day should name its day, got ${JSON.stringify(daySub)}`);
+  else if (m2[1] === predDay) fail(`the live slot's day should be Live's own, not Predicted's ${predDay}`);
+  await dayCtx.close();
 
   // Same-tz case: no second clock at all — a driver whose origin and destination share a
   // timezone doesn't need to be told their own clock twice.
