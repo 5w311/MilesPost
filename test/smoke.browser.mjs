@@ -89,40 +89,35 @@ try {
   const etaClock = (await page.textContent("#etaClock"))?.trim();
   if (!/^\d{2}:\d{2} \S+$/.test(etaClock || "") || etaClock === "--:--")
     fail(`expected a computed arrival clock with its own tz suffix, got ${JSON.stringify(etaClock)}`);
-  // Predicted's cross-model comparison is live-sourced now, so with no quote in hand the
-  // comparison board must be absent entirely — never a stale or fabricated comparison.
-  // (The present-after-a-quote half is asserted on livePage, which has one.)
   const quickNoteText = (await page.textContent("#quickNote")) || "";
   if (!/÷ 50 =/.test(quickNoteText))
     fail(`quickNote should still show dispatch's own math, got ${JSON.stringify(quickNoteText)}`);
-  if (await page.isVisible("#quickLive"))
-    fail("the Predicted comparison board must be hidden with no fresh quote");
   // Dispatch's own ÷50 math is not live-sourced and must stay out of the board.
   if (/\b(ahead|behind)\b/.test(quickNoteText))
-    fail(`the comparison must not be inside #quickNote any more, got ${JSON.stringify(quickNoteText)}`);
+    fail(`the comparison must not be inside #quickNote, got ${JSON.stringify(quickNoteText)}`);
 
-  // The Live tab is strictly live: with no quote it shows the empty state, not an offline
-  // model. Miles and a departure are entered, so the old build would have had a full run
-  // on screen here — arrival clock, shift line, strip, chips and stat line all populated.
-  if (await page.isVisible("#etaShift"))
-    fail("shift line should be hidden on the Predicted sub-tab");
-  await page.click("#tabTuned");
-  await page.waitForTimeout(100);
-  const dryClock = (await page.textContent("#etaClock"))?.trim();
-  if (dryClock !== "--:--")
-    fail(`Live tab with no quote should show the placeholder, got ${JSON.stringify(dryClock)}`);
-  const dryDay = (await page.textContent("#etaDay"))?.trim() || "";
-  if (!/UPDATE LIVE ETA/.test(dryDay) || !/signal/i.test(dryDay))
-    fail(`Live tab with no quote should explain what to do, got ${JSON.stringify(dryDay)}`);
-  for (const id of ["etaShift", "strip", "stripKey", "legend", "etaExit", "liveLine"])
+  // Both arrivals share one panel now, so there is no tab to switch and nothing to hide:
+  // Predicted renders offline (asserted above) while the live half alone stands down.
+  // The whole point of anchoring on Predicted is that the big number keeps its place.
+  if ((await page.locator("#tabQuick").count()) !== 0 ||
+      (await page.locator("#tabTuned").count()) !== 0)
+    fail("the Predicted/Live sub-tabs must no longer exist in the DOM");
+  if (!(await page.isVisible("#liveSide")))
+    fail("the live slot should stay on screen with no quote, not disappear");
+  const dryLive = (await page.textContent("#liveClock"))?.trim();
+  if (dryLive !== "--:--")
+    fail(`live slot with no quote should show the placeholder, got ${JSON.stringify(dryLive)}`);
+  if (!/signal/i.test((await page.textContent("#liveSub")) || ""))
+    fail("live slot with no quote should say why it's empty");
+  if (!(await page.locator("#liveSide.dead").count()))
+    fail("the live slot should carry its dimmed 'dead' state with no quote");
+  // Everything read off a live solve stays hidden until there is one.
+  for (const id of ["etaShift", "strip", "stripKey", "legend", "liveLine"])
     if (await page.isVisible(`#${id}`))
-      fail(`#${id} must be hidden on the Live tab with no fresh quote`);
-  await page.click("#tabQuick");
-  await page.waitForTimeout(100);
-  // Predicted still computes offline, so switching back must restore a real arrival.
-  const backClock = (await page.textContent("#etaClock"))?.trim();
-  if (!/^\d{2}:\d{2} \S+$/.test(backClock || "") || backClock === "--:--")
-    fail(`Predicted tab should still compute offline, got ${JSON.stringify(backClock)}`);
+      fail(`#${id} must be hidden with no fresh quote`);
+  // The run panel is no longer tab-gated — its stop rules apply to every live quote.
+  if (!(await page.isVisible("#panelTuned")))
+    fail("the run panel should always be visible now that there are no ETA sub-tabs");
 
   // The preset chooser is gone — its six-values-at-once shortcut no longer has an mph to
   // set, and the remaining five are edited individually under "+ TUNE TO YOUR TRUCK".
@@ -312,32 +307,41 @@ try {
   await livePage.dispatchEvent("#miles", "input");
   await livePage.fill("#destIn", "Nashville TN");
   await livePage.press("#destIn", "Enter");
-  await livePage.click("#tabTuned");
   await livePage.click("#liveBtn");
   await livePage.waitForTimeout(300);
   if (!(await livePage.isVisible("#liveLine")))
-    fail("LIVE line should render after a successful mocked HERE fetch");
-  // The board carries only what isn't already on screen: that this is truck routing, and
-  // what traffic costs. The arrival clock, its date, the mileage and the device-clock tail
-  // all live elsewhere on the same panel and were dropped from here.
+    fail("LIVE board should render after a successful mocked HERE fetch");
+  // The board carries only what isn't already on screen: the gap against dispatch (the
+  // whole reason both arrivals share a panel) and what traffic costs. The arrival clock,
+  // its date, the mileage and the device-clock tail all live elsewhere on this panel.
   const liveText = (await livePage.textContent("#liveLine"))?.trim() || "";
-  if (liveText !== "LIVE truck route · traffic +20m")
+  if (!/^LIVE \d+h \d+m (ahead|behind) · traffic \+20m$/.test(liveText))
     fail(`unexpected LIVE board copy: ${JSON.stringify(liveText)}`);
-  // Guard the separator specifically: dropping the leading pieces must not strand a "·"
+  // Guard the separator specifically: dropping a leading piece must not strand a "·"
   // against the badge, which is what naive concatenation of " · "-prefixed fragments does.
   if (/LIVE\s+·/.test(liveText))
     fail(`the LIVE badge must not be followed by a dangling separator: ${JSON.stringify(liveText)}`);
-  // With a fresh quote the Live tab is a full run again: the arrival is the quote's own
-  // arrival, and the strip/chips/stat line that the empty state suppressed all come back.
-  const liveClock = (await livePage.textContent("#etaClock"))?.trim();
+  // Predicted still anchors the big number — it never depended on the quote — while the
+  // quote's own arrival lands in the live slot beside it. Two different clocks, both on
+  // screen at once, which is the entire point of merging the tabs.
+  const predClock = (await livePage.textContent("#etaClock"))?.trim();
+  if (!/^\d{2}:\d{2} \S+$/.test(predClock || "") || predClock === "--:--")
+    fail(`Predicted should still anchor the panel, got ${JSON.stringify(predClock)}`);
+  const liveClock = (await livePage.textContent("#liveClock"))?.trim();
   if (!/^\d{2}:\d{2} \S+$/.test(liveClock || "") || liveClock === "--:--")
-    fail(`Live tab should show the quote's arrival, got ${JSON.stringify(liveClock)}`);
+    fail(`the live slot should show the quote's arrival, got ${JSON.stringify(liveClock)}`);
+  if (liveClock === predClock)
+    fail("the live and predicted arrivals should be distinct readings, not the same clock");
+  if (await livePage.locator("#liveSide.dead").count())
+    fail("the live slot must drop its dimmed state once a quote lands");
   for (const id of ["strip", "stripKey", "legend", "etaShift", "etaExit"])
     if (!(await livePage.isVisible(`#${id}`)))
-      fail(`#${id} should be visible on the Live tab once a quote lands`);
+      fail(`#${id} should be visible once a quote lands`);
+  // "@ arrival" is load-bearing: on a run with swaps, a bare "day shift driving" reads as
+  // who is driving right now, which is not what this line reports.
   const shiftText = (await livePage.textContent("#etaShift"))?.trim();
-  if (!/^(day|night) shift driving$/.test(shiftText || ""))
-    fail(`expected a shift readout, got ${JSON.stringify(shiftText)}`);
+  if (!/^(day|night) shift driving @ arrival$/.test(shiftText || ""))
+    fail(`expected a shift readout naming arrival, got ${JSON.stringify(shiftText)}`);
   // Rolling + stopped now visibly sum to the third cell, which is the point of showing a
   // total instead of an average speed.
   const legendText = (await livePage.textContent("#legend")) || "";
@@ -348,9 +352,10 @@ try {
     if (mins(cells[1], cells[2]) + mins(cells[3], cells[4]) !== mins(cells[5], cells[6]))
       fail(`rolling + stopped must add up to the total, got ${JSON.stringify(legendText)}`);
   }
-  // The Live tab is labelled for what it is; the shared label follows the mode.
-  if ((await livePage.textContent("#etaLabel"))?.trim().startsWith("Live Arrival ·") !== true)
-    fail(`the Live tab label should read "Live Arrival", got ${JSON.stringify(await livePage.textContent("#etaLabel"))}`);
+  // One panel, one label: which number is which is said by the headings inside it.
+  const etaLabelText = (await livePage.textContent("#etaLabel"))?.trim() || "";
+  if (!etaLabelText.startsWith("Arrival ·") || /Live Arrival/.test(etaLabelText))
+    fail(`the panel label should read "Arrival · <place>", got ${JSON.stringify(etaLabelText)}`);
   // The run panel describes the stop rules on every pass, and appends this run's counts
   // only when a quote backs them — no cruise speed anywhere, it isn't a setting anymore.
   const runNoteText = (await livePage.textContent("#runNote")) || "";
@@ -358,37 +363,19 @@ try {
     fail(`the run note must not mention a cruise speed, got ${JSON.stringify(runNoteText)}`);
   if (!/This run:/.test(runNoteText))
     fail(`the run note should append this run's stop counts, got ${JSON.stringify(runNoteText)}`);
-  // Predicted's comparison line is present now, sourced from that same quote.
-  await livePage.click("#tabQuick");
-  await livePage.waitForTimeout(100);
-  if (!(await livePage.isVisible("#quickLive")))
-    fail("the Predicted comparison board should appear once a quote backs it");
-  const liveQuickNote = (await livePage.textContent("#quickLive")) || "";
-  if (!/^LIVE \d{2}:\d{2} [A-Z]{2,6} · \d+h \d+m (ahead|behind)$/.test(liveQuickNote.trim()))
-    fail(`unexpected Predicted comparison board copy: ${JSON.stringify(liveQuickNote)}`);
   // Dispatch's own ÷50 math is not live-sourced, so it stays out of the board and keeps
   // its plain note styling next door.
   const dispatchNote = (await livePage.textContent("#quickNote")) || "";
   if (!/÷ 50 =/.test(dispatchNote) || /\b(ahead|behind)\b/.test(dispatchNote))
     fail(`#quickNote should hold only dispatch's own math, got ${JSON.stringify(dispatchNote)}`);
-  // Cross-check that the Live tab's big number really is the quote's own liveEta — this
-  // board is the other reading of LIVE.res.liveEta on screen, so the two must agree.
-  if (!liveQuickNote.includes("LIVE " + liveClock.split(" ")[0]))
-    fail(`the Live arrival and the comparison board must be the same quote: ${JSON.stringify(liveClock)} vs ${JSON.stringify(liveQuickNote)}`);
-  // The board must not fuse with the note above it — .liveLine joins to a FOLLOWING .note,
-  // and #quickLive's next sibling is #strip, so it stays a panel of its own.
+  // The board fuses with the caveat note directly after it — that joined panel is the
+  // design — so #liveNote must stay its immediate next sibling.
   const fused = await livePage.evaluate(() => {
-    const q = document.getElementById("quickLive");
-    return { next: q.nextElementSibling?.id, radius: getComputedStyle(q).borderBottomLeftRadius };
+    const q = document.getElementById("liveLine");
+    return { next: q.nextElementSibling?.id };
   });
-  if (fused.next !== "strip")
-    fail(`#quickLive must sit directly before #strip, not a .note — next sibling is ${JSON.stringify(fused.next)}`);
-  if (fused.radius === "0px")
-    fail("#quickLive should keep its own rounded bottom, not fuse into a following panel");
-  // Same shared label, other tab: Predicted's flat ÷50 is not a live arrival.
-  const quickLabel = (await livePage.textContent("#etaLabel"))?.trim() || "";
-  if (!quickLabel.startsWith("Arrival ·"))
-    fail(`the Predicted tab label should stay "Arrival", got ${JSON.stringify(quickLabel)}`);
+  if (fused.next !== "liveNote")
+    fail(`#liveNote must follow #liveLine directly to fuse — next sibling is ${JSON.stringify(fused.next)}`);
   // The gap must be run-time vs run-time. Dispatch's number departs from the typed
   // "rolling out"; the quote departs from when it was fetched. Push the typed departure
   // months out — differencing the two ARRIVALS would fold that separation into the answer
@@ -397,13 +384,11 @@ try {
   await livePage.fill("#depart", "2027-01-20T08:00");
   await livePage.dispatchEvent("#depart", "input");
   await livePage.waitForTimeout(150);
-  const skewNote = (await livePage.textContent("#quickLive")) || "";
+  const skewNote = (await livePage.textContent("#liveLine")) || "";
   const gap = skewNote.match(/(\d+)h (\d+)m (ahead|behind)/);
-  if (!gap) fail(`the comparison board should still carry a gap, got ${JSON.stringify(skewNote)}`);
+  if (!gap) fail(`the board should still carry a gap, got ${JSON.stringify(skewNote)}`);
   else if (Number(gap[1]) > 24)
     fail(`the dispatch gap must compare run times, not arrival clocks — a far-off departure leaked in: ${JSON.stringify(skewNote)}`);
-  await livePage.click("#tabTuned");
-  await livePage.waitForTimeout(100);
   // Route params sanity: the request must be truck mode with the vehicle[...] dimensions —
   // never a silent fall-back to car routing.
   const routeUrl = await livePage.evaluate(() =>
@@ -415,14 +400,9 @@ try {
   // v8 is traffic-aware by OMITTING departureTime (defaults to now). The v7 literal
   // departureTime=now gets a 400 "Malformed request" — keep it out.
   if (routeUrl.includes("departureTime")) fail("routing request must omit departureTime (v8 defaults to now; the literal 400s)");
-  await livePage.click("#tabQuick");
-  await livePage.waitForTimeout(100);
-  if (await livePage.isVisible("#liveLine")) fail("LIVE line must not show on the Estimated tab");
-  // Opening the tuning grid stands the LIVE CTA down, so the fields sit directly under the
-  // toggle that revealed them; closing it must bring the button back. A one-way hide here
+  // Opening the tuning grid stands the switch rows down, so the fields sit directly under
+  // the toggle that revealed them; closing it must bring them back. A one-way hide here
   // would strand the driver with no way to refresh a live ETA.
-  await livePage.click("#tabTuned");
-  await livePage.waitForTimeout(100);
   if (!(await livePage.isVisible("#liveBtn"))) fail("LIVE button should be visible with tuning closed");
   if (!(await livePage.isVisible("#overrideRow"))) fail("override row should be visible with tuning closed");
   // Turn override on before opening tuning, so hiding the row can be checked against
@@ -466,7 +446,6 @@ try {
   await deniedPage.dispatchEvent("#miles", "input");
   await deniedPage.fill("#destIn", "Nashville TN");
   await deniedPage.press("#destIn", "Enter");
-  await deniedPage.click("#tabTuned");
   await deniedPage.click("#liveBtn");
   await deniedPage.waitForTimeout(300);
   if (await deniedPage.isVisible("#liveLine"))
@@ -474,14 +453,14 @@ try {
   const noteText = (await deniedPage.textContent("#liveNote"))?.trim() || "";
   if (!/live unavailable/.test(noteText))
     fail(`denied path should show the unobtrusive fallback note, got ${JSON.stringify(noteText)}`);
-  const tunedClock = (await deniedPage.textContent("#etaClock"))?.trim();
-  if (tunedClock !== "--:--")
-    fail(`Live arrival must be the placeholder when live is unavailable, got ${JSON.stringify(tunedClock)}`);
-  if (await deniedPage.isVisible("#etaDay"))
-    fail("the generic empty-state prompt must stand down while #liveNote is explaining a real failure");
+  const deniedLive = (await deniedPage.textContent("#liveClock"))?.trim();
+  if (deniedLive !== "--:--")
+    fail(`the live slot must be the placeholder when live is unavailable, got ${JSON.stringify(deniedLive)}`);
+  // The slot says "unavailable" rather than "needs signal" — #liveNote carries the real
+  // reason just below, so this line stays short instead of repeating it.
+  if ((await deniedPage.textContent("#liveSub"))?.trim() !== "unavailable")
+    fail(`the live slot should read "unavailable" when a fetch actually failed, got ${JSON.stringify((await deniedPage.textContent("#liveSub"))?.trim())}`);
   // Predicted is unaffected — it never needed signal.
-  await deniedPage.click("#tabQuick");
-  await deniedPage.waitForTimeout(100);
   const deniedQuick = (await deniedPage.textContent("#etaClock"))?.trim();
   if (!/^\d{2}:\d{2} \S+$/.test(deniedQuick || "") || deniedQuick === "--:--")
     fail("Predicted must still compute with GPS denied");
@@ -557,7 +536,6 @@ try {
   await autofillPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await autofillPage.fill("#destIn", "Nashville TN");
   await autofillPage.press("#destIn", "Enter");
-  await autofillPage.click("#tabTuned");
   await autofillPage.click("#liveBtn");
   await autofillPage.waitForTimeout(300);
   const filledMiles = await autofillPage.inputValue("#miles");
@@ -600,7 +578,6 @@ try {
   await keepPage.dispatchEvent("#miles", "input");
   await keepPage.fill("#destIn", "Nashville TN");
   await keepPage.press("#destIn", "Enter");
-  await keepPage.click("#tabTuned");
   await keepPage.click("#liveBtn");
   await keepPage.waitForTimeout(300);
   const keptMiles = await keepPage.inputValue("#miles");
@@ -635,12 +612,15 @@ try {
   await calmPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await calmPage.fill("#destIn", "Nashville TN");
   await calmPage.press("#destIn", "Enter");
-  await calmPage.click("#tabTuned");
   await calmPage.click("#liveBtn");
   await calmPage.waitForTimeout(300);
+  // With a clear road the traffic segment drops out entirely, leaving just the gap — and
+  // no dangling separator behind the badge, which is what the joined-list build prevents.
   const calmLine = (await calmPage.textContent("#liveLine"))?.trim() || "";
-  if (calmLine !== "LIVE truck route")
-    fail(`with no traffic the board should read exactly "LIVE truck route", got ${JSON.stringify(calmLine)}`);
+  if (!/^LIVE \d+h \d+m (ahead|behind)$/.test(calmLine))
+    fail(`with no traffic the board should read just the gap, got ${JSON.stringify(calmLine)}`);
+  if (/·/.test(calmLine))
+    fail(`a single-item board must carry no separator at all, got ${JSON.stringify(calmLine)}`);
   if (calmErrors.length) fail("calm-traffic page errors: " + JSON.stringify(calmErrors, null, 2));
   await calmPage.close();
 
@@ -657,7 +637,6 @@ try {
   await tzPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await tzPage.fill("#destIn", "Nashville TN");
   await tzPage.press("#destIn", "Enter");
-  await tzPage.click("#tabTuned");
   await tzPage.click("#liveBtn");
   await tzPage.waitForTimeout(300);
   if (!(await tzPage.isVisible("#etaYours")))
@@ -683,7 +662,6 @@ try {
   await sameTzPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await sameTzPage.fill("#destIn", "Los Angeles CA");
   await sameTzPage.press("#destIn", "Enter");
-  await sameTzPage.click("#tabTuned");
   await sameTzPage.click("#liveBtn");
   await sameTzPage.waitForTimeout(300);
   if (await sameTzPage.isVisible("#etaYours"))
@@ -705,7 +683,6 @@ try {
   await overridePage.dispatchEvent("#miles", "input");
   await overridePage.fill("#destIn", "Nashville TN");
   await overridePage.press("#destIn", "Enter");
-  await overridePage.click("#tabTuned");
   await overridePage.click("#overrideBtn");
   await overridePage.click("#liveBtn");
   await overridePage.waitForTimeout(300);
@@ -733,7 +710,6 @@ try {
   await clearLivePage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await clearLivePage.fill("#destIn", "Nashville TN");
   await clearLivePage.press("#destIn", "Enter");
-  await clearLivePage.click("#tabTuned");
   // Move a stop rule off its default so "CLEAR didn't touch tuning" is a real check and
   // not just two identical default snapshots. The preset shortcut used to do this.
   await clearLivePage.click("#tuneToggle");
@@ -791,29 +767,16 @@ try {
   await getMiPage.press("#destIn", "Enter");
   await getMiPage.waitForTimeout(100);
   if (!(await getMiPage.isVisible("#getMiBtn")))
-    fail("#getMiBtn should appear once a destination is set and miles is blank, on the Simple tab");
+    fail("#getMiBtn should appear once a destination is set and miles is blank");
   await getMiPage.click("#getMiBtn");
   await getMiPage.waitForTimeout(300);
   const getMiMiles = await getMiPage.inputValue("#miles");
   if (getMiMiles !== "400")
-    fail(`GET MILEAGE should fill miles from the real road distance, got ${JSON.stringify(getMiMiles)}`);
+    fail(`the contextual button should fill miles from the real road distance, got ${JSON.stringify(getMiMiles)}`);
   if (await getMiPage.isVisible("#getMiBtn"))
     fail("#getMiBtn should hide itself once miles has a value");
-  // The actual boundary this button exists to respect: no live/traffic-aware quote. LIVE
-  // isn't exposed on window, so infer through the same UI a real live quote would show —
-  // the LIVE line — both immediately and after switching to the tab that would display it.
-  if (await getMiPage.isVisible("#liveLine"))
-    fail("GET MILEAGE must never produce a visible LIVE line on the Simple tab");
-  await getMiPage.click("#tabTuned");
-  await getMiPage.waitForTimeout(150);
-  if (await getMiPage.isVisible("#liveLine"))
-    fail("GET MILEAGE must not have produced a live quote at all — still absent after switching to Tuned");
   if (getMiErrors.length) fail("getMi page errors: " + JSON.stringify(getMiErrors, null, 2));
   await getMiPage.close();
-
-  // The Live tab's half of this button is covered by the contextual-button blocks further
-  // down: since v4.3 it reads GET LIVE ETA there and runs the full live fetch, so the old
-  // "must not produce a live quote on Tuned" case is no longer the behaviour to assert.
 
   // RUNNING: keeps the departure clock and the arrival current, and must do it entirely
   // offline. The clock is driven by a controllable Date so a minute of wall time can pass
@@ -835,7 +798,6 @@ try {
   await runPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await runPage.fill("#destIn", "Nashville TN");
   await runPage.press("#destIn", "Enter");
-  await runPage.click("#tabTuned");
   await runPage.click("#liveBtn");
   await runPage.waitForTimeout(300);
   if (!(await runPage.isVisible("#liveLine")))
@@ -880,24 +842,17 @@ try {
   if (!(await runPage.isVisible("#liveLine")))
     fail("the LIVE line should survive ticking (the quote is still fresh)");
 
-  // The clock keeps running across the ETA sub-tabs. Predicted solves from the departure
-  // too, so it has exactly as much use for a current one — and the switch itself now lives
-  // in the load card, so it's on screen and reachable from both.
-  await runPage.click("#tabQuick");
-  await runPage.waitForTimeout(100);
+  // Both arrivals solve from the departure, so the clock serves the whole panel — and the
+  // switch lives in the load card, on screen alongside them.
   if (!(await runPage.isVisible("#runningRow")))
-    fail("the RUNNING switch must be reachable from the Predicted tab, not Live-only");
-  const departOnQuick = await runPage.inputValue("#depart");
+    fail("the RUNNING switch should be on screen with the ETA view");
+  const departPanel = await runPage.inputValue("#depart");
   await runPage.evaluate(() => { window.__skewMs = 6 * 60 * 1000; });
   await runPage.waitForTimeout(1600);
-  if ((await runPage.inputValue("#depart")) === departOnQuick)
-    fail("the RUNNING clock must keep running on the Predicted tab");
+  if ((await runPage.inputValue("#depart")) === departPanel)
+    fail("the RUNNING clock must keep the departure current");
   if (!(await runPage.isDisabled("#depart")))
-    fail("#depart must stay disabled on Predicted while RUNNING drives it");
-  await runPage.click("#tabTuned");
-  await runPage.waitForTimeout(100);
-  if ((await runPage.getAttribute("#runningBtn", "aria-checked")) !== "true")
-    fail("switching sub-tabs must not flip the switch off");
+    fail("#depart must stay disabled while RUNNING drives it");
 
   // It does stand down on the 34 RESET view, though — nothing there for it to re-render.
   await runPage.click("#tabReset");
@@ -911,7 +866,6 @@ try {
   await runPage.waitForTimeout(1600);
   if ((await runPage.inputValue("#depart")) === departOnReset)
     fail("the RUNNING clock must resume on returning to the ETA view");
-  await runPage.click("#tabTuned");
   await runPage.waitForTimeout(100);
 
   // Backgrounding does the same. visibilityState is read-only, so stub the getter.
@@ -958,7 +912,6 @@ try {
     fail("RUNNING switched off must stay off across a reload");
   if (await runPage.isDisabled("#depart"))
     fail("#depart should be the driver's again after reloading with RUNNING off");
-  await runPage.click("#tabTuned");
   await runPage.click("#runningBtn");                 // back on
   await runPage.reload({ waitUntil: "networkidle" });
   await runPage.waitForTimeout(200);
@@ -967,10 +920,11 @@ try {
   if (runErrors.length) fail("running page errors: " + JSON.stringify(runErrors, null, 2));
   await runPage.close();
 
-  // The contextual button says what it will do, and does what it says. On Predicted that's
-  // distance only; on Live it must actually deliver a live ETA, because getMileageOnly()
-  // never populates LIVE.res and a button reading GET LIVE ETA that left the tab in its
-  // empty state would be lying about what just happened.
+  // The contextual button says what it will do, and does what it says. With one merged
+  // panel there is no mode to switch on: a driver with a town but no mileage wants the
+  // live read, so it says GET LIVE ETA and must actually deliver one — getMileageOnly()
+  // never populates LIVE.res, and a button with that label calling it would leave the
+  // live slot empty, having promised an arrival.
   const ctxPage = await browser.newPage();
   const ctxErrors = [];
   ctxPage.on("pageerror", e => ctxErrors.push("pageerror: " + e.message));
@@ -979,28 +933,16 @@ try {
   await ctxPage.fill("#destIn", "Nashville TN");
   await ctxPage.press("#destIn", "Enter");
   await ctxPage.waitForTimeout(150);
-  if ((await ctxPage.textContent("#getMiBtn"))?.trim() !== "GET MILEAGE")
-    fail(`the Predicted tab's contextual button should read GET MILEAGE, got ${JSON.stringify((await ctxPage.textContent("#getMiBtn"))?.trim())}`);
-  // The label follows the tab without a reload, in both directions.
-  await ctxPage.click("#tabTuned");
-  await ctxPage.waitForTimeout(150);
   if ((await ctxPage.textContent("#getMiBtn"))?.trim() !== "GET LIVE ETA")
-    fail(`the Live tab's contextual button should read GET LIVE ETA, got ${JSON.stringify((await ctxPage.textContent("#getMiBtn"))?.trim())}`);
-  await ctxPage.click("#tabQuick");
-  await ctxPage.waitForTimeout(150);
-  if ((await ctxPage.textContent("#getMiBtn"))?.trim() !== "GET MILEAGE")
-    fail("the label must switch back on returning to Predicted, without a reload");
-  // Predicted: distance only, no live quote — unchanged from before.
+    fail(`the contextual button should read GET LIVE ETA, got ${JSON.stringify((await ctxPage.textContent("#getMiBtn"))?.trim())}`);
   await ctxPage.click("#getMiBtn");
   await ctxPage.waitForTimeout(400);
   if ((await ctxPage.inputValue("#miles")) !== "400")
-    fail("GET MILEAGE should still fill miles on the Predicted tab");
-  if (await ctxPage.isVisible("#quickLive"))
-    fail("GET MILEAGE must not produce a live quote — the comparison board should stay hidden");
-  await ctxPage.click("#tabTuned");
-  await ctxPage.waitForTimeout(150);
-  if (await ctxPage.isVisible("#liveLine"))
-    fail("GET MILEAGE must not have produced a live quote, checked on the tab that shows one");
+    fail("GET LIVE ETA should fill miles from the route on the way past");
+  if (!(await ctxPage.isVisible("#liveLine")))
+    fail("GET LIVE ETA must deliver an actual live quote, not just a distance");
+  if (await ctxPage.locator("#liveSide.dead").count())
+    fail("the live slot must come alive after GET LIVE ETA");
   if (ctxErrors.length) fail("contextual-button page errors: " + JSON.stringify(ctxErrors, null, 2));
   await ctxPage.close();
 
@@ -1012,7 +954,6 @@ try {
   await ctxLivePage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await ctxLivePage.fill("#destIn", "Nashville TN");
   await ctxLivePage.press("#destIn", "Enter");
-  await ctxLivePage.click("#tabTuned");
   await ctxLivePage.waitForTimeout(150);
   if (!(await ctxLivePage.isVisible("#getMiBtn")))
     fail("the contextual button should be showing on Live with a destination set and miles empty");
@@ -1038,12 +979,10 @@ try {
   ctaPage.on("pageerror", e => ctaErrors.push("pageerror: " + e.message));
   await mockHere(ctaPage);
   await ctaPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
-  if (await ctaPage.isVisible("#liveBtn"))
-    fail("UPDATE LIVE ETA should not show on the Predicted tab");
-  await ctaPage.click("#tabTuned");
-  await ctaPage.waitForTimeout(150);
+  // With both arrivals in one panel the CTA is always relevant — there is no longer a tab
+  // it doesn't belong on.
   if (!(await ctaPage.isVisible("#liveBtn")))
-    fail("UPDATE LIVE ETA should show on the Live tab");
+    fail("UPDATE LIVE ETA should be on screen with the ETA view");
   // It now sits inside the load card, directly above CLEAR.
   const ctaPlace = await ctaPage.evaluate(() => {
     const b = document.getElementById("liveBtn");
@@ -1080,7 +1019,6 @@ try {
   await geoPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await geoPage.fill("#destIn", "Nashville TN");
   await geoPage.press("#destIn", "Enter");
-  await geoPage.click("#tabTuned");
   await geoPage.click("#liveBtn");
   await geoPage.waitForTimeout(300);
   await geoPage.click("#liveBtn");
@@ -1120,7 +1058,6 @@ try {
   await resumePage.dispatchEvent("#miles", "input");
   await resumePage.fill("#destIn", "Nashville TN");
   await resumePage.press("#destIn", "Enter");
-  await resumePage.click("#tabTuned");
   await resumePage.click("#liveBtn");
   await resumePage.waitForTimeout(300);
   if (!(await resumePage.isVisible("#liveLine")))
@@ -1138,24 +1075,25 @@ try {
     fail("returning to the foreground must drop a LIVE quote that went stale while backgrounded");
   // And the whole tab goes back to its empty state with it — a stale quote must not leave
   // an arrival on screen just because the LIVE line beneath it disappeared.
+  // Only the live half goes stale. Predicted is arithmetic on numbers already in hand, so
+  // the big number must hold — that is precisely why it anchors the panel.
   const staleClock = (await resumePage.textContent("#etaClock"))?.trim();
-  if (staleClock !== "--:--")
-    fail(`a stale quote should clear the Live arrival, got ${JSON.stringify(staleClock)}`);
-  if (!/UPDATE LIVE ETA/.test((await resumePage.textContent("#etaDay")) || ""))
-    fail("a stale quote should return the Live tab to its empty-state prompt");
-  for (const id of ["strip", "stripKey", "legend", "etaShift"])
+  if (!/^\d{2}:\d{2} \S+$/.test(staleClock || "") || staleClock === "--:--")
+    fail(`Predicted must survive a stale quote, got ${JSON.stringify(staleClock)}`);
+  const staleLive = (await resumePage.textContent("#liveClock"))?.trim();
+  if (staleLive !== "--:--")
+    fail(`a stale quote should clear the live slot, got ${JSON.stringify(staleLive)}`);
+  if (!(await resumePage.locator("#liveSide.dead").count()))
+    fail("a stale quote should return the live slot to its dimmed state");
+  for (const id of ["strip", "stripKey", "legend", "etaShift", "liveLine"])
     if (await resumePage.isVisible(`#${id}`))
       fail(`#${id} must clear along with a stale quote`);
-  // Predicted's comparison board is gated on freshness, not merely on a quote having once
-  // existed — a ten-minute-old read compared against dispatch is exactly the fabricated
-  // comparison the board is supposed to avoid.
-  await resumePage.click("#tabQuick");
-  await resumePage.waitForTimeout(100);
-  if (await resumePage.isVisible("#quickLive"))
-    fail("a stale quote must not feed the Predicted comparison board");
+  // The gap is gated on freshness, not merely on a quote having once existed — a
+  // ten-minute-old read compared against dispatch is exactly the fabricated comparison
+  // the board is supposed to avoid.
   const staleQuickNote = (await resumePage.textContent("#quickNote")) || "";
   if (/\b(ahead|behind)\b/.test(staleQuickNote))
-    fail(`a stale quote must not leave a comparison in #quickNote either, got ${JSON.stringify(staleQuickNote)}`);
+    fail(`a stale quote must not leave a comparison behind, got ${JSON.stringify(staleQuickNote)}`);
   if (resumeErrors.length) fail("resume page errors: " + JSON.stringify(resumeErrors, null, 2));
   await resumePage.close();
 
@@ -1220,7 +1158,6 @@ try {
   await swapPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await swapPage.fill("#destIn", "Nashville TN");
   await swapPage.press("#destIn", "Enter");
-  await swapPage.click("#tabTuned");
   await swapPage.click("#liveBtn");
   await swapPage.waitForTimeout(400);
   if ((await swapPage.inputValue("#miles")) !== "400")
@@ -1280,22 +1217,17 @@ try {
   await swapMiPage.fill("#destIn", "Nashville TN");
   await swapMiPage.press("#destIn", "Enter");
   await swapMiPage.waitForTimeout(150);
-  await swapMiPage.click("#getMiBtn");              // GET MILEAGE — distance only, never a live quote
+  await swapMiPage.click("#getMiBtn");              // GET LIVE ETA — route, mileage and quote
   await swapMiPage.waitForTimeout(400);
   if ((await swapMiPage.inputValue("#miles")) !== "400")
-    fail("GET-MILEAGE setup: the first fetch should fill the mileage");
+    fail("contextual-button setup: the first fetch should fill the mileage");
   await swapMiPage.evaluate(() => { window.__routeMeters = 1931200; });   // ~1200 mi
   await swapMiPage.fill("#destIn", "Laredo TX");
   await swapMiPage.press("#destIn", "Enter");
   await swapMiPage.waitForTimeout(800);
   const swapMiMiles = await swapMiPage.inputValue("#miles");
   if (swapMiMiles !== "1200")
-    fail(`GET MILEAGE alone should still refresh the mileage on a city change, got ${JSON.stringify(swapMiMiles)}`);
-  // Refreshed the way they were working — a mileage-only fetch, not a live quote.
-  await swapMiPage.click("#tabTuned");
-  await swapMiPage.waitForTimeout(200);
-  if (await swapMiPage.isVisible("#liveLine"))
-    fail("refreshing after GET MILEAGE must not conjure a live quote");
+    fail(`a city change should refresh the mileage the app filled in, got ${JSON.stringify(swapMiMiles)}`);
   if (swapMiErrors.length) fail("getmi-swap page errors: " + JSON.stringify(swapMiErrors, null, 2));
   await swapMiPage.close();
 
@@ -1346,7 +1278,6 @@ try {
   });
   await originPage.fill("#destIn", "Nashville TN");
   await originPage.press("#destIn", "Enter");
-  await originPage.click("#tabTuned");
   await originPage.click("#liveBtn");
   await originPage.waitForTimeout(400);
   // Default: the phone's own fix, as before.
@@ -1422,7 +1353,6 @@ try {
   await noGpsPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await noGpsPage.fill("#destIn", "Coppell TX");
   await noGpsPage.press("#destIn", "Enter");
-  await noGpsPage.click("#tabTuned");
   await noGpsPage.click("#origToggle");
   await noGpsPage.fill("#origIn", "Carson, CA");
   await noGpsPage.click("#origSet");
@@ -1468,7 +1398,6 @@ try {
   await badOriginPage.dispatchEvent("#miles", "input");
   await badOriginPage.fill("#destIn", "Nashville TN");
   await badOriginPage.press("#destIn", "Enter");
-  await badOriginPage.click("#tabTuned");
   await badOriginPage.click("#origToggle");
   await badOriginPage.fill("#origIn", "Redlands, CA");
   await badOriginPage.click("#origSet");
@@ -1658,9 +1587,9 @@ try {
 
   // overrideHelp is new — confirm ITS specific wiring (not just that some help button
   // works), since a copy-paste of the shared pattern is exactly where a wrong HELP key
-  // would slip through unnoticed. #tabTuned lives inside #viewEta, hidden while the main
-  // page is on the Reset view (see the comment above) — switch back first.
-  await page.click("#tabEta"); await page.click("#tabTuned"); await page.waitForTimeout(100);
+  // would slip through unnoticed. It lives inside #viewEta, hidden while the main page is
+  // on the Reset view (see the comment above) — switch back first.
+  await page.click("#tabEta"); await page.waitForTimeout(100);
   await page.click("#overrideHelp");
   await page.waitForTimeout(100);
   if ((await page.textContent("#helpTitle"))?.trim() !== "Override")
@@ -1863,7 +1792,7 @@ try {
   }
 
   if (!process.exitCode)
-    console.log(`SMOKE OK: arrival ${etaClock}, shift "${shiftText}" (Live only), Live tab is strictly live (empty state with no/denied/stale quote, full run once one lands), preset chooser and cruise-speed field gone, CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one (override off) but always overwrites when override is on, live re-quote refreshes its own autofilled miles, CLEAR invalidates a stale LIVE quote without touching tuning, GET MILEAGE fills miles on both tabs without ever producing a live quote, per-field × buttons clear independently, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the LIVE CTA down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
+    console.log(`SMOKE OK: predicted ${etaClock}, shift "${shiftText}", one merged panel (no ETA sub-tabs), Predicted anchors and survives no/denied/stale quotes while only the live slot stands down, board carries the dispatch gap + traffic with no dangling separator, preset chooser and cruise-speed field gone, CLEAR empties the load, reset picker stays up until SET/NOW, LIVE renders from mocked HERE + hides on GPS denial, LIVE autofills blank miles but never overwrites a typed one (override off) but always overwrites when override is on, live re-quote refreshes its own autofilled miles, CLEAR invalidates a stale LIVE quote without touching tuning, contextual button delivers a real live quote, per-field × buttons clear independently, city suggestions show same-named cities across states + fall back to autosuggest on autocomplete failure, tuning toggle stands the switch rows down and back, help modal opens/stays/dismisses correctly, module loaded, no page errors`);
 } finally {
   await browser.close();
   server.close();
