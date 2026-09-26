@@ -355,6 +355,47 @@
     color:var(--cms-dim);font-family:var(--mono);font-weight:600;font-size:10.5px;
     letter-spacing:.04em;line-height:1.5;text-transform:uppercase}
 
+
+  /* The fuel gauge: eighths, E to F, in the two bands the tank model plans by.
+     Amber is plannable, the darker amber is the backup band a plan only dips into when
+     the reading is already at the floor, and red is the limp eighth nothing ever spends. */
+  .gauge{display:flex;gap:3px;padding:5px;background:var(--panel-w,#fff);
+    border:2px solid var(--ink);border-radius:10px;margin-top:6px}
+  .gauge button{flex:1;height:40px;border:none;border-radius:5px;cursor:pointer;
+    background:#e4e7e4;transition:background .12s}
+  .gauge button.plan{background:linear-gradient(180deg,var(--amber-hi),var(--amber))}
+  .gauge button.backup{background:linear-gradient(180deg,#E6B15C,#C98A22)}
+  .gauge button.limp{background:linear-gradient(180deg,#e06a5e,var(--late))}
+  .gticks{display:flex;margin-top:6px;padding:0 3px;font-family:var(--sans);font-weight:700;
+    font-size:9px;letter-spacing:.06em;color:var(--panel-mute)}
+  .gticks span{flex:1;text-align:center}
+  .grange{margin-top:10px;font-family:var(--mono);font-weight:600;font-size:11.5px;
+    line-height:1.7;color:var(--ink)}
+  .grange b{color:var(--panel-green);font-weight:700}
+  .grange.warn b{color:var(--late)}
+  .grange em{font-style:normal;color:var(--panel-mute);font-size:10px}
+  .glabel{display:flex;align-items:baseline;justify-content:space-between;margin-top:14px}
+  .glabel em{font-style:normal;font-family:var(--mono);font-weight:600;font-size:9.5px;
+    color:var(--panel-mute);opacity:.75}
+
+  /* The stop schedule, on the green panel directly under the strip that draws it. Each
+     row carries its own colour, which is why the old DOT/Fuel/Swap legend chips came out:
+     the list labels every colour it uses. */
+  .stops{margin-top:12px;border-top:1px solid rgba(255,255,255,.3)}
+  .srow{display:flex;align-items:center;gap:10px;padding:10px 0;
+    border-bottom:1px solid rgba(255,255,255,.16)}
+  .srow:last-child{border-bottom:none}
+  .srow i.pip{width:9px;height:9px;border-radius:99px;flex:none}
+  .stype{font-family:var(--sans);font-weight:800;font-size:11.5px;letter-spacing:.06em;
+    min-width:76px}
+  .swhen{flex:1;font-family:var(--mono);font-weight:600;font-size:12px;
+    font-variant-numeric:tabular-nums}
+  .swhen em{font-style:normal;opacity:.66;font-size:10px;display:block;margin-top:4px;
+    letter-spacing:.03em}
+  .slen{font-family:var(--sans);font-weight:700;font-size:11px;opacity:.82}
+  .srow i.pip.dot{background:var(--good)}
+  .srow i.pip.fuel{background:var(--amber-dim)}
+  .srow i.pip.swap{background:var(--reefer)}
   .overrideState{font-family:var(--mono);font-weight:600;font-size:10px;
     letter-spacing:.08em;color:var(--panel-mute)}
   .overrideState.on{color:var(--panel-green);font-weight:700}
@@ -536,6 +577,7 @@
         <span><i class="fuel"></i>Fuel</span>
         <span><i class="swap"></i>Swap</span>
       </div>
+      <div class="stops hide" id="stopList"></div>
       <div class="legend hide" id="legend"></div>
       <div class="cushion hide" id="cushion"></div>
     </div>
@@ -639,6 +681,11 @@
         <button class="help-btn" id="runHelp" aria-label="What is this?" type="button"><span>?</span></button>
       </div>
       <div class="note" id="runNote" style="margin-top:0"></div>
+      <div class="glabel"><div class="lbl" style="margin-bottom:0">On the gauge</div>
+        <em>THIS RUN — NOT REMEMBERED</em></div>
+      <div class="gauge" id="gauge"></div>
+      <div class="gticks"><span>E</span><span>⅛</span><span>¼</span><span>⅜</span><span>½</span><span>⅝</span><span>¾</span><span>⅞</span><span>F</span></div>
+      <div class="grange" id="grange"></div>
       <!-- Centered settings link above the full-width primary CTA. display:block + auto
            side margins centers the button itself (it stays shrink-to-fit). -->
       <button class="link" id="tuneToggle"
@@ -659,7 +706,8 @@
         </div>
       </div>
       <div class="grid hide" id="tuneGrid">
-        <div><div class="lbl">Fuel every</div><div class="fieldwrap"><input id="fuelEvery" type="number" inputmode="decimal"><span class="suffix">mi</span></div></div>
+        <div><div class="lbl">Tank</div><div class="fieldwrap"><input id="gal" type="number" inputmode="decimal"><span class="suffix">gal</span></div></div>
+        <div><div class="lbl">Loaded</div><div class="fieldwrap"><input id="mpg" type="number" inputmode="decimal" step="0.1"><span class="suffix">mpg</span></div></div>
         <div><div class="lbl">Fuel stop</div><div class="fieldwrap"><input id="fuelMin" type="number" inputmode="decimal"><span class="suffix">min</span></div></div>
         <div><div class="lbl">Swap takes</div><div class="fieldwrap"><input id="swapMin" type="number" inputmode="decimal"><span class="suffix">min</span></div></div>
         <div><div class="lbl">DOT break</div><div class="fieldwrap"><input id="dotMin" type="number" inputmode="decimal" min="30" step="5"><span class="suffix">min</span></div></div>
@@ -747,7 +795,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.8</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v5.0</button>
   </div>
 </div>
 
@@ -767,6 +815,7 @@ import {
   clockOf, dayOf, hm, hms,
   RATE, STOP_DEFAULTS, PRESET_VERSION, SWAP_DEFAULT, shiftAtArrival, dotDuration,
   solveEtaLive, liveFresh, LIVE_MAX_AGE_MS, formatPlaceSuggestions, metersToMiles,
+  TICKS, rangeForTick, fullRange, milesPerTick,
   RESET_HOURS, AUTO_CLEAR_MS, autoClearElapsed, icsStamp, esc
 } from "./lib/logic.js";
 
@@ -872,10 +921,15 @@ const HELP = {
     "<li>CLEAR wipes the load but keeps your tuning and swap schedule.</li></ul>" },
   run:{ title:"How You Run", body:
     "<p>Your stop rules — the team-driver time the router knows nothing about, laid on top "+
-    "of the live drive time. Dial in your own fuel stops, swap length, and DOT break timing "+
-    "under \"+ TUNE TO YOUR TRUCK.\"</p>"+
-    "<ul><li>DOT break has a 30-minute floor — the legal minimum, so it won't let you go lower.</li>"+
-    "<li>Changing these only touches the stop math — your swap schedule and theme stay put.</li></ul>" },
+    "of the live drive time.</p>"+
+    "<ul><li><b>The tank is your truck:</b> gallons × loaded mpg is how far a full one "+
+    "goes. <b>On the gauge</b> is what's aboard right now — it moves every fuel stop on "+
+    "the run, and it isn't remembered between sessions, because fuel goes stale the "+
+    "moment you drive.</li>"+
+    "<li>Two floors, and they answer different questions. A plan never spends your bottom "+
+    "quarter; nothing ever spends the last eighth — that's limp fuel, and it stays yours.</li>"+
+    "<li>Roll out low enough and the first stop lands at mile 0: fuel before you roll.</li>"+
+    "<li>DOT break has a 30-minute floor — the legal minimum, so it won't go lower.</li></ul>" },
   override:{ title:"Override", body:
     "<p>By default, \"Update ETA\" only fills in miles when the field is blank, or still "+
     "holds a number the app filled in itself — a mileage you typed (dispatch's number, say) "+
@@ -960,6 +1014,11 @@ const TRUCK = { height:412, width:259, length:2195, grossWeight:36287, axleCount
 
 /* A live quote is a snapshot: solved once at fetch time, shown only while liveFresh says
    it's recent. Never persisted — a stale route is worse than none. */
+/* The gauge reading, in eighths. Session-only on purpose: what's in the tank goes stale
+   the moment the truck moves, so a remembered level would be confidently wrong far more
+   often than right. Starts full — the common case, and the one that plans the least. */
+let tick = TICKS;
+
 const LIVE = { at:null, res:null, trafficS:0, note:"", pending:false, tried:false,
   /* The exact mileage this app last auto-filled, as a string. A blank-only guard can't
      tell a number the driver typed from one we wrote ourselves, so re-quoting after
@@ -1172,7 +1231,7 @@ async function updateLive(){
     // Kept raw as well as solved: RUNNING re-solves these same numbers against a moving
     // departure, which is what lets the arrival stay current without another fetch.
     LIVE.raw = { duration, length, base };
-    LIVE.res = solveEtaLive({ driveSeconds:duration, meters:length, p:E.p, swap:E.swap, startMs });
+    LIVE.res = solveEtaLive({ driveSeconds:duration, meters:length, p:E.p, swap:E.swap, startMs, tick });
     // Convenience only: fill miles from the real road distance when the field is blank, or
     // when it still holds a number we put there ourselves — so re-quoting for a new
     // destination refreshes the mileage instead of stranding the old city's. A mileage the
@@ -1309,7 +1368,7 @@ ZONE_LIST.forEach(z=>{
 });
 // The stop rules, and only the stop rules — cruise speed is gone with the preset
 // chooser, since live routing supplies drive time and nothing else reads an mph.
-const TUNE_KEYS = ["fuelEvery","fuelMin","swapMin","dotMin","dotAt"];
+const TUNE_KEYS = ["gal","mpg","fuelMin","swapMin","dotMin","dotAt"];
 const syncTune = () => { TUNE_KEYS.forEach(k=>{ $(k).value = E.p[k]; }); };
 TUNE_KEYS.forEach(k=>{
   $(k).addEventListener("input", e=>{
@@ -1378,7 +1437,7 @@ let runTimer = null;
 // quote in hand — clearing the destination or a failed fetch drops LIVE.raw with the rest.
 const resolveLiveFromRaw = startMs => {
   if(!LIVE.raw) return;
-  LIVE.res = solveEtaLive({ driveSeconds:LIVE.raw.duration, meters:LIVE.raw.length,
+  LIVE.res = solveEtaLive({ driveSeconds:LIVE.raw.duration, meters:LIVE.raw.length, tick,
     p:E.p, swap:E.swap, startMs });
 };
 const runTick = () => {
@@ -1519,6 +1578,44 @@ const refreshStaleQuote = () => {
     updateLive();
 };
 
+/* The gauge. Tapping a tick changes what the plan may spend, which moves every fuel stop
+   on the run — so it re-solves from the quote already in hand rather than re-fetching:
+   the tank is ours to model, the route isn't. */
+const FRAC = ["E","⅛","¼","⅜","½","⅝","¾","⅞","F"];
+function renderGauge(){
+  const g = $("gauge");
+  if(!g) return;
+  g.innerHTML = Array.from({length:TICKS}, (_,i) => {
+    const t = i+1, on = t <= tick;
+    const cls = !on ? "" : t <= (Number(E.p.backupTicks)||0) ? "limp"
+              : t <= (Number(E.p.reserveTicks)||0) ? "backup" : "plan";
+    return '<button type="button" data-t="'+t+'" class="'+cls+'" aria-label="'+FRAC[t]+' tank"></button>';
+  }).join("");
+  [...g.children].forEach(b => b.onclick = () => {
+    tick = Number(b.dataset.t);
+    if(LIVE.raw && liveFresh(LIVE.at, Date.now())) resolveFromRaw();
+    renderEta();
+  });
+  const r = rangeForTick(tick, E.p), aboard = Math.round(tick*milesPerTick(E.p));
+  const limp = Math.round((Number(E.p.backupTicks)||0)*milesPerTick(E.p));
+  const el = $("grange");
+  el.className = "grange" + (r.miles <= 0 ? " warn" : "");
+  el.innerHTML = r.miles <= 0
+    ? "<b>"+aboard+" mi</b> aboard, all of it limp fuel. <b>Fuel before you roll.</b>"
+    : "<b>"+aboard+" mi</b> aboard · plan on <b>"+Math.round(r.miles)+" mi</b>"
+      + (r.backup ? "<em> — dipping into your backup reserve</em>" : "")
+      + "<em><br>"+limp+" mi of limp fuel underneath it, never planned.</em>";
+}
+
+/* Re-solve the arrival from the quote already fetched — same drive time and distance, new
+   tank or new departure. No network: that is what makes the gauge and the running clock
+   free to move. */
+function resolveFromRaw(){
+  if(!LIVE.raw) return;
+  LIVE.res = solveEtaLive({ driveSeconds:LIVE.raw.duration, meters:LIVE.raw.length, tick,
+    p:E.p, swap:E.swap, startMs:LIVE.at });
+}
+
 function renderEta(){
   const showTz = E.destTz || E.originTz;
   // Small per-field "×" buttons: visible only once their own field has content. Driven
@@ -1557,19 +1654,27 @@ function renderEta(){
   // between cards shows miles remaining; the fuel milepost fronts the run panel
   // (so it shows/hides with it) with the tuned fuel interval — never a number
   // that can disagree with what the run note says.
+  const liveNow = !!(liveFresh(LIVE.at, Date.now()) && LIVE.res);
   show($("mpTopWrap"), M > 0);
   if(M > 0) $("mpTop").textContent = "MILE " + M;
-  show($("mpFuelWrap"), true);
-  $("mpFuel").textContent = Number(E.p.fuelEvery) > 0 ? "MILE " + E.p.fuelEvery + " · FUEL" : "FUEL";
+  // The fuel milepost names the first stop this run actually takes, off the solved
+  // schedule — not an interval, which could disagree with the list below it.
+  {
+    const firstFuel = liveNow && LIVE.res.schedule.find(x => x.kind === "fuel");
+    show($("mpFuelWrap"), !!firstFuel);
+    if(firstFuel) $("mpFuel").textContent = "MILE " + Math.round(firstFuel.mile) + " · FUEL";
+  }
 
   // The stop rules describe the tuning panel itself, not any one run, so they render on
   // every pass — including the empty states below, where the panel is still on screen.
   $("runNote").innerHTML =
-    "fuel every "+E.p.fuelEvery+" mi ("+E.p.fuelMin+" min) · swap "+
+    "tank "+E.p.gal+" gal × "+E.p.mpg+" mpg = <b>"+Math.round(fullRange(E.p))+" mi</b> full · "+
+    "fuel stop "+E.p.fuelMin+" min<br>swap "+
     E.swap.times.join(" / ")+" "+tzTag(E.swap.tz)+" ("+E.p.swapMin+" min) · DOT "+
     dotDuration(E.p.dotMin)+" min @ "+E.p.dotAt+" h into shift";
+  renderGauge();
 
-  ["etaYours","etaShift","liveLine","liveNote","quickNote","strip","stripKey",
+  ["etaYours","etaShift","liveLine","liveNote","quickNote","strip","stripKey","stopList",
    "legend","cushion","etaExit"].forEach(id=>show($(id),false));
   show($("etaDay"), true);
   renderLiveBtn();
@@ -1683,14 +1788,11 @@ function renderEta(){
         + "next few hours. The truck-legal routing applies to the whole run.";
     }
 
-    // Lay every stop on the timeline: swaps and DOT breaks by clock, fuel by odometer.
-    const stops = [];
-    swaps.forEach(t => stops.push({k:"swap", min:Number(E.p.swapMin)||0,
-      at:(t-liveStart)/3600e3/totalH}));
-    for(let i=1;i<=fuelStops;i++)
-      stops.push({k:"fuel", min:Number(E.p.fuelMin)||0, at:i*Number(E.p.fuelEvery)/liveMiles});
-    dots.forEach(t => stops.push({k:"dot", min:dotMin, at:(t-liveStart)/3600e3/totalH}));
-    stops.sort((a,b)=>a.at-b.at);
+    // The strip and the list below it read the SAME solved schedule, so a notch and a row
+    // can never disagree about where a stop is. runSchedule() already merged the two
+    // clocks — swaps and breaks by wall time, fuel by odometer — into one ordered list.
+    const stops = LIVE.res.schedule.map(x =>
+      ({ k:x.kind, min:x.min, at:(x.atMs - liveStart)/3600e3/totalH }));
 
     let html="";
     for(let i=0;i<=stops.length;i++){
@@ -1698,7 +1800,21 @@ function renderEta(){
       if(i<stops.length) html += "<i class='"+stops[i].k+"' style='flex:"+(stops[i].min/60)+"'></i>";
     }
     $("strip").innerHTML = html;
-    show($("strip"), true); show($("stripKey"), true); show($("legend"), true);
+    show($("strip"), true); show($("legend"), true);
+
+    /* The schedule as rows: what, when, at what mile. The app has always computed these
+       positions to draw the strip and then thrown them away — a driver plans against the
+       stop, not the count. "BEFORE YOU ROLL" is the tank model's most useful answer:
+       knowing at the yard that you need fuel first beats any arrival time on the screen. */
+    const NAMES = { swap:"SWAP", dot:"DOT BREAK", fuel:"FUEL" };
+    $("stopList").innerHTML = LIVE.res.schedule.map(x =>
+      '<div class="srow"><i class="pip '+x.kind+'"></i>'
+      + '<div class="stype">'+NAMES[x.kind]+'</div>'
+      + '<div class="swhen">' + (x.mile < 1 ? "BEFORE YOU ROLL"
+          : clockOf(new Date(x.atMs), showTz)+" "+tzTag(showTz))
+      + '<em>' + (x.mile < 1 ? "AT THE YARD" : "MILE "+Math.round(x.mile)) + '</em></div>'
+      + '<div class="slen">'+x.min+' min</div></div>').join("");
+    show($("stopList"), LIVE.res.schedule.length > 0);
     // Total rather than an average speed: rolling and stopped visibly add up to it, which
     // is the number a driver is actually planning against.
     $("legend").innerHTML = "<span>ROLLING "+hm(driveH)+"</span><span>STOPPED "+hm(stopH)+
