@@ -1638,6 +1638,17 @@ try {
   const helpBody = (await page.textContent("#helpBody"))?.trim();
   if (!helpTitle) fail("help modal should show a non-empty title");
   if (!helpBody) fail("help modal should show non-empty body text");
+  // The ETA tab's "Assumes nonstop team running / Doesn't track HOS" footer is gone.
+  const etaText = await page.$eval("#viewEta", el => el.textContent);
+  if (/nonstop team running|track HOS/.test(etaText))
+    fail("the ETA tab should no longer carry the nonstop-team / HOS footer note");
+  // Frosted, not just dimmed: the open backdrop blurs the page behind the sign.
+  const helpFrost = await page.$eval("#helpBackdrop", el => {
+    const cs = getComputedStyle(el);
+    return cs.backdropFilter || cs.webkitBackdropFilter || "";
+  });
+  if (!/blur\(\s*[1-9]/.test(helpFrost))
+    fail(`help backdrop should be frosted (backdrop-filter blur), got ${JSON.stringify(helpFrost)}`);
   await page.click("#helpTitle");                 // tap inside the panel
   await page.waitForTimeout(100);
   if (!(await page.isVisible("#helpBackdrop"))) fail("tapping inside the panel must not close it");

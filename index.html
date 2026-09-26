@@ -213,6 +213,16 @@
     display:flex;align-items:center;justify-content:center;
     padding:22px calc(22px + env(safe-area-inset-right)) calc(22px + env(safe-area-inset-bottom))
       calc(22px + env(safe-area-inset-left))}
+  /* Frosted behind the sign: the page blurs out instead of just dimming. The flat
+     .72 above stays as the fallback for an engine without backdrop-filter; with the
+     blur doing the separating, the tint can ease off so it reads as frost, not a
+     blackout. Day gets a lighter, cooler frost so the light road stays light. */
+  @supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+    .helpBackdrop{background:rgba(6,8,10,.45);
+      -webkit-backdrop-filter:blur(14px) saturate(140%);
+      backdrop-filter:blur(14px) saturate(140%)}
+    [data-theme="day"] .helpBackdrop{background:rgba(15,20,25,.28)}
+  }
   .helpPanel{background:var(--panel);color:var(--ink);border:3px solid var(--ink);
     border-radius:var(--r-sheet);box-shadow:var(--shadow);
     width:100%;max-width:400px;max-height:80vh;overflow-y:auto;padding:18px}
@@ -425,9 +435,10 @@
     font-family:var(--mono);font-weight:600;font-size:11px;letter-spacing:.03em}
   select.centered{text-align:center;text-align-last:center}
 
-  /* Nothing translucent is left to reduce, but the plumbing stays harmless. */
+  /* Reduced transparency: no frost, back to the flat dim in both themes. */
   @media (prefers-reduced-transparency: reduce){
-    .helpBackdrop{-webkit-backdrop-filter:none;backdrop-filter:none}
+    .helpBackdrop,[data-theme="day"] .helpBackdrop{background:rgba(6,8,10,.72);
+      -webkit-backdrop-filter:none;backdrop-filter:none}
   }
   .hide{display:none !important}
 </style>
@@ -638,11 +649,6 @@
         <select id="swapTz" class="centered" style="margin-top:10px"></select>
       </div>
     </div>
-
-    <div class="foot" style="text-align:center">
-      <p>Assumes nonstop team running.</p>
-      <p>Doesn't track HOS — check your clocks.</p>
-    </div>
   </div>
 
   <!-- ========================== 34 RESET ========================== -->
@@ -716,7 +722,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.6.4</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v4.6.5</button>
   </div>
 </div>
 

@@ -20,7 +20,7 @@ no server, no signal required to open it, read the 34 reset, or get a Predicted 
 truck route, and with no fresh quote it says so rather than showing an arrival the road can't
 back up.
 
-**Current version: v4.6.4**
+**Current version: v4.6.5**
 
 ## Files
 
@@ -90,6 +90,17 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v4.6.5
+
+- **The help guides open on frosted glass.** Tapping any "?" now blurs the page behind
+  the guide instead of just dimming it, so the white sign stands out and the screen
+  underneath reads as out of focus. The day theme gets a lighter frost so the light road
+  stays light. Tapping outside or pressing Escape still closes it, exactly as before.
+- With the phone's **Reduce Transparency** setting on, or on a browser that can't blur,
+  it falls back to the plain dark dim.
+- **Removed the "Assumes nonstop team running. Doesn't track HOS — check your clocks."
+  note** from the bottom of the ETA tab.
 
 ### v4.6.4
 
