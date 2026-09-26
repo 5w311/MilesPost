@@ -1652,24 +1652,37 @@ try {
   await verNoUpdatePage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await verNoUpdatePage.waitForTimeout(200);   // let the mocked registration resolve into swReg
   const verFootDefault = (await verNoUpdatePage.textContent("#verFoot"))?.trim();
+  // The quiet check on launch: the app asks on its own, FuelPost-style, with no tap and
+  // nothing flashed on the footer.
+  if ((await verNoUpdatePage.evaluate(() => window.__updateCalls)) !== 1)
+    fail(`the app should check for an update on its own at launch, update() calls: ${await verNoUpdatePage.evaluate(() => window.__updateCalls)}`);
+  if ((await verNoUpdatePage.textContent("#verFoot"))?.trim() !== verFootDefault)
+    fail("a quiet launch check must not change the footer");
   await verNoUpdatePage.click("#verFoot");
   await verNoUpdatePage.waitForTimeout(100);
   if ((await verNoUpdatePage.textContent("#verFoot"))?.trim() !== "CHECKING FOR UPDATES…")
     fail(`tapping the version footer should show a checking state immediately, got ${JSON.stringify((await verNoUpdatePage.textContent("#verFoot"))?.trim())}`);
-  if ((await verNoUpdatePage.evaluate(() => window.__updateCalls)) !== 1)
-    fail("tapping the version footer should call registration.update() exactly once");
+  if ((await verNoUpdatePage.evaluate(() => window.__updateCalls)) !== 2)
+    fail("tapping the version footer should call registration.update() exactly once more");
   await verNoUpdatePage.waitForTimeout(1700);   // past the 1500ms found/not-found window
   if ((await verNoUpdatePage.textContent("#verFoot"))?.trim() !== "YOU'RE UP TO DATE")
     fail(`no updatefound within the window should show the up-to-date message, got ${JSON.stringify((await verNoUpdatePage.textContent("#verFoot"))?.trim())}`);
   await verNoUpdatePage.waitForTimeout(2200);   // past the 2000ms revert-to-default timer
   if ((await verNoUpdatePage.textContent("#verFoot"))?.trim() !== verFootDefault)
     fail(`the footer should revert to its version stamp, got ${JSON.stringify((await verNoUpdatePage.textContent("#verFoot"))?.trim())}`);
+  // And again every time the app comes back to the front — still quietly.
+  await verNoUpdatePage.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await verNoUpdatePage.waitForTimeout(100);
+  if ((await verNoUpdatePage.evaluate(() => window.__updateCalls)) !== 3)
+    fail("coming back to the front should run a quiet update check");
+  if ((await verNoUpdatePage.textContent("#verFoot"))?.trim() !== verFootDefault)
+    fail("a quiet foreground check must not change the footer");
   if (verNoUpdateErrors.length) fail("verFoot (no-update) page errors: " + JSON.stringify(verNoUpdateErrors, null, 2));
   await verNoUpdatePage.close();
 
   // Update found: "updatefound" fires on the mocked registration — the footer must show
-  // "UPDATING…" and, critically, STAY there — the up-to-date fallback (on its own timer)
-  // must not clobber it once a real update is in progress.
+  // "DOWNLOADING UPDATE…" and, critically, STAY there — the up-to-date fallback (on its own
+  // timer) must not clobber it once a real download is in progress.
   const verUpdatePage = await browser.newPage();
   const verUpdateErrors = [];
   verUpdatePage.on("pageerror", e => verUpdateErrors.push("pageerror: " + e.message));
@@ -1685,11 +1698,11 @@ try {
   await verUpdatePage.waitForTimeout(50);
   await verUpdatePage.evaluate(() => window.__fireUpdateFound());
   await verUpdatePage.waitForTimeout(100);
-  if ((await verUpdatePage.textContent("#verFoot"))?.trim() !== "UPDATING…")
-    fail(`updatefound should switch the footer to an updating state, got ${JSON.stringify((await verUpdatePage.textContent("#verFoot"))?.trim())}`);
-  await verUpdatePage.waitForTimeout(1800);   // past the 1500ms window AND the 2000ms revert
-  if ((await verUpdatePage.textContent("#verFoot"))?.trim() !== "UPDATING…")
-    fail(`the updating state must not be overwritten by the up-to-date fallback, got ${JSON.stringify((await verUpdatePage.textContent("#verFoot"))?.trim())}`);
+  if ((await verUpdatePage.textContent("#verFoot"))?.trim() !== "DOWNLOADING UPDATE…")
+    fail(`updatefound should switch the footer to a downloading state, got ${JSON.stringify((await verUpdatePage.textContent("#verFoot"))?.trim())}`);
+  await verUpdatePage.waitForTimeout(3600);   // past the settle window AND the 2500ms revert
+  if ((await verUpdatePage.textContent("#verFoot"))?.trim() !== "DOWNLOADING UPDATE…")
+    fail(`the downloading state must not be overwritten by the up-to-date fallback, got ${JSON.stringify((await verUpdatePage.textContent("#verFoot"))?.trim())}`);
   if (verUpdateErrors.length) fail("verFoot (update-found) page errors: " + JSON.stringify(verUpdateErrors, null, 2));
   await verUpdatePage.close();
 
@@ -1749,78 +1762,179 @@ try {
   await verFailPage.close();
 
   /* ---- Real service-worker update, end to end. No fake registration: a second server
-     that can change what it serves, a genuine install, a genuine deploy, and the reload
-     the driver is actually waiting for.
+     that can change what it serves, a genuine install, a genuine deploy, and a real reload.
 
-     The case that matters is the one that shipped broken. `hadController` exists to skip
-     the reload on the first handover — a worker claiming a page that just downloaded the
-     newest content has nothing to reload for — but as a parse-time snapshot it swallowed
-     every later handover on that same page too. So a page that installed the worker on
-     THIS load (a first launch, or after iOS evicted the worker) would install and activate
-     a new version while continuing to show the old one, with the footer stuck on
-     "UPDATING…". Exactly the state a driver would describe as the updater not working. */
+     v4.8 behavior, FuelPost's model: the app checks on its own (launch + every return to
+     the front), a new build downloads and then WAITS, the footer names it — "UPDATE
+     AVAILABLE (vX) — TAP TO RELOAD" — and nothing reloads until the driver taps it.
+
+     The server sends GitHub Pages' own `cache-control: max-age=600`. That's what makes
+     the stale-build trap reproducible here: without it every fetch hits the network and a
+     new build can't be seeded with the previous build's index.html out of HTTP cache. */
   let swVersion = "0.0.1";
+  let swLegacy = false;     // serve a pre-v4.8 worker: takes over on install, no tap marker
+  const LEGACY_SW = v => `
+    const CACHE = "milespost-v${v}";
+    self.addEventListener("install", e => e.waitUntil(caches.open(CACHE)
+      .then(c => c.addAll(["./", "./index.html", "./lib/logic.js"])).then(() => self.skipWaiting())));
+    self.addEventListener("activate", e => e.waitUntil(caches.keys()
+      .then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())));
+    self.addEventListener("fetch", e => {
+      if (e.request.method !== "GET" || new URL(e.request.url).origin !== self.location.origin) return;
+      e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request)));
+    });`;
   const swServer = http.createServer((req, res) => {
     let p = decodeURIComponent(req.url.split("?")[0]);
     if (p === "/") p = "/index.html";
+    const headers = v => ({ "content-type": v, "cache-control": "max-age=600" });
+    if (p === "/sw.js" && swLegacy) {
+      res.writeHead(200, headers("text/javascript")); res.end(LEGACY_SW(swVersion)); return;
+    }
     fs.readFile(path.join(ROOT, p), (err, data) => {
       if (err) { res.writeHead(404); res.end("not found"); return; }
       let body = data;
       // Restamp the two files that carry a version so "deploying" is a one-line change.
       if (p === "/index.html" || p === "/sw.js")
         body = data.toString().replace(/(MilesPost v|milespost-v)[0-9][0-9.]*/g, "$1" + swVersion);
-      res.writeHead(200, { "content-type": TYPES[path.extname(p)] || "application/octet-stream" });
+      res.writeHead(200, headers(TYPES[path.extname(p)] || "application/octet-stream"));
       res.end(body);
     });
   });
   await new Promise(r => swServer.listen(0, r));
   const swPort = swServer.address().port;
+  const foot = pg => pg.textContent("#verFoot").then(t => (t || "").trim());
+  const offerFor = v => `UPDATE AVAILABLE (v${v}) — TAP TO RELOAD`;
+  const waitFoot = (pg, text, ms = 15000) =>
+    pg.waitForFunction(t => document.getElementById("verFoot").textContent.trim() === t, text, { timeout: ms })
+      .then(() => true, () => false);
+  // Build caches only — "milespost-tap" is sw.js's flag that a tap-aware build has taken
+  // over, not a build.
+  const cacheNames = pg => pg.evaluate(() => caches.keys())
+    .then(k => k.filter(n => n !== "milespost-tap").sort());
+  // Polled from here, not with an async waitForFunction predicate: Playwright doesn't await
+  // those, and a returned Promise is truthy — the wait passes without checking anything.
+  const waitCaches = async (pg, want, ms = 15000) => {
+    for (const end = Date.now() + ms; Date.now() < end; await pg.waitForTimeout(200))
+      if (JSON.stringify(await cacheNames(pg)) === JSON.stringify(want)) return true;
+    return false;
+  };
+  const stamp = pg => pg.evaluate(() => { window.__noReload = true; });
+  const stayed = pg => pg.evaluate(() => window.__noReload === true).catch(() => false);
   try {
     const swCtx = await browser.newContext();
     const swPage = await swCtx.newPage();
     // Deliberately NOT reloading after the first install: this page is uncontrolled at
-    // parse time and becomes controlled during the load, which is the broken path.
+    // parse time and becomes controlled during the load — the first handover must be
+    // skipped, and later ones must still work on this same page.
     await swPage.goto(`http://127.0.0.1:${swPort}/index.html`, { waitUntil: "networkidle" });
     await swPage.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 15000 })
       .catch(() => fail("the service worker never took control on first load"));
-    if ((await swPage.textContent("#verFoot"))?.trim() !== "MilesPost v0.0.1")
-      fail(`SW test setup: expected the v0.0.1 stamp, got ${JSON.stringify((await swPage.textContent("#verFoot"))?.trim())}`);
+    if ((await foot(swPage)) !== "MilesPost v0.0.1")
+      fail(`SW test setup: expected the v0.0.1 stamp, got ${JSON.stringify(await foot(swPage))}`);
 
-    swVersion = "0.0.2";                                  // deploy
+    // Deploy, then tap to check: the new build downloads and is OFFERED, by name — no reload.
+    swVersion = "0.0.2";
+    await stamp(swPage);
+    await swPage.click("#verFoot");
+    if (!(await waitFoot(swPage, offerFor("0.0.2"))))
+      fail(`a tapped check with a new build deployed should offer it by name, got ${JSON.stringify(await foot(swPage))}`);
+    if (!(await swPage.evaluate(() => document.getElementById("verFoot").classList.contains("ready"))))
+      fail("the footer should light up while an update is on offer");
+    // Give a build that wrongly takes over by itself time to do it (activation lands about a
+    // second after install) before checking it's still waiting — checked at once, the old
+    // build's cache is always still there and this would pass either way.
+    await swPage.waitForTimeout(2500);
+    const waiting = await cacheNames(swPage);
+    if (JSON.stringify(waiting) !== JSON.stringify(["milespost-v0.0.1", "milespost-v0.0.2"]))
+      fail(`the new build should be downloaded and WAITING (both caches present), got ${JSON.stringify(waiting)}`);
+    if (!(await stayed(swPage)))
+      fail("finding an update must never reload the page by itself — the driver picks the moment");
+    if ((await foot(swPage)) !== offerFor("0.0.2"))
+      fail(`the offer should stay up until tapped, got ${JSON.stringify(await foot(swPage))}`);
+
+    // The tap applies it: reload into the new build.
     const reloaded = swPage.waitForNavigation({ timeout: 15000 }).then(() => true).catch(() => false);
     await swPage.click("#verFoot");
-    if (!(await reloaded))
-      fail("tapping check-for-update with a new version deployed must reload the page — "
-         + "the new worker activates either way, so without this the app keeps showing the old version");
+    if (!(await reloaded)) fail("tapping TAP TO RELOAD must reload into the new build");
     await swPage.waitForLoadState("networkidle");
-    const afterUpdate = (await swPage.textContent("#verFoot"))?.trim();
-    if (afterUpdate !== "MilesPost v0.0.2")
-      fail(`after updating, the app should be running the new version, got ${JSON.stringify(afterUpdate)}`);
-    // And the old cache is gone, so nothing can serve the previous build back.
-    const swCaches = await swPage.evaluate(() => caches.keys());
-    if (!swCaches.includes("milespost-v0.0.2") || swCaches.includes("milespost-v0.0.1"))
-      fail(`activate should leave only the new cache, got ${JSON.stringify(swCaches)}`);
+    // Proves the no-cache install: with max-age=600 on every file, a build that trusted the
+    // HTTP cache would have cached v0.0.1's index.html and come back up as v0.0.1.
+    if ((await foot(swPage)) !== "MilesPost v0.0.2")
+      fail(`after the tap, the app should be running the new build, got ${JSON.stringify(await foot(swPage))}`);
+    const afterApply = await cacheNames(swPage);
+    if (JSON.stringify(afterApply) !== JSON.stringify(["milespost-v0.0.2"]))
+      fail(`activate should leave only the new cache, got ${JSON.stringify(afterApply)}`);
 
-    // Second update on the same page, now controlled from parse time — the path that was
-    // already working, kept honest so a fix to one case can't regress the other.
+    // Next deploy, found with NO tap: coming back to the front runs the quiet check, and
+    // the offer just appears. Still no reload.
     swVersion = "0.0.3";
-    const reloadedAgain = swPage.waitForNavigation({ timeout: 15000 }).then(() => true).catch(() => false);
+    await stamp(swPage);
+    await swPage.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    if (!(await waitFoot(swPage, offerFor("0.0.3"))))
+      fail(`returning to the app should find the new build and offer it, got ${JSON.stringify(await foot(swPage))}`);
+    if (!(await stayed(swPage))) fail("a quietly found update must not reload the page");
+
+    // Launched again while that build is still waiting: the offer is up straight away.
+    // Tapping it there must reload THAT page only — the other one gets offered, not reloaded.
+    const swPage2 = await swCtx.newPage();
+    await swPage2.goto(`http://127.0.0.1:${swPort}/index.html`, { waitUntil: "networkidle" });
+    if (!(await waitFoot(swPage2, offerFor("0.0.3"), 5000)))
+      fail(`a build downloaded earlier and never applied should be offered at launch, got ${JSON.stringify(await foot(swPage2))}`);
+    const reloaded2 = swPage2.waitForNavigation({ timeout: 15000 }).then(() => true).catch(() => false);
+    await swPage2.click("#verFoot");
+    if (!(await reloaded2)) fail("tapping the offer on a fresh launch must reload into the new build");
+    await swPage2.waitForLoadState("networkidle");
+    if ((await foot(swPage2)) !== "MilesPost v0.0.3")
+      fail(`the tapped page should now run v0.0.3, got ${JSON.stringify(await foot(swPage2))}`);
+    await swPage.waitForTimeout(800);
+    if (!(await stayed(swPage)))
+      fail("a page that didn't tap must not be reloaded when another one applies the update");
+    if ((await foot(swPage)) !== offerFor("0.0.3"))
+      fail(`the untapped page should keep offering the update, got ${JSON.stringify(await foot(swPage))}`);
+    const r3 = swPage.waitForNavigation({ timeout: 15000 }).then(() => true).catch(() => false);
     await swPage.click("#verFoot");
-    if (!(await reloadedAgain)) fail("a second update on the same page must also reload");
+    if (!(await r3)) fail("tapping the offer after the build already took over should just reload");
     await swPage.waitForLoadState("networkidle");
-    if ((await swPage.textContent("#verFoot"))?.trim() !== "MilesPost v0.0.3")
-      fail("the second update should land too");
+    if ((await foot(swPage)) !== "MilesPost v0.0.3")
+      fail(`after its own tap the first page should run v0.0.3, got ${JSON.stringify(await foot(swPage))}`);
+    await swPage2.close();
 
     // Nothing new deployed: an honest "up to date", and no reload.
-    let bounced = false;
-    swPage.once("framenavigated", () => { bounced = true; });
+    await stamp(swPage);
     await swPage.click("#verFoot");
     await swPage.waitForTimeout(1400);
-    const idle = (await swPage.textContent("#verFoot"))?.trim();
-    if (idle !== "YOU'RE UP TO DATE")
-      fail(`with nothing deployed the check should report up to date, got ${JSON.stringify(idle)}`);
-    if (bounced) fail("an up-to-date check must not reload the page");
+    if ((await foot(swPage)) !== "YOU'RE UP TO DATE")
+      fail(`with nothing deployed the check should report up to date, got ${JSON.stringify(await foot(swPage))}`);
+    if (!(await stayed(swPage))) fail("an up-to-date check must not reload the page");
     await swCtx.close();
+
+    /* The one-time hand-off. A phone still on a pre-v4.8 build runs a page that can't send
+       the tap, so the first tap-aware build must take over on its own — exactly once —
+       and every build after it must wait. */
+    swVersion = "0.0.1"; swLegacy = true;
+    const legCtx = await browser.newContext();
+    const legPage = await legCtx.newPage();
+    await legPage.goto(`http://127.0.0.1:${swPort}/index.html`, { waitUntil: "networkidle" });
+    await legPage.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 15000 })
+      .catch(() => fail("the legacy worker never took control"));
+    swVersion = "0.0.2"; swLegacy = false;              // the first tap-aware deploy
+    await stamp(legPage);
+    await legPage.click("#verFoot");
+    if (!(await waitCaches(legPage, ["milespost-v0.0.2"])))
+      fail(`replacing a pre-v4.8 worker, the new build must take over on its own, caches: ${JSON.stringify(await cacheNames(legPage))}`);
+    if (!(await waitFoot(legPage, offerFor("0.0.2"), 5000)))
+      fail(`a build that took over without the tap should be offered, not reloaded into, got ${JSON.stringify(await foot(legPage))}`);
+    if (!(await stayed(legPage))) fail("the hand-off must not reload a tap-aware page by itself");
+    swVersion = "0.0.3";                                // every build after that waits
+    await legPage.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    if (!(await waitFoot(legPage, offerFor("0.0.3"))))
+      fail(`the next build should be offered as usual, got ${JSON.stringify(await foot(legPage))}`);
+    await legPage.waitForTimeout(2500);                 // same reason as above
+    const legCaches = await cacheNames(legPage);
+    if (JSON.stringify(legCaches) !== JSON.stringify(["milespost-v0.0.2", "milespost-v0.0.3"]))
+      fail(`after the hand-off, the next build must WAIT for the tap, caches: ${JSON.stringify(legCaches)}`);
+    await legCtx.close();
   } finally {
     swServer.close();
   }
