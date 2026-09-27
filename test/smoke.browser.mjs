@@ -125,9 +125,24 @@ try {
     fail("the preset chooser must no longer exist in the DOM");
   if ((await page.locator("#mph").count()) !== 0)
     fail("the cruise-speed field must no longer exist in the DOM");
-  for (const id of ["gal", "mpg", "fuelMin", "swapMin", "dotMin", "dotAt"])
+  for (const id of ["fuelMax", "fuelMin", "swapMin", "dotMin", "dotAt"])
     if ((await page.locator(`#${id}`).count()) !== 1)
       fail(`#${id} must be in the tuning grid — it's a stop rule, not a preset`);
+  // v5.1: one "Fuel every … mi max" field replaced gallons × mpg.
+  for (const id of ["gal", "mpg"])
+    if ((await page.locator(`#${id}`).count()) !== 0)
+      fail(`#${id} must be gone — miles between fuel stops replaced gallons × mpg`);
+  if ((await page.inputValue("#fuelMax")) !== "900")
+    fail(`miles between fuel stops should default to 900, got ${JSON.stringify(await page.inputValue("#fuelMax"))}`);
+  // The gauge reads like FuelPost's: plannable miles, 900 on a full tank, 0 at the bottom.
+  const gaugeFull = (await page.textContent("#grange"))?.trim() || "";
+  if (!/^F — 900 mi/.test(gaugeFull))
+    fail(`a full tank should read "F — 900 mi", got ${JSON.stringify(gaugeFull)}`);
+  await page.click('#gauge button[data-t="1"]');
+  const gaugeLow = (await page.textContent("#grange"))?.trim() || "";
+  if (!/^⅛ — 0 mi/.test(gaugeLow))
+    fail(`the bottom of the gauge should read "⅛ — 0 mi", got ${JSON.stringify(gaugeLow)}`);
+  await page.click('#gauge button[data-t="8"]');
 
   // CLEAR button: enabled once there's a load, two-tap arm/confirm empties the load
   // and returns the readout to its placeholder.
@@ -307,7 +322,7 @@ try {
   await livePage.dispatchEvent("#miles", "input");
   await livePage.fill("#destIn", "Nashville TN");
   await livePage.press("#destIn", "Enter");
-  await livePage.click("#liveBtn");
+  await livePage.click("#getMiBtn");
   await livePage.waitForTimeout(300);
   if (!(await livePage.isVisible("#liveLine")))
     fail("LIVE board should render after a successful mocked HERE fetch");
@@ -403,7 +418,7 @@ try {
   // Opening the tuning grid stands the switch rows down, so the fields sit directly under
   // the toggle that revealed them; closing it must bring them back. A one-way hide here
   // would strand the driver with no way to refresh a live ETA.
-  if (!(await livePage.isVisible("#liveBtn"))) fail("LIVE button should be visible with tuning closed");
+  if (!(await livePage.isVisible("#getMiBtn"))) fail("GET ETA should be visible with tuning closed");
   if (!(await livePage.isVisible("#overrideRow"))) fail("override row should be visible with tuning closed");
   // Turn override on before opening tuning, so hiding the row can be checked against
   // actually losing the driver's choice — a hide that also resets E.liveOverride would
@@ -446,7 +461,7 @@ try {
   await deniedPage.dispatchEvent("#miles", "input");
   await deniedPage.fill("#destIn", "Nashville TN");
   await deniedPage.press("#destIn", "Enter");
-  await deniedPage.click("#liveBtn");
+  await deniedPage.click("#getMiBtn");
   await deniedPage.waitForTimeout(300);
   if (await deniedPage.isVisible("#liveLine"))
     fail("LIVE line must stay hidden when GPS is denied");
@@ -519,8 +534,10 @@ try {
         if (window.__blockRoute) return Promise.resolve(new Response("no", { status: 503 }));
         return Promise.resolve(new Response(JSON.stringify(
           // 6h drive, 20min of it traffic, 400 mi (643,738 m). Length is overridable via
-          // window.__routeMeters so a test can simulate re-quoting a different destination.
-          { routes: [{ sections: [{ summary: { duration: 21600, baseDuration: 20400,
+          // window.__routeMeters so a test can simulate re-quoting a different destination;
+          // window.__routeSeconds for a run long enough to repeat every kind of stop.
+          { routes: [{ sections: [{ summary: { duration: window.__routeSeconds || 21600,
+            baseDuration: window.__routeSeconds || 20400,
             length: window.__routeMeters || 643738 } }] }] })));
       }
       return realFetch(url, ...rest);
@@ -536,7 +553,7 @@ try {
   await autofillPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await autofillPage.fill("#destIn", "Nashville TN");
   await autofillPage.press("#destIn", "Enter");
-  await autofillPage.click("#liveBtn");
+  await autofillPage.click("#getMiBtn");
   await autofillPage.waitForTimeout(300);
   const filledMiles = await autofillPage.inputValue("#miles");
   if (filledMiles !== "400")
@@ -559,7 +576,7 @@ try {
   await autofillPage.evaluate(() => { window.__routeMeters = 1207008; });   // 750 mi
   await autofillPage.fill("#destIn", "Laredo TX");
   await autofillPage.press("#destIn", "Enter");
-  await autofillPage.click("#liveBtn");
+  await autofillPage.click("#getMiBtn");
   await autofillPage.waitForTimeout(300);
   const requoted = await autofillPage.inputValue("#miles");
   if (requoted !== "750")
@@ -578,7 +595,7 @@ try {
   await keepPage.dispatchEvent("#miles", "input");
   await keepPage.fill("#destIn", "Nashville TN");
   await keepPage.press("#destIn", "Enter");
-  await keepPage.click("#liveBtn");
+  await keepPage.click("#getMiBtn");
   await keepPage.waitForTimeout(300);
   const keptMiles = await keepPage.inputValue("#miles");
   if (keptMiles !== "250")
@@ -612,7 +629,7 @@ try {
   await calmPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await calmPage.fill("#destIn", "Nashville TN");
   await calmPage.press("#destIn", "Enter");
-  await calmPage.click("#liveBtn");
+  await calmPage.click("#getMiBtn");
   await calmPage.waitForTimeout(300);
   // With a clear road the traffic segment drops out entirely, leaving just the gap — and
   // no dangling separator behind the badge, which is what the joined-list build prevents.
@@ -637,7 +654,7 @@ try {
   await tzPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await tzPage.fill("#destIn", "Nashville TN");
   await tzPage.press("#destIn", "Enter");
-  await tzPage.click("#liveBtn");
+  await tzPage.click("#getMiBtn");
   await tzPage.waitForTimeout(300);
   if (!(await tzPage.isVisible("#etaYours")))
     fail("a driver in a different tz should get their own clock reading on the Live tab");
@@ -674,7 +691,7 @@ try {
   await dayPage.fill("#depart", later);
   await dayPage.fill("#destIn", "Nashville TN");
   await dayPage.press("#destIn", "Enter");
-  await dayPage.click("#liveBtn");
+  await dayPage.click("#getMiBtn");
   await dayPage.waitForTimeout(300);
   const daySub = (await dayPage.textContent("#liveSub"))?.trim() || "";
   const predDay = ((await dayPage.textContent("#etaDay"))?.trim() || "").split(",")[0].toUpperCase();
@@ -693,7 +710,7 @@ try {
   await sameTzPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await sameTzPage.fill("#destIn", "Los Angeles CA");
   await sameTzPage.press("#destIn", "Enter");
-  await sameTzPage.click("#liveBtn");
+  await sameTzPage.click("#getMiBtn");
   await sameTzPage.waitForTimeout(300);
   if (await sameTzPage.isVisible("#etaYours"))
     fail("no device-clock line should appear when origin and destination share a tz");
@@ -715,7 +732,7 @@ try {
   await overridePage.fill("#destIn", "Nashville TN");
   await overridePage.press("#destIn", "Enter");
   await overridePage.click("#overrideBtn");
-  await overridePage.click("#liveBtn");
+  await overridePage.click("#getMiBtn");
   await overridePage.waitForTimeout(300);
   const overriddenMiles = await overridePage.inputValue("#miles");
   if (overriddenMiles === "250" || overriddenMiles === "")
@@ -744,16 +761,16 @@ try {
   // Move a stop rule off its default so "CLEAR didn't touch tuning" is a real check and
   // not just two identical default snapshots. The preset shortcut used to do this.
   await clearLivePage.click("#tuneToggle");
-  await clearLivePage.fill("#gal", "150");
-  await clearLivePage.dispatchEvent("#gal", "input");
+  await clearLivePage.fill("#fuelMax", "600");
+  await clearLivePage.dispatchEvent("#fuelMax", "input");
   await clearLivePage.click("#tuneToggle");
   await clearLivePage.waitForTimeout(100);
-  await clearLivePage.click("#liveBtn");
+  await clearLivePage.click("#getMiBtn");
   await clearLivePage.waitForTimeout(300);
   if (!(await clearLivePage.isVisible("#liveLine")))
     fail("LIVE line should be showing before CLEAR (setup check)");
   const tuneBefore = await clearLivePage.evaluate(() => ({
-    tune: ["gal","mpg","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
+    tune: ["fuelMax","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
     swap: ["swapA","swapB","swapTz"].map(id => document.getElementById(id).value),
   }));
   await clearLivePage.click("#etaClear");                   // arm
@@ -775,7 +792,7 @@ try {
     fail("a brand-new destination must not inherit a stale LIVE quote left over from before CLEAR");
   await clearLivePage.evaluate(() => { window.__blockRoute = false; });
   const tuneAfter = await clearLivePage.evaluate(() => ({
-    tune: ["gal","mpg","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
+    tune: ["fuelMax","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
     swap: ["swapA","swapB","swapTz"].map(id => document.getElementById(id).value),
   }));
   if (JSON.stringify(tuneBefore) !== JSON.stringify(tuneAfter))
@@ -804,8 +821,9 @@ try {
   const getMiMiles = await getMiPage.inputValue("#miles");
   if (getMiMiles !== "400")
     fail(`the contextual button should fill miles from the real road distance, got ${JSON.stringify(getMiMiles)}`);
-  if (await getMiPage.isVisible("#getMiBtn"))
-    fail("#getMiBtn should hide itself once miles has a value");
+  // v5.1: it stays. It's the only fetch button now, so a fresh read is always one tap away.
+  if (!(await getMiPage.isVisible("#getMiBtn")))
+    fail("GET ETA should stay on screen once miles has a value — it's the only fetch button now");
   if (getMiErrors.length) fail("getMi page errors: " + JSON.stringify(getMiErrors, null, 2));
   await getMiPage.close();
 
@@ -829,7 +847,7 @@ try {
   await runPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await runPage.fill("#destIn", "Nashville TN");
   await runPage.press("#destIn", "Enter");
-  await runPage.click("#liveBtn");
+  await runPage.click("#getMiBtn");
   await runPage.waitForTimeout(300);
   if (!(await runPage.isVisible("#liveLine")))
     fail("RUNNING setup: a live quote should be in hand");
@@ -997,50 +1015,88 @@ try {
   const ctxClock = (await ctxLivePage.textContent("#etaClock"))?.trim();
   if (!/^\d{2}:\d{2} \S+$/.test(ctxClock || "") || ctxClock === "--:--")
     fail(`GET LIVE ETA must leave a real arrival on screen, not the empty state, got ${JSON.stringify(ctxClock)}`);
-  // Having filled miles, the contextual button has nothing left to do and stands down.
-  if (await ctxLivePage.isVisible("#getMiBtn"))
-    fail("the contextual button should hide once miles has a value");
+  // v5.1: filling miles no longer stands it down — there's no second button to fall back on.
+  if (!(await ctxLivePage.isVisible("#getMiBtn")))
+    fail("GET ETA should stay available after filling miles");
   if (ctxLiveErrors.length) fail("contextual-button (live) page errors: " + JSON.stringify(ctxLiveErrors, null, 2));
   await ctxLivePage.close();
 
-  // The live CTA moved into the load card, so opening tuning must no longer hide it — the
-  // show() that did belonged to its old home inside the panel the tuning fields expand into.
+  // v5.1: UPDATE ETA is gone — GET ETA is the one fetch button, and it covers the cases
+  // UPDATE ETA existed for: typed dispatch miles, a stale quote, a fresh traffic read.
   const ctaPage = await browser.newPage();
   const ctaErrors = [];
   ctaPage.on("pageerror", e => ctaErrors.push("pageerror: " + e.message));
   await mockHere(ctaPage);
   await ctaPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
-  // With both arrivals in one panel the CTA is always relevant — there is no longer a tab
-  // it doesn't belong on.
-  if (!(await ctaPage.isVisible("#liveBtn")))
-    fail("UPDATE LIVE ETA should be on screen with the ETA view");
-  // Labelled without "LIVE": the panel's own Live slot already says where the number comes from.
-  if ((await ctaPage.textContent("#liveBtn"))?.trim() !== "UPDATE ETA")
-    fail(`the live CTA should read UPDATE ETA, got ${JSON.stringify((await ctaPage.textContent("#liveBtn"))?.trim())}`);
-  // It now sits inside the load card, directly above CLEAR.
-  const ctaPlace = await ctaPage.evaluate(() => {
-    const b = document.getElementById("liveBtn");
-    return { next: b.nextElementSibling?.id, card: b.closest(".card") === document.getElementById("panelTuned") };
-  });
-  if (ctaPlace.next !== "etaClear")
-    fail(`UPDATE LIVE ETA should sit directly above CLEAR, next sibling is ${JSON.stringify(ctaPlace.next)}`);
-  if (ctaPlace.card) fail("UPDATE LIVE ETA should no longer live in the run panel");
+  if ((await ctaPage.locator("#liveBtn").count()) !== 0)
+    fail("the UPDATE ETA button must be gone — GET ETA replaced it");
+  // Typed dispatch miles and then a destination: the case that used to need UPDATE ETA,
+  // because GET ETA hid itself the moment miles had a value.
+  await ctaPage.fill("#miles", "400");
+  await ctaPage.dispatchEvent("#miles", "input");
+  await ctaPage.fill("#destIn", "Nashville TN");
+  await ctaPage.press("#destIn", "Enter");
+  await ctaPage.waitForTimeout(100);
+  if (!(await ctaPage.isVisible("#getMiBtn")))
+    fail("GET ETA must be on screen with typed miles and a destination — nothing else can fetch now");
+  await ctaPage.click("#getMiBtn");
+  await ctaPage.waitForTimeout(300);
+  if (!(await ctaPage.isVisible("#liveLine")))
+    fail("GET ETA with typed miles should still deliver a live quote");
+  if ((await ctaPage.inputValue("#miles")) !== "400")
+    fail("GET ETA must not overwrite typed miles with override off");
+  const calls1 = await ctaPage.evaluate(() => window.__hereCalls.route);
+  await ctaPage.click("#getMiBtn");                     // a fresh read while one is showing
+  await ctaPage.waitForTimeout(300);
+  if ((await ctaPage.evaluate(() => window.__hereCalls.route)) !== calls1 + 1)
+    fail("tapping GET ETA again should pull a fresh quote");
   await ctaPage.click("#tuneToggle");
   await ctaPage.waitForTimeout(200);
   if (!(await ctaPage.isVisible("#tuneGrid"))) fail("tuning should open");
-  if (!(await ctaPage.isVisible("#liveBtn")))
-    fail("UPDATE LIVE ETA must stay visible while tuning is open — it's not in that panel any more");
-  // Override still steps aside — it's still in that panel. Running isn't any more, and
-  // must stay put for the same reason the CTA does: it's in the load card now, and hiding
-  // it would take the only unlock for the greyed-out departure off screen.
+  if (!(await ctaPage.isVisible("#getMiBtn")))
+    fail("GET ETA must stay visible while tuning is open — it's in the load card");
+  // Override still steps aside — it's in the panel the tuning fields expand into. Running
+  // must stay put: it's the only unlock for the greyed-out departure.
   if (await ctaPage.isVisible("#overrideRow")) fail("the override row should still hide with tuning open");
   if (!(await ctaPage.isVisible("#runningRow")))
     fail("the RUNNING switch must stay visible while tuning is open — it's not in that panel any more");
   await ctaPage.click("#tuneToggle");
   await ctaPage.waitForTimeout(200);
-  if (!(await ctaPage.isVisible("#liveBtn"))) fail("UPDATE LIVE ETA should still be there after closing tuning");
-  if (ctaErrors.length) fail("live-CTA page errors: " + JSON.stringify(ctaErrors, null, 2));
+  if (ctaErrors.length) fail("GET ETA page errors: " + JSON.stringify(ctaErrors, null, 2));
   await ctaPage.close();
+
+  // v5.1: the stop list is grouped by kind — one row each for DOT, fuel and swap, with the
+  // count and the total time, and every stop's time and mile under it in order. A ~40h,
+  // 2,400-mile run repeats every kind, so grouping is actually exercised.
+  const groupPage = await browser.newPage();
+  const groupErrors = [];
+  groupPage.on("pageerror", e => groupErrors.push("pageerror: " + e.message));
+  await mockHere(groupPage);
+  await groupPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+  await groupPage.evaluate(() => { window.__routeSeconds = 144000; window.__routeMeters = 3862400; });
+  await groupPage.fill("#destIn", "Nashville TN");
+  await groupPage.press("#destIn", "Enter");
+  await groupPage.click("#getMiBtn");
+  await groupPage.waitForTimeout(400);
+  const groups = await groupPage.evaluate(() => [...document.querySelectorAll("#stopList .srow")].map(r => ({
+    kind: r.dataset.kind,
+    label: r.querySelector(".stype").textContent.trim(),
+    times: [...r.querySelectorAll(".sat")].map(a => a.firstChild.textContent.trim()),
+    len: r.querySelector(".slen").textContent.trim(),
+  })));
+  const kinds = groups.map(g => g.kind);
+  if (JSON.stringify(kinds) !== JSON.stringify(["dot", "fuel", "swap"]))
+    fail(`the stop list should be one row per kind — dot, fuel, swap — got ${JSON.stringify(kinds)}`);
+  for (const g of groups) {
+    if (g.times.length < 2)
+      fail(`a 40-hour run should repeat every kind; ${g.kind} has ${g.times.length}`);
+    if (!g.label.endsWith("×" + g.times.length))
+      fail(`a grouped row should count its stops, got ${JSON.stringify(g.label)} for ${g.times.length}`);
+    if (!/^\d+mintotal$/i.test(g.len.replace(/\s+/g, "")))
+      fail(`a grouped row should show its total time, got ${JSON.stringify(g.len)}`);
+  }
+  if (groupErrors.length) fail("grouped stop list page errors: " + JSON.stringify(groupErrors, null, 2));
+  await groupPage.close();
 
   // Geocode caching: a town's coordinates don't move between refreshes, so re-quoting the
   // same destination should spend a routing call and nothing else. Changing the destination
@@ -1053,9 +1109,9 @@ try {
   await geoPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await geoPage.fill("#destIn", "Nashville TN");
   await geoPage.press("#destIn", "Enter");
-  await geoPage.click("#liveBtn");
+  await geoPage.click("#getMiBtn");
   await geoPage.waitForTimeout(300);
-  await geoPage.click("#liveBtn");
+  await geoPage.click("#getMiBtn");
   await geoPage.waitForTimeout(300);
   const sameDest = await geoPage.evaluate(() => ({ ...window.__hereCalls }));
   if (sameDest.route !== 2)
@@ -1092,7 +1148,7 @@ try {
   await resumePage.dispatchEvent("#miles", "input");
   await resumePage.fill("#destIn", "Nashville TN");
   await resumePage.press("#destIn", "Enter");
-  await resumePage.click("#liveBtn");
+  await resumePage.click("#getMiBtn");
   await resumePage.waitForTimeout(300);
   if (!(await resumePage.isVisible("#liveLine")))
     fail("LIVE line should be showing before the resume check (setup)");
@@ -1192,7 +1248,7 @@ try {
   await swapPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   await swapPage.fill("#destIn", "Nashville TN");
   await swapPage.press("#destIn", "Enter");
-  await swapPage.click("#liveBtn");
+  await swapPage.click("#getMiBtn");
   await swapPage.waitForTimeout(400);
   if ((await swapPage.inputValue("#miles")) !== "400")
     fail("swap setup: the first quote should fill 400 miles");
@@ -1312,7 +1368,7 @@ try {
   });
   await originPage.fill("#destIn", "Nashville TN");
   await originPage.press("#destIn", "Enter");
-  await originPage.click("#liveBtn");
+  await originPage.click("#getMiBtn");
   await originPage.waitForTimeout(400);
   // Default: the phone's own fix, as before.
   if ((await routeOrigin()) !== "41.8781,-87.6298")
@@ -1326,7 +1382,7 @@ try {
   await originPage.waitForTimeout(150);
   if (!/Redlands, CA/.test((await originPage.textContent("#origChip")) || ""))
     fail("the chip should name the town routes now start from");
-  await originPage.click("#liveBtn");
+  await originPage.click("#getMiBtn");
   await originPage.waitForTimeout(400);
   if ((await routeOrigin()) !== "34.0556,-117.1825")
     fail(`the route must start at the town set under Rolling out, got ${JSON.stringify(await routeOrigin())}`);
@@ -1335,7 +1391,7 @@ try {
   await originPage.click("#origToggle");
   await originPage.click("#origDev");
   await originPage.waitForTimeout(150);
-  await originPage.click("#liveBtn");
+  await originPage.click("#getMiBtn");
   await originPage.waitForTimeout(400);
   if ((await routeOrigin()) !== "41.8781,-87.6298")
     fail("DEVICE should put the route back on the phone's own fix");
@@ -1347,7 +1403,7 @@ try {
   await originPage.waitForTimeout(150);
   await originPage.selectOption("#origPick", "America/Denver");
   await originPage.waitForTimeout(150);
-  await originPage.click("#liveBtn");
+  await originPage.click("#getMiBtn");
   await originPage.waitForTimeout(400);
   if ((await routeOrigin()) !== "41.8781,-87.6298")
     fail("picking a bare timezone gives no place to route from — the fix must still be used");
@@ -1391,7 +1447,7 @@ try {
   await noGpsPage.fill("#origIn", "Carson, CA");
   await noGpsPage.click("#origSet");
   await noGpsPage.waitForTimeout(150);
-  await noGpsPage.click("#liveBtn");
+  await noGpsPage.click("#getMiBtn");
   await noGpsPage.waitForTimeout(500);
   if (!(await noGpsPage.isVisible("#liveLine")))
     fail("a live ETA should work with location refused once a town is set to roll out from");
@@ -1436,7 +1492,7 @@ try {
   await badOriginPage.fill("#origIn", "Redlands, CA");
   await badOriginPage.click("#origSet");
   await badOriginPage.waitForTimeout(150);
-  await badOriginPage.click("#liveBtn");
+  await badOriginPage.click("#getMiBtn");
   await badOriginPage.waitForTimeout(500);
   if (await badOriginPage.isVisible("#liveLine"))
     fail("an origin that can't be placed must not produce a route at all");

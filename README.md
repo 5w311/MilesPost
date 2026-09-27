@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.0**
+**Current version: v5.1**
 
 ## Files
 
@@ -100,7 +100,22 @@ path is relative — and the HERE key is locked to trusted domains that include
 
 ## Version history
 
-### v5.0
+### v5.1
+
+- **One button: GET ETA.** UPDATE ETA is gone. GET ETA used to hide as soon as miles had a
+  number in it, which is the only reason a second button existed — typed dispatch miles, a
+  quote gone stale, or wanting a fresh traffic read had nowhere else to go. Now GET ETA
+  stays up whenever there's a destination, and tapping it always pulls a fresh quote.
+- **The gauge reads like FuelPost's:** the miles you can plan on — **F — 900 mi** on a full
+  tank, down 150 an eighth, **0** at the bottom. It used to lead with the fuel physically
+  aboard (1200 at F), including the reserve that's never planned.
+- **Tank and Loaded mpg are gone from tuning — one "Fuel every … mi max" instead:** the most
+  miles you'll run between fuel stops, 900 by default. That's what a full tank plans; the
+  quarter-tank reserve and the limp eighth still sit underneath it. `PRESET_VERSION` goes to
+  7, so saved tuning resets to the new default; swap schedule and theme stay.
+- **The stop list is grouped:** one row each for DOT breaks, fuel and swaps — with how many
+  (×2, ×3) and the time they add up to — and every stop's time and mile listed under it. The
+  run strip above still draws them in the order they happen.
 
 - **The tank replaces "fuel every N miles."** That one number was doing two jobs — how far
   the tank goes (a truck fact) and how far you'll run before stopping (a decision) — so

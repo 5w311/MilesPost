@@ -382,17 +382,22 @@
      row carries its own colour, which is why the old DOT/Fuel/Swap legend chips came out:
      the list labels every colour it uses. */
   .stops{margin-top:12px;border-top:1px solid rgba(255,255,255,.3)}
-  .srow{display:flex;align-items:center;gap:10px;padding:10px 0;
+  .srow{display:flex;align-items:flex-start;gap:10px;padding:10px 0;
     border-bottom:1px solid rgba(255,255,255,.16)}
   .srow:last-child{border-bottom:none}
-  .srow i.pip{width:9px;height:9px;border-radius:99px;flex:none}
+  .srow i.pip{width:9px;height:9px;border-radius:99px;flex:none;margin-top:3px}
   .stype{font-family:var(--sans);font-weight:800;font-size:11.5px;letter-spacing:.06em;
-    min-width:76px}
+    min-width:100px;white-space:nowrap}
+  .stype b{font-weight:800;opacity:.75}
+  .sat + .sat{margin-top:8px}
   .swhen{flex:1;font-family:var(--mono);font-weight:600;font-size:12px;
     font-variant-numeric:tabular-nums}
   .swhen em{font-style:normal;opacity:.66;font-size:10px;display:block;margin-top:4px;
     letter-spacing:.03em}
-  .slen{font-family:var(--sans);font-weight:700;font-size:11px;opacity:.82}
+  .slen{font-family:var(--sans);font-weight:700;font-size:11px;opacity:.82;text-align:right;
+    white-space:nowrap}
+  .slen em{font-style:normal;display:block;font-size:9.5px;opacity:.8;margin-top:3px;
+    letter-spacing:.04em;text-transform:uppercase}
   .srow i.pip.dot{background:var(--good)}
   .srow i.pip.fuel{background:var(--amber-dim)}
   .srow i.pip.swap{background:var(--reefer)}
@@ -595,11 +600,9 @@
           <input id="miles" type="number" inputmode="decimal">
           <button type="button" class="fieldClear hide" id="milesClear" aria-label="Clear miles">×</button>
           <span class="suffix">mi</span>
-          <!-- On the Tuned tab this sits alongside UPDATE LIVE ETA on purpose: GET MILEAGE
-               is the quicker, narrower action — distance only, no traffic quote — so it
-               stays available there too. Compact secondary action, not the full-width
-               .primary CTA that button uses. Visibility driven from renderEta() below,
-               same pattern as milesClear/destClear. -->
+          <!-- The one fetch button (v5.1 folded UPDATE ETA into it): a live, truck-legal
+               quote, filling the miles on the way past. Shown whenever there's a
+               destination to route to — visibility driven from renderEta() below. -->
           <button type="button" class="go hide" id="getMiBtn" style="margin-top:8px">GET ETA</button>
           <div class="err hide" id="getMiNote"></div>
         </div>
@@ -665,11 +668,6 @@
         <input id="appt" type="datetime-local">
       </div>
 
-      <!-- The live CTA sits with the load it acts on, not down in the run panel. Visibility
-           is driven from renderEta() (Live tab only, as before the move) — renderLiveBtn()
-           still sets text/disabled only, so a fetch finishing while the tab is elsewhere
-           comes back in the right state. -->
-      <button class="primary" id="liveBtn" style="margin-top:6px">UPDATE ETA</button>
       <button class="muted" id="etaClear" style="margin-top:10px">CLEAR</button>
     </div>
 
@@ -706,8 +704,7 @@
         </div>
       </div>
       <div class="grid hide" id="tuneGrid">
-        <div><div class="lbl">Tank</div><div class="fieldwrap"><input id="gal" type="number" inputmode="decimal"><span class="suffix">gal</span></div></div>
-        <div><div class="lbl">Loaded</div><div class="fieldwrap"><input id="mpg" type="number" inputmode="decimal" step="0.1"><span class="suffix">mpg</span></div></div>
+        <div><div class="lbl">Fuel every</div><div class="fieldwrap"><input id="fuelMax" type="number" inputmode="decimal" step="50"><span class="suffix">mi max</span></div></div>
         <div><div class="lbl">Fuel stop</div><div class="fieldwrap"><input id="fuelMin" type="number" inputmode="decimal"><span class="suffix">min</span></div></div>
         <div><div class="lbl">Swap takes</div><div class="fieldwrap"><input id="swapMin" type="number" inputmode="decimal"><span class="suffix">min</span></div></div>
         <div><div class="lbl">DOT break</div><div class="fieldwrap"><input id="dotMin" type="number" inputmode="decimal" min="30" step="5"><span class="suffix">min</span></div></div>
@@ -795,7 +792,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v5.0</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v5.1</button>
   </div>
 </div>
 
@@ -904,7 +901,7 @@ const HELP = {
     "<ul><li>The board under them is the gap between the two — how far ahead of or behind "+
     "dispatch you actually are.</li>"+
     "<li>Predicted always works; it's arithmetic on numbers you already have.</li>"+
-    "<li>Live needs signal — tap \"GET ETA\" or \"UPDATE ETA\" to fetch one. It goes stale after about "+
+    "<li>Live needs signal — tap \"GET ETA\" to fetch one, or a fresh one. It goes stale after about "+
     "ten minutes, and that half clears until you pull a new one.</li>"+
     "<li>Edit your stop rules under \"+ TUNE TO YOUR TRUCK.\"</li></ul>" },
   load:{ title:"Your Load", body:
@@ -922,8 +919,9 @@ const HELP = {
   run:{ title:"How You Run", body:
     "<p>Your stop rules — the team-driver time the router knows nothing about, laid on top "+
     "of the live drive time.</p>"+
-    "<ul><li><b>The tank is your truck:</b> gallons × loaded mpg is how far a full one "+
-    "goes. <b>On the gauge</b> is what's aboard right now — it moves every fuel stop on "+
+    "<ul><li><b>Fuel every</b> is the most miles you'll run between fuel stops — what a "+
+    "full tank plans on, so the gauge reads F — 900 mi at the default. <b>On the gauge</b> "+
+    "is what's aboard right now, in miles you can plan on — it moves every fuel stop on "+
     "the run, and it isn't remembered between sessions, because fuel goes stale the "+
     "moment you drive.</li>"+
     "<li>Two floors, and they answer different questions. A plan never spends your bottom "+
@@ -931,15 +929,15 @@ const HELP = {
     "<li>Roll out low enough and the first stop lands at mile 0: fuel before you roll.</li>"+
     "<li>DOT break has a 30-minute floor — the legal minimum, so it won't go lower.</li></ul>" },
   override:{ title:"Override", body:
-    "<p>By default, \"Update ETA\" only fills in miles when the field is blank, or still "+
+    "<p>By default, \"Get ETA\" only fills in miles when the field is blank, or still "+
     "holds a number the app filled in itself — a mileage you typed (dispatch's number, say) "+
     "is never touched.</p>"+
-    "<ul><li>Turn this on and \"Update ETA\" always overwrites miles with the real "+
+    "<ul><li>Turn this on and \"Get ETA\" always overwrites miles with the real "+
     "road distance, even one you typed yourself.</li>"+
     "<li>Off by default, and remembered across sessions once you change it.</li></ul>" },
   running:{ title:"Running", body:
     "<p>Keeps your arrival current on its own — the departure clock tracks now and both "+
-    "arrivals re-solve against it. Doesn't use data; tap \"UPDATE ETA\" to pull a "+
+    "arrivals re-solve against it. Doesn't use data; tap \"GET ETA\" to pull a "+
     "fresh quote.</p>"+
     "<ul><li>Nothing is re-fetched while it runs: the arrival is re-solved from the quote "+
     "you already pulled, so the drive time and traffic in it stay as of that fetch.</li>"+
@@ -1266,14 +1264,8 @@ async function updateLive(){
   LIVE.pending = false;
   renderLiveBtn(); renderEta();
 }
-const renderLiveBtn = () => {
-  $("liveBtn").textContent = LIVE.pending ? "UPDATING…" : "UPDATE ETA";
-  $("liveBtn").disabled = LIVE.pending;
-  // On the Live tab the contextual button runs the same fetch, so it shares this one's
-  // in-flight state and has to be refreshed alongside it.
-  renderGetMiBtn();
-};
-$("liveBtn").onclick = () => updateLive();
+// GET ETA is the only fetch button now; this name stays for the callers that repaint it.
+const renderLiveBtn = () => renderGetMiBtn();
 
 /* A route has two ends — the destination, and since v4.5 the origin — so changing either
    leaves the quote in hand describing a trip nobody is taking. Doing nothing was worse than
@@ -1368,7 +1360,7 @@ ZONE_LIST.forEach(z=>{
 });
 // The stop rules, and only the stop rules — cruise speed is gone with the preset
 // chooser, since live routing supplies drive time and nothing else reads an mph.
-const TUNE_KEYS = ["gal","mpg","fuelMin","swapMin","dotMin","dotAt"];
+const TUNE_KEYS = ["fuelMax","fuelMin","swapMin","dotMin","dotAt"];
 const syncTune = () => { TUNE_KEYS.forEach(k=>{ $(k).value = E.p[k]; }); };
 TUNE_KEYS.forEach(k=>{
   $(k).addEventListener("input", e=>{
@@ -1596,15 +1588,14 @@ function renderGauge(){
     if(LIVE.raw && liveFresh(LIVE.at, Date.now())) resolveFromRaw();
     renderEta();
   });
-  const r = rangeForTick(tick, E.p), aboard = Math.round(tick*milesPerTick(E.p));
-  const limp = Math.round((Number(E.p.backupTicks)||0)*milesPerTick(E.p));
+  // Reads like FuelPost's gauge: the miles you can PLAN on — "F — 900 mi" full, down to 0
+  // at the bottom — not the physical fuel under the reserve, which is never planned.
+  const r = rangeForTick(tick, E.p), miles = Math.round(r.miles);
   const el = $("grange");
-  el.className = "grange" + (r.miles <= 0 ? " warn" : "");
-  el.innerHTML = r.miles <= 0
-    ? "<b>"+aboard+" mi</b> aboard, all of it limp fuel. <b>Fuel before you roll.</b>"
-    : "<b>"+aboard+" mi</b> aboard · plan on <b>"+Math.round(r.miles)+" mi</b>"
-      + (r.backup ? "<em> — dipping into your backup reserve</em>" : "")
-      + "<em><br>"+limp+" mi of limp fuel underneath it, never planned.</em>";
+  el.className = "grange" + (miles <= 0 ? " warn" : "");
+  el.innerHTML = "<b>"+FRAC[tick]+" — "+miles.toLocaleString()+" mi</b>"
+    + (miles <= 0 ? " · <b>Fuel before you roll.</b>"
+      : r.backup ? "<em> — on your backup reserve. Make the first stop count.</em>" : "");
 }
 
 /* Re-solve the arrival from the quote already fetched — same drive time and distance, new
@@ -1640,7 +1631,11 @@ function renderEta(){
   // miles yet — the instant miles gets a value some other way, this has nothing left to
   // do. Hiding the button also drops its own stale error note, so a failure from a
   // previous destination can't linger once the button it belongs to is gone.
-  const showGetMi = !!E.destTz && M === 0;
+  // v5.1: whenever there's a destination, not just while miles is blank. It used to hide
+  // once miles had a value, which is the only reason a second UPDATE ETA button existed —
+  // typed dispatch miles, a stale quote, or wanting a fresh traffic read all had nowhere
+  // else to go. One button, always there, covers all of them.
+  const showGetMi = !!E.destTz;
   show($("getMiBtn"), showGetMi);
   if(!showGetMi) show($("getMiNote"), false);
   const start = fromWall($("depart").value, E.originTz);
@@ -1668,7 +1663,7 @@ function renderEta(){
   // The stop rules describe the tuning panel itself, not any one run, so they render on
   // every pass — including the empty states below, where the panel is still on screen.
   $("runNote").innerHTML =
-    "tank "+E.p.gal+" gal × "+E.p.mpg+" mpg = <b>"+Math.round(fullRange(E.p))+" mi</b> full · "+
+    "fuel every <b>"+E.p.fuelMax+" mi</b> max · "+
     "fuel stop "+E.p.fuelMin+" min<br>swap "+
     E.swap.times.join(" / ")+" "+tzTag(E.swap.tz)+" ("+E.p.swapMin+" min) · DOT "+
     dotDuration(E.p.dotMin)+" min @ "+E.p.dotAt+" h into shift";
@@ -1806,14 +1801,22 @@ function renderEta(){
        positions to draw the strip and then thrown them away — a driver plans against the
        stop, not the count. "BEFORE YOU ROLL" is the tank model's most useful answer:
        knowing at the yard that you need fuel first beats any arrival time on the screen. */
+    // Grouped by kind (v5.1): one row per kind — DOT, fuel, swap — with the count and the
+    // time it all adds up to, and each stop's time and mile listed under it in order. The
+    // strip above still draws them interleaved, which is where the order reads best.
     const NAMES = { swap:"SWAP", dot:"DOT BREAK", fuel:"FUEL" };
-    $("stopList").innerHTML = LIVE.res.schedule.map(x =>
-      '<div class="srow"><i class="pip '+x.kind+'"></i>'
-      + '<div class="stype">'+NAMES[x.kind]+'</div>'
-      + '<div class="swhen">' + (x.mile < 1 ? "BEFORE YOU ROLL"
-          : clockOf(new Date(x.atMs), showTz)+" "+tzTag(showTz))
-      + '<em>' + (x.mile < 1 ? "AT THE YARD" : "MILE "+Math.round(x.mile)) + '</em></div>'
-      + '<div class="slen">'+x.min+' min</div></div>').join("");
+    $("stopList").innerHTML = ["dot","fuel","swap"].map(k => {
+      const xs = LIVE.res.schedule.filter(x => x.kind === k);
+      if(!xs.length) return "";
+      const total = xs.reduce((a,x) => a + x.min, 0);
+      return '<div class="srow" data-kind="'+k+'"><i class="pip '+k+'"></i>'
+        + '<div class="stype">'+NAMES[k]+(xs.length > 1 ? ' <b>×'+xs.length+'</b>' : '')+'</div>'
+        + '<div class="swhen">' + xs.map(x => '<div class="sat">'
+            + (x.mile < 1 ? "BEFORE YOU ROLL" : clockOf(new Date(x.atMs), showTz)+" "+tzTag(showTz))
+            + '<em>' + (x.mile < 1 ? "AT THE YARD" : "MILE "+Math.round(x.mile)) + '</em></div>').join("")
+        + '</div>'
+        + '<div class="slen">'+total+' min'+(xs.length > 1 ? '<em>total</em>' : '')+'</div></div>';
+    }).join("");
     show($("stopList"), LIVE.res.schedule.length > 0);
     // Total rather than an average speed: rolling and stopped visibly add up to it, which
     // is the number a driver is actually planning against.
