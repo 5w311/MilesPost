@@ -5,15 +5,24 @@ import { solveEtaLive, overlayStops, runSchedule, fuelStopMiles, rangeForTick,
 
 const NY = "America/New_York";
 const swap = { times: ["06:00", "18:00"], tz: NY };
-const P = STOP_DEFAULTS;                       // 200 gal x 6 mpg = 1200 mi, 150 a tick
+const P = STOP_DEFAULTS;                       // fuel every 900 mi max -> 150 a tick, 1200 full
 const startMs = fromWall("2026-06-15T08:00", NY).getTime();
 const MI = 1609.344;
 
 describe("the tank — range off the truck, floors off the driver", () => {
-  it("range is gallons x mpg, split into eighths", () => {
-    expect(fullRange(P)).toBe(1200);
-    expect(milesPerTick(P)).toBe(150);
+  it("a full tank plans exactly the miles between fuel stops, like FuelPost's F — 900", () => {
+    expect(P.fuelMax).toBe(900);
+    expect(plannableMiles(TICKS, P)).toBe(900);
+    expect(milesPerTick(P)).toBe(150);          // 900 over the six eighths above the floor
+    expect(fullRange(P)).toBe(1200);            // the physical tank, reserve included
     expect(TICKS).toBe(8);
+  });
+  it("the whole scale moves with the setting", () => {
+    const p600 = { ...P, fuelMax: 600 };
+    expect(plannableMiles(TICKS, p600)).toBe(600);
+    expect(milesPerTick(p600)).toBe(100);
+    expect(rangeForTick(1, p600)).toEqual({ miles: 0, backup: false });   // bottom reads 0
+    expect(fuelStopMiles(1500, 8, p600)).toEqual([600, 1200]);            // never more than 600 apart
   });
   it("a plan may not touch the bottom quarter", () => {
     expect(plannableMiles(8, P)).toBe(900);     // F: six plannable eighths
@@ -52,8 +61,8 @@ describe("fuelStopMiles — where the stops land on the odometer", () => {
   });
   it("guards: no run, or no usable range configured, plans nothing rather than looping", () => {
     expect(fuelStopMiles(0, 8, P)).toEqual([]);
-    expect(fuelStopMiles(688, 8, { ...P, gal: 0 })).toEqual([]);
-    expect(fuelStopMiles(688, 8, { ...P, mpg: 0 })).toEqual([]);
+    expect(fuelStopMiles(688, 8, { ...P, fuelMax: 0 })).toEqual([]);
+    expect(fuelStopMiles(688, 8, { ...P, fuelMax: undefined })).toEqual([]);
   });
 });
 
