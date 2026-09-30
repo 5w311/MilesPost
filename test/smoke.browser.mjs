@@ -702,28 +702,59 @@ try {
   if (tzErrors.length) fail("tz-mismatch page errors: " + JSON.stringify(tzErrors, null, 2));
   await tzCtx.close();
 
-  // Live on a different day from Predicted: the date line and exit tab are Predicted's, so
-  // the live slot has to name its own day. Rolling out three days from now puts Predicted
-  // days past a live quote that departs from the moment it was fetched.
+  // v5.3: Live departs from Rolling Out, the same as Predicted — never from the tap. A
+  // driver pricing a run ("Dalton at 1:30 AM") saw Live start at the tap instead: stops
+  // outside the run they'd entered, and "59m ahead" beside a Live clock half a day later.
+  // Rolling out 16:30 tomorrow (Chicago): Predicted = 400 mi ÷ 50 = 8h -> 00:30 the day
+  // after; Live = 6h drive + the 17:00 swap + the 22:00 DOT (30 min each) -> 23:30 — so
+  // Live also lands on a different day, and the slot has to name it.
   const dayCtx = await browser.newContext({ timezoneId: "America/Chicago" });
   const dayPage = await dayCtx.newPage();
   await runningOff(dayPage);
   await mockHere(dayPage);
   await dayPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
   const later = await dayPage.evaluate(() => {
-    const d = new Date(Date.now() + 3 * 864e5), z = n => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T08:00`;
+    const d = new Date(Date.now() + 864e5), z = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T16:30`;
   });
   await dayPage.fill("#depart", later);
   await dayPage.fill("#destIn", "Nashville TN");
   await dayPage.press("#destIn", "Enter");
   await dayPage.click("#getMiBtn");
   await dayPage.waitForTimeout(300);
+  const hhmm = t => { const m = /(\d{2}):(\d{2})/.exec(t || ""); return m ? +m[1] * 60 + +m[2] : NaN; };
+  const predMin = hhmm(await dayPage.textContent("#etaClock"));
+  const liveMin = hhmm(await dayPage.textContent("#liveClock"));
+  if (predMin !== 30 || liveMin !== 23 * 60 + 30)
+    fail(`both arrivals should count from Rolling Out 16:30 — Predicted 00:30, Live 23:30 — got ${await dayPage.textContent("#etaClock")} / ${await dayPage.textContent("#liveClock")}`);
+  // The board's gap has to be the gap between the two clocks, not just between two run times.
+  const board = (await dayPage.textContent("#liveLine")) || "";
+  const g = /(\d+)h (\d+)m (ahead|behind)/i.exec(board);
+  const clockGap = ((predMin - liveMin) % 1440 + 1440) % 1440;
+  if (!g || +g[1] * 60 + +g[2] !== clockGap || g[3].toLowerCase() !== "ahead")
+    fail(`the board should read ${clockGap} min ahead — the gap between the clocks on screen — got ${JSON.stringify(board)}`);
   const daySub = (await dayPage.textContent("#liveSub"))?.trim() || "";
   const predDay = ((await dayPage.textContent("#etaDay"))?.trim() || "").split(",")[0].toUpperCase();
   const m2 = /^([A-Z]{3}) · truck route$/.exec(daySub);
   if (!m2) fail(`a live arrival on another day should name its day, got ${JSON.stringify(daySub)}`);
   else if (m2[1] === predDay) fail(`the live slot's day should be Live's own, not Predicted's ${predDay}`);
+  // Stops can only fall inside the run that was entered, and the groups read in the order
+  // they happen: the 17:00 swap before the 22:00 DOT break.
+  const rows = await dayPage.evaluate(() => [...document.querySelectorAll("#stopList .srow")]
+    .map(r => [r.dataset.kind, r.querySelector(".sat").firstChild.textContent.trim()]));
+  if (JSON.stringify(rows) !== JSON.stringify([["swap", "17:00 CDT"], ["dot", "22:00 CDT"]])
+      && JSON.stringify(rows) !== JSON.stringify([["swap", "17:00 CST"], ["dot", "22:00 CST"]]))
+    fail(`the stops should be the 17:00 swap then the 22:00 DOT, in that order, got ${JSON.stringify(rows)}`);
+  // Moving Rolling Out moves Live with it — no new fetch needed.
+  const dayRoutes = await dayPage.evaluate(() => window.__hereCalls.route);
+  await dayPage.fill("#depart", later.replace("T16:30", "T15:30"));
+  await dayPage.dispatchEvent("#depart", "input");
+  await dayPage.waitForTimeout(200);
+  const liveMoved = hhmm(await dayPage.textContent("#liveClock"));
+  if (liveMoved !== 22 * 60 + 30)
+    fail(`an hour earlier Rolling Out should pull Live an hour earlier (22:30), got ${await dayPage.textContent("#liveClock")}`);
+  if ((await dayPage.evaluate(() => window.__hereCalls.route)) !== dayRoutes)
+    fail("re-timing the departure should re-solve the quote in hand, not fetch again");
   await dayCtx.close();
 
   // Same-tz case: no second clock at all — a driver whose origin and destination share a
@@ -1111,7 +1142,9 @@ try {
     len: r.querySelector(".slen").textContent.trim(),
   })));
   const kinds = groups.map(g => g.kind);
-  if (JSON.stringify(kinds) !== JSON.stringify(["dot", "fuel", "swap"]))
+  // One row per kind (v5.3: in the order each kind first happens — the day test above
+  // pins that order on a run with known stop times).
+  if (JSON.stringify([...kinds].sort()) !== JSON.stringify(["dot", "fuel", "swap"]))
     fail(`the stop list should be one row per kind — dot, fuel, swap — got ${JSON.stringify(kinds)}`);
   for (const g of groups) {
     if (g.times.length < 2)

@@ -814,7 +814,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v5.2</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v5.3</button>
   </div>
 </div>
 
@@ -1039,7 +1039,9 @@ const TRUCK = { height:412, width:259, length:2195, grossWeight:36287, axleCount
    often than right. Starts full — the common case, and the one that plans the least. */
 let tick = TICKS;
 
-const LIVE = { at:null, res:null, trafficS:0, note:"", pending:false, tried:false,
+// at: when the quote was fetched (its freshness clock). start: when the run it describes
+// rolls out — the Rolling Out time, same as Predicted (v5.3).
+const LIVE = { at:null, start:null, res:null, trafficS:0, note:"", pending:false, tried:false,
   /* The exact mileage this app last auto-filled, as a string. A blank-only guard can't
      tell a number the driver typed from one we wrote ourselves, so re-quoting after
      changing the destination used to leave the old city's mileage sitting there. If the
@@ -1247,7 +1249,12 @@ async function updateLive(){
   LIVE.pending = true; renderLiveBtn();
   try{
     const { duration, length, base } = await fetchTruckRoute(E.destName, E.originPlace);
-    const startMs = Date.now();             // live means from where the truck sits right now
+    /* v5.3: the run departs from Rolling Out — the same moment Predicted counts from — not
+       from the tap. The two used to start hours apart whenever Rolling Out wasn't now:
+       stops landed outside the run you'd entered, and "ahead of dispatch" could sit next
+       to a Live clock half a day later. HERE's drive time still carries right-now
+       traffic, as the board says; only where the run starts is the driver's. */
+    const startMs = rollOutMs();
     // Kept raw as well as solved: RUNNING re-solves these same numbers against a moving
     // departure, which is what lets the arrival stay current without another fetch.
     LIVE.raw = { duration, length, base };
@@ -1272,7 +1279,7 @@ async function updateLive(){
       repaintField(milesEl);
     }
     LIVE.trafficS = base ? Math.max(0, duration - base) : 0;
-    LIVE.at = startMs; LIVE.note = "";
+    LIVE.at = Date.now(); LIVE.start = startMs; LIVE.note = "";
     setTimeout(renderEta, LIVE_MAX_AGE_MS + 1000);   // drop the line once the quote goes stale
   }catch(err){
     // Any failure — no GPS permission, no signal, HERE down, no match — falls back
@@ -1451,12 +1458,13 @@ let runTimer = null;
 // quote in hand — clearing the destination or a failed fetch drops LIVE.raw with the rest.
 const resolveLiveFromRaw = startMs => {
   if(!LIVE.raw) return;
+  LIVE.start = startMs;
   LIVE.res = solveEtaLive({ driveSeconds:LIVE.raw.duration, meters:LIVE.raw.length, tick,
     p:E.p, swap:E.swap, startMs });
 };
 const runTick = () => {
   $("depart").value = toWall(new Date(), E.originTz);
-  resolveLiveFromRaw(Date.now());
+  resolveLiveFromRaw(rollOutMs());
   renderEta();
 };
 // Which of the two top-level views is up. The tick re-renders the ETA screen, so it has
@@ -1660,10 +1668,12 @@ function renderGauge(){
 /* Re-solve the arrival from the quote already fetched — same drive time and distance, new
    tank or new departure. No network: that is what makes the gauge and the running clock
    free to move. */
-function resolveFromRaw(){
-  if(!LIVE.raw) return;
-  LIVE.res = solveEtaLive({ driveSeconds:LIVE.raw.duration, meters:LIVE.raw.length, tick,
-    p:E.p, swap:E.swap, startMs:LIVE.at });
+function resolveFromRaw(){ resolveLiveFromRaw(rollOutMs()); }
+// Where the run starts: the Rolling Out field, read in the origin's zone — the same moment
+// Predicted departs from. Falls back to now only if the field can't be read.
+function rollOutMs(){
+  const d = fromWall($("depart").value, E.originTz);
+  return d ? d.getTime() : Date.now();
 }
 
 function renderEta(){
@@ -1743,13 +1753,16 @@ function renderEta(){
   // A live quote is only worth reading while it's fresh — see liveFresh(). Everything the
   // live half of this panel shows hangs off this one flag.
   const liveOn = !!(liveFresh(LIVE.at, Date.now()) && LIVE.res);
+  // Keep Live departing when Predicted does: an edited Rolling Out time (or origin zone)
+  // re-solves the quote in hand — no fetch — so both arrivals always share a start.
+  if(liveOn && LIVE.start !== start.getTime()) resolveFromRaw();
 
   /* Predicted is dispatch's flat miles ÷ 50, nonstop — pure arithmetic on numbers already
      in hand, so it renders whether or not there's a bar of signal. That's why it anchors
      the panel: the big number never blanks, never resizes, and never leaves a hole where
      an arrival used to be. Live takes drive time, distance and the whole team overlay
      straight off the quote — solveEtaLive already ran overlayStops when it was fetched,
-     and LIVE.at is the departure that solve started from. */
+     and LIVE.start (Rolling Out) is the departure that solve started from. */
   const quickH = M / RATE;
   const quickEta = new Date(start.getTime() + quickH*3600e3);
   // The best arrival currently on the table, for anything measuring against "when we get
@@ -1804,10 +1817,10 @@ function renderEta(){
     }
   } else {
     // Everything below runs off the quote itself: solveEtaLive already laid the team
-    // overlay on HERE's drive time, and LIVE.at is the moment that solve departed from.
+    // overlay on HERE's drive time, and LIVE.start is the moment that solve departed from.
     const { driveH, fuelStops, swaps, dots, dotMin, stopH, totalH } = LIVE.res;
     const liveMiles = LIVE.res.miles;
-    const liveStart = LIVE.at;
+    const liveStart = LIVE.start;
 
     // Who's behind the wheel when we roll in — swaps run on a fixed clock, so the arrival
     // time picks the shift. "@ arrival" because on a run with swaps this is easy to read
@@ -1864,9 +1877,11 @@ function renderEta(){
     // time it all adds up to, and each stop's time and mile listed under it in order. The
     // strip above still draws them interleaved, which is where the order reads best.
     const NAMES = { swap:"SWAP", dot:"DOT BREAK", fuel:"FUEL" };
-    $("stopList").innerHTML = ["dot","fuel","swap"].map(k => {
+    // Groups in the order their first stop happens, so the list reads the way the strip
+    // above runs (v5.3 — a fixed DOT/fuel/swap order put a 23:00 break above a 19:00 swap).
+    const kinds = [...new Set(LIVE.res.schedule.map(x => x.kind))];
+    $("stopList").innerHTML = kinds.map(k => {
       const xs = LIVE.res.schedule.filter(x => x.kind === k);
-      if(!xs.length) return "";
       const total = xs.reduce((a,x) => a + x.min, 0);
       return '<div class="srow" data-kind="'+k+'"><i class="pip '+k+'"></i>'
         + '<div class="stype">'+NAMES[k]+(xs.length > 1 ? ' <b>×'+xs.length+'</b>' : '')+'</div>'

@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.2**
+**Current version: v5.3**
 
 ## Files
 
@@ -99,6 +99,19 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v5.3
+
+- **Fixed: Live now rolls out when you told it to.** Live used to start the run the moment
+  you tapped GET ETA, while Predicted used your Rolling Out time. Price a run ahead of time —
+  Dalton, GA at 1:30 AM — and the two started hours apart: stops landed outside the run
+  you'd entered (a 19:00 swap on a run that's over by early afternoon), and the board could
+  say "59m ahead" next to a Live clock half a day later. Now both arrivals depart from
+  Rolling Out, so the stops sit inside your run and "ahead/behind" is the gap between the
+  two clocks. Change Rolling Out and Live follows without a new fetch. The traffic in Live
+  is still right-now conditions, as the board says.
+- **The stop list reads in the order things happen:** the groups are ordered by their first
+  stop, so a 19:00 swap sits above a 23:00 DOT break, matching the strip above it.
 
 ### v5.2
 
