@@ -356,27 +356,38 @@
     letter-spacing:.04em;line-height:1.5;text-transform:uppercase}
 
 
-  /* The fuel gauge: eighths, E to F, in the two bands the tank model plans by.
-     Amber is plannable, the darker amber is the backup band a plan only dips into when
-     the reading is already at the floor, and red is the limp eighth nothing ever spends. */
-  .gauge{display:flex;gap:3px;padding:5px;background:var(--panel-w,#fff);
-    border:2px solid var(--ink);border-radius:10px;margin-top:6px}
-  .gauge button{flex:1;height:40px;border:none;border-radius:5px;cursor:pointer;
-    background:#e4e7e4;transition:background .12s}
-  .gauge button.plan{background:linear-gradient(180deg,var(--amber-hi),var(--amber))}
-  .gauge button.backup{background:linear-gradient(180deg,#E6B15C,#C98A22)}
-  .gauge button.limp{background:linear-gradient(180deg,#e06a5e,var(--late))}
-  .gticks{display:flex;margin-top:6px;padding:0 3px;font-family:var(--sans);font-weight:700;
-    font-size:9px;letter-spacing:.06em;color:var(--panel-mute)}
-  .gticks span{flex:1;text-align:center}
-  .grange{margin-top:10px;font-family:var(--mono);font-weight:600;font-size:11.5px;
-    line-height:1.7;color:var(--ink)}
-  .grange b{color:var(--panel-green);font-weight:700}
-  .grange.warn b{color:var(--late)}
-  .grange em{font-style:normal;color:var(--panel-mute);font-size:10px}
-  .glabel{display:flex;align-items:baseline;justify-content:space-between;margin-top:14px}
-  .glabel em{font-style:normal;font-family:var(--mono);font-weight:600;font-size:9.5px;
-    color:var(--panel-mute);opacity:.75}
+  /* The fuel gauge — FuelPost's, look for look (v5.2): a needle, not a fill bar. A flat
+     track with the reserve painted on its low end like a tachometer redline — red over
+     the limp eighth nothing ever spends, amber over the backup band a plan only dips into
+     at the floor — a tick at every eighth and a finer one at every half, and a blue
+     needle you tap or drag to where your own gauge sits. The bands are sized from the
+     model (backupTicks, reserveTicks) in renderGauge(), so they can't disagree with it. */
+  .ghead{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;
+    column-gap:10px;margin-top:16px;margin-bottom:6px}
+  .ghead .gq{font-family:var(--sans);font-weight:600;font-size:13px;color:var(--panel-mute)}
+  .greadout{font-family:var(--sans);font-weight:700;font-size:16px;line-height:22px;
+    color:var(--ink);margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .gauge{-webkit-tap-highlight-color:transparent;outline:none}
+  .gauge:focus-visible{box-shadow:none}
+  .gauge:focus-visible .gtrack{box-shadow:0 0 0 3px var(--amber-hi)}
+  .glabels{position:relative;height:13px;margin-bottom:4px}
+  .glabels span{position:absolute;top:0;transform:translateX(-50%);font-family:var(--sans);
+    font-size:11px;font-weight:700;color:var(--panel-mute);white-space:nowrap}
+  .gtrack{position:relative;height:44px;border-radius:12px;background:rgba(21,24,27,.07);
+    touch-action:none;cursor:pointer}
+  .gdanger,.gwarn,.gtick,.gneedle{position:absolute;pointer-events:none}
+  .gdanger{top:0;bottom:0;left:0;background:rgba(255,59,48,.32);border-radius:12px 0 0 12px}
+  .gwarn{top:0;bottom:0;background:rgba(255,159,10,.3)}
+  .gtick{top:5px;bottom:5px;width:2px;background:rgba(0,0,0,.25);transform:translateX(-50%)}
+  .gtick.minor{top:11px;bottom:11px;width:1px;background:rgba(0,0,0,.14)}
+  .gneedle{top:-5px;bottom:-5px;width:8px;border-radius:5px;background:#0A6CD6;
+    box-shadow:0 1px 4px rgba(0,0,0,.35);transform:translateX(-50%);transition:left .12s ease}
+  .ghint{margin-top:6px;font-family:var(--sans);font-weight:600;font-size:12px;
+    color:var(--panel-mute)}
+  .grange{margin-top:8px;font-family:var(--sans);font-weight:600;font-size:13px;
+    line-height:1.4;color:var(--ink)}
+  .grange.warn{color:var(--late)}
+  .grange b{font-weight:700}
 
   /* The stop schedule, on the green panel directly under the strip that draws it. Each
      row carries its own colour, which is why the old DOT/Fuel/Swap legend chips came out:
@@ -679,11 +690,22 @@
         <button class="help-btn" id="runHelp" aria-label="What is this?" type="button"><span>?</span></button>
       </div>
       <div class="note" id="runNote" style="margin-top:0"></div>
-      <div class="glabel"><div class="lbl" style="margin-bottom:0">On the gauge</div>
-        <em>THIS RUN — NOT REMEMBERED</em></div>
-      <div class="gauge" id="gauge"></div>
-      <div class="gticks"><span>E</span><span>⅛</span><span>¼</span><span>⅜</span><span>½</span><span>⅝</span><span>¾</span><span>⅞</span><span>F</span></div>
-      <div class="grange" id="grange"></div>
+      <div class="ghead">
+        <div class="gq" id="gaugeQ">How far can you run now?</div>
+        <div class="greadout" id="greadout"></div>
+      </div>
+      <div class="gauge" id="gauge" tabindex="0" role="slider" aria-labelledby="gaugeQ"
+           aria-valuemin="1" aria-valuemax="8">
+        <div class="glabels" id="glabels"></div>
+        <div class="gtrack" id="gtrack">
+          <div class="gdanger" id="gdanger"></div>
+          <div class="gwarn" id="gwarn"></div>
+          <div id="gticks"></div>
+          <div class="gneedle" id="gneedle"></div>
+        </div>
+      </div>
+      <div class="ghint">Tap or drag to where your gauge sits.</div>
+      <div class="grange hide" id="grange"></div>
       <!-- Centered settings link above the full-width primary CTA. display:block + auto
            side margins centers the button itself (it stays shrink-to-fit). -->
       <button class="link" id="tuneToggle"
@@ -792,7 +814,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v5.1</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v5.2</button>
   </div>
 </div>
 
@@ -920,7 +942,7 @@ const HELP = {
     "<p>Your stop rules — the team-driver time the router knows nothing about, laid on top "+
     "of the live drive time.</p>"+
     "<ul><li><b>Fuel every</b> is the most miles you'll run between fuel stops — what a "+
-    "full tank plans on, so the gauge reads F — 900 mi at the default. <b>On the gauge</b> "+
+    "full tank plans on, so the gauge reads F — 900 mi at the default. <b>The gauge</b> "+
     "is what's aboard right now, in miles you can plan on — it moves every fuel stop on "+
     "the run, and it isn't remembered between sessions, because fuel goes stale the "+
     "moment you drive.</li>"+
@@ -1570,32 +1592,69 @@ const refreshStaleQuote = () => {
     updateLive();
 };
 
-/* The gauge. Tapping a tick changes what the plan may spend, which moves every fuel stop
-   on the run — so it re-solves from the quote already in hand rather than re-fetching:
-   the tank is ours to model, the route isn't. */
-const FRAC = ["E","⅛","¼","⅜","½","⅝","¾","⅞","F"];
-function renderGauge(){
-  const g = $("gauge");
-  if(!g) return;
-  g.innerHTML = Array.from({length:TICKS}, (_,i) => {
-    const t = i+1, on = t <= tick;
-    const cls = !on ? "" : t <= (Number(E.p.backupTicks)||0) ? "limp"
-              : t <= (Number(E.p.reserveTicks)||0) ? "backup" : "plan";
-    return '<button type="button" data-t="'+t+'" class="'+cls+'" aria-label="'+FRAC[t]+' tank"></button>';
-  }).join("");
-  [...g.children].forEach(b => b.onclick = () => {
-    tick = Number(b.dataset.t);
-    if(LIVE.raw && liveFresh(LIVE.at, Date.now())) resolveFromRaw();
-    renderEta();
+/* The gauge. Moving the needle changes what the plan may spend, which moves every fuel
+   stop on the run — so it re-solves from the quote already in hand rather than
+   re-fetching: the tank is ours to model, the route isn't. Built like FuelPost's: tap or
+   drag anywhere on the track, arrow keys when focused. E isn't a landing spot — a truck
+   reads at least an eighth — so the needle snaps to ⅛ through F. */
+const GLABEL = ["E","1/8","1/4","3/8","1/2","5/8","3/4","7/8","F"];
+const setTick = t => {
+  t = Math.max(1, Math.min(TICKS, Math.round(t)));
+  if(t === tick) return;
+  tick = t;
+  if(LIVE.raw && liveFresh(LIVE.at, Date.now())) resolveFromRaw();
+  renderEta();
+};
+(() => {
+  const g = $("gauge"), tr = $("gtrack");
+  $("glabels").innerHTML = GLABEL.map((l,i) => '<span style="left:'+(i/TICKS*100)+'%">'+l+'</span>').join("");
+  // A tick at every eighth and a finer one at every half — none on E or F, which sit on
+  // the track's very ends (FuelPost dropped them there for the same reason).
+  let ticks = "";
+  for(let i = 0; i < TICKS; i++){
+    if(i > 0) ticks += '<i class="gtick" style="left:'+(i/TICKS*100)+'%"></i>';
+    ticks += '<i class="gtick minor" style="left:'+((i+.5)/TICKS*100)+'%"></i>';
+  }
+  $("gticks").innerHTML = ticks;
+  const fromX = x => { const r = tr.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (x - r.left) / r.width)) * TICKS; };
+  let dragging = false;
+  tr.addEventListener("pointerdown", e => {
+    dragging = true; try{ tr.setPointerCapture(e.pointerId); }catch{}
+    setTick(fromX(e.clientX));
   });
+  tr.addEventListener("pointermove", e => { if(dragging) setTick(fromX(e.clientX)); });
+  const stop = () => { dragging = false; };
+  tr.addEventListener("pointerup", stop); tr.addEventListener("pointercancel", stop);
+  g.addEventListener("keydown", e => {
+    const step = { ArrowLeft:-1, ArrowDown:-1, ArrowRight:1, ArrowUp:1 }[e.key];
+    if(step){ e.preventDefault(); setTick(tick + step); }
+    else if(e.key === "Home"){ e.preventDefault(); setTick(1); }
+    else if(e.key === "End"){ e.preventDefault(); setTick(TICKS); }
+  });
+})();
+function renderGauge(){
+  if(!$("gneedle")) return;
+  const backup = Number(E.p.backupTicks) || 0, reserve = Number(E.p.reserveTicks) || 0;
+  $("gdanger").style.width = (backup/TICKS*100)+"%";
+  $("gwarn").style.left = (backup/TICKS*100)+"%";
+  $("gwarn").style.width = (Math.max(0, reserve-backup)/TICKS*100)+"%";
+  $("gneedle").style.left = (tick/TICKS*100)+"%";
   // Reads like FuelPost's gauge: the miles you can PLAN on — "F — 900 mi" full, down to 0
   // at the bottom — not the physical fuel under the reserve, which is never planned.
   const r = rangeForTick(tick, E.p), miles = Math.round(r.miles);
+  const text = GLABEL[tick]+" — "+miles.toLocaleString()+" mi";
+  $("greadout").textContent = text;
+  const g = $("gauge");
+  g.setAttribute("aria-valuenow", String(tick));
+  g.setAttribute("aria-valuetext", text + (r.backup ? " on backup reserve" : ""));
+  // A note only when there's something to say: at or under the floor, like FuelPost.
   const el = $("grange");
   el.className = "grange" + (miles <= 0 ? " warn" : "");
-  el.innerHTML = "<b>"+FRAC[tick]+" — "+miles.toLocaleString()+" mi</b>"
-    + (miles <= 0 ? " · <b>Fuel before you roll.</b>"
-      : r.backup ? "<em> — on your backup reserve. Make the first stop count.</em>" : "");
+  el.innerHTML = miles <= 0 ? "<b>Nothing left to plan on — fuel before you roll.</b>"
+    : r.backup ? "Planning on <b>"+miles.toLocaleString()+" mi</b> of backup reserve. Make the first stop count."
+    : "";
+  show(el, miles <= 0 || r.backup);
 }
 
 /* Re-solve the arrival from the quote already fetched — same drive time and distance, new
