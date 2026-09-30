@@ -134,15 +134,41 @@ try {
       fail(`#${id} must be gone — miles between fuel stops replaced gallons × mpg`);
   if ((await page.inputValue("#fuelMax")) !== "900")
     fail(`miles between fuel stops should default to 900, got ${JSON.stringify(await page.inputValue("#fuelMax"))}`);
-  // The gauge reads like FuelPost's: plannable miles, 900 on a full tank, 0 at the bottom.
-  const gaugeFull = (await page.textContent("#grange"))?.trim() || "";
-  if (!/^F — 900 mi/.test(gaugeFull))
+  // The gauge reads like FuelPost's: plannable miles, 900 on a full tank, 0 at the bottom —
+  // and looks like it (v5.2): a needle on a track you tap or drag, not segment buttons.
+  if ((await page.locator("#gauge button").count()) !== 0)
+    fail("the gauge should be FuelPost's needle track, not a row of segment buttons");
+  const gaugeFull = (await page.textContent("#greadout"))?.trim() || "";
+  if (gaugeFull !== "F — 900 mi")
     fail(`a full tank should read "F — 900 mi", got ${JSON.stringify(gaugeFull)}`);
-  await page.click('#gauge button[data-t="1"]');
-  const gaugeLow = (await page.textContent("#grange"))?.trim() || "";
-  if (!/^⅛ — 0 mi/.test(gaugeLow))
-    fail(`the bottom of the gauge should read "⅛ — 0 mi", got ${JSON.stringify(gaugeLow)}`);
-  await page.click('#gauge button[data-t="8"]');
+  const needleAt = () => page.evaluate(() => {
+    const t = document.getElementById("gtrack").getBoundingClientRect(),
+          n = document.getElementById("gneedle").getBoundingClientRect();
+    return Math.round(((n.left + n.width / 2) - t.left) / t.width * 8);
+  });
+  if ((await needleAt()) !== 8) fail(`the needle should start at F, got eighth ${await needleAt()}`);
+  await page.locator("#gtrack").scrollIntoViewIfNeeded();   // mouse taps need it on screen
+  const track = await page.locator("#gtrack").boundingBox();
+  await page.mouse.click(track.x + track.width * 0.02, track.y + track.height / 2);   // tap near E
+  await page.waitForTimeout(200);
+  const gaugeLow = (await page.textContent("#greadout"))?.trim() || "";
+  if (gaugeLow !== "1/8 — 0 mi")
+    fail(`tapping the low end should snap to 1/8 (E isn't a landing spot) and read "1/8 — 0 mi", got ${JSON.stringify(gaugeLow)}`);
+  if (!/fuel before you roll/i.test((await page.textContent("#grange")) || ""))
+    fail("at the bottom the gauge should say to fuel before you roll");
+  if ((await needleAt()) !== 1) fail(`the needle should sit on 1/8, got eighth ${await needleAt()}`);
+  // Drag back up to half, then keys to full.
+  await page.mouse.move(track.x + track.width * 0.13, track.y + track.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(track.x + track.width * 0.5, track.y + track.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  if ((await page.textContent("#greadout"))?.trim() !== "1/2 — 300 mi")
+    fail(`dragging to the middle should read "1/2 — 300 mi", got ${JSON.stringify((await page.textContent("#greadout"))?.trim())}`);
+  await page.focus("#gauge");
+  await page.keyboard.press("End");
+  if ((await page.textContent("#greadout"))?.trim() !== "F — 900 mi")
+    fail("End should put the needle back on F");
 
   // CLEAR button: enabled once there's a load, two-tap arm/confirm empties the load
   // and returns the readout to its placeholder.

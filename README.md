@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.1**
+**Current version: v5.2**
 
 ## Files
 
@@ -99,6 +99,15 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v5.2
+
+- **The fuel gauge looks like FuelPost's now.** A blue needle on a flat track, a tick at every
+  eighth and a finer one at every half, the reserve painted on the low end — red over the
+  last eighth, amber over the backup band — and **"How far can you run now?"** with the
+  reading (**F — 900 mi**) beside it. Tap or drag anywhere on the track, or use the arrow keys;
+  it snaps to the nearest eighth, ⅛ through F. The low-tank note only shows when there's
+  something to say — at or under the quarter-tank floor.
 
 ### v5.1
 
