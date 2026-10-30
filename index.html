@@ -814,7 +814,7 @@
   </div>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v5.3</button>
+    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v5.4</button>
   </div>
 </div>
 
@@ -842,7 +842,7 @@ import {
    label elsewhere on the card. For the two big readout numbers (etaClock/rsClock) the
    tag rides along as a smaller, muted suffix rather than matching the giant font, which
    would read as a second clock rather than a unit label. */
-const clockWithTz = (d, tz) => clockOf(d, tz) + "<span class=\"big-tz\"> " + tzTag(tz) + "</span>";
+const clockWithTz = (d, tz) => clockOf(d, tz) + "<span class=\"big-tz\"> " + tzTag(tz, d) + "</span>";
 
 /* ======================= theme ======================= */
 const THEME_KEY = "milespost.theme";
@@ -1411,7 +1411,13 @@ $("swapB").addEventListener("input", e=>{ if(e.target.value){ E.swap.times[1]=e.
 $("swapTz").addEventListener("change", e=>{ E.swap.tz=e.target.value; saveEta(); renderEta(); });
 
 ["miles","appt","depart"].forEach(id => $(id).addEventListener("input", renderEta));
-$("nowBtn").onclick = ()=>{ $("depart").value = toWall(new Date(), E.originTz); renderEta(); };
+// NOW also remembers the exact instant it stood for (see departDate()): in the repeated
+// fall-back hour the field's "01:30" alone can't say which 1:30 it was.
+var departPinned = null;      // var, not let: departDate() may run before this line does
+$("nowBtn").onclick = ()=>{
+  departPinned = new Date(Math.floor(Date.now()/60000)*60000);
+  $("depart").value = toWall(departPinned, E.originTz); renderEta();
+};
 $("milesClear").onclick = clearMilesField;
 $("tuneToggle").onclick = ()=>{
   const on = $("tuneGrid").classList.contains("hide");
@@ -1672,8 +1678,21 @@ function resolveFromRaw(){ resolveLiveFromRaw(rollOutMs()); }
 // Where the run starts: the Rolling Out field, read in the origin's zone — the same moment
 // Predicted departs from. Falls back to now only if the field can't be read.
 function rollOutMs(){
-  const d = fromWall($("depart").value, E.originTz);
+  const d = departDate();
   return d ? d.getTime() : Date.now();
+}
+/* The departure instant. With RUNNING on it IS now — taken straight off the clock (to the
+   minute, as the field shows it), never round-tripped through the field. Once a year that
+   round trip goes wrong: when clocks fall back, 1:00–2:00 AM happens twice, the field's
+   "01:30" can only be read back one way, and it was read as the first one — an hour before
+   the actual now, so both arrivals came up an hour early. A time typed with RUNNING off
+   still reads from the field (in that repeated hour, as the first 1:30). */
+function departDate(){
+  if(E.running) return new Date(Math.floor(Date.now()/60000)*60000);
+  const v = $("depart").value;
+  // Still showing exactly what NOW put there? Then it means that instant.
+  if(departPinned && toWall(departPinned, E.originTz) === v) return departPinned;
+  return fromWall(v, E.originTz);
 }
 
 function renderEta(){
@@ -1707,7 +1726,7 @@ function renderEta(){
   const showGetMi = !!E.destTz;
   show($("getMiBtn"), showGetMi);
   if(!showGetMi) show($("getMiNote"), false);
-  const start = fromWall($("depart").value, E.originTz);
+  const start = departDate();
 
   // Inert until the load has something in it — nothing to clear otherwise.
   const hasLoad = M > 0 || !!E.destTz || !!$("appt").value;
@@ -1773,7 +1792,7 @@ function renderEta(){
   $("etaDay").textContent = dayOf(quickEta, showTz);
   // Exit tab: same day + tz the readout just computed, in guide-sign shorthand.
   $("etaExit").textContent =
-    dayOf(quickEta, showTz).split(",")[0].toUpperCase() + " · " + tzTag(showTz);
+    dayOf(quickEta, showTz).split(",")[0].toUpperCase() + " · " + tzTag(showTz, quickEta);
   show($("etaExit"), true);
 
   /* The live slot. With a fresh quote it carries the arrival in CMS amber — the same
@@ -1803,7 +1822,7 @@ function renderEta(){
     show($("etaYours"), true);
     // Sits under the Predicted number and its date, so it reads as Predicted on the
     // driver's own clock — and has to be exactly that, never the live arrival converted.
-    $("etaYours").textContent = clockOf(quickEta, E.originTz)+" "+tzTag(E.originTz)+" · current device timezone";
+    $("etaYours").textContent = clockOf(quickEta, E.originTz)+" "+tzTag(E.originTz, quickEta)+" · current device timezone";
   }
 
   if(!liveOn){
@@ -1886,7 +1905,7 @@ function renderEta(){
       return '<div class="srow" data-kind="'+k+'"><i class="pip '+k+'"></i>'
         + '<div class="stype">'+NAMES[k]+(xs.length > 1 ? ' <b>×'+xs.length+'</b>' : '')+'</div>'
         + '<div class="swhen">' + xs.map(x => '<div class="sat">'
-            + (x.mile < 1 ? "BEFORE YOU ROLL" : clockOf(new Date(x.atMs), showTz)+" "+tzTag(showTz))
+            + (x.mile < 1 ? "BEFORE YOU ROLL" : clockOf(new Date(x.atMs), showTz)+" "+tzTag(showTz, new Date(x.atMs)))
             + '<em>' + (x.mile < 1 ? "AT THE YARD" : "MILE "+Math.round(x.mile)) + '</em></div>').join("")
         + '</div>'
         + '<div class="slen">'+total+' min'+(xs.length > 1 ? '<em>total</em>' : '')+'</div></div>';
@@ -1965,7 +1984,7 @@ const rsSetShut = ()=>{
     const done = new Date(d.getTime() + RESET_HOURS*3600e3);
     show($("rsErr"), true);
     $("rsErr").textContent = "That 34 already finished " + clockOf(done, R.tz) + " "
-      + tzTag(R.tz) + " " + dayOf(done, R.tz)
+      + tzTag(R.tz, done) + " " + dayOf(done, R.tz)
       + " — it's done. Enter a later shutdown, or tap NOW.";
     return;
   }
@@ -2064,7 +2083,7 @@ $("icsBtn").onclick = ()=>{
     "DTSTART:"+icsStamp(legal),
     "DTEND:"+icsStamp(legal),
     "SUMMARY:70 hours restored - back on duty",
-    "DESCRIPTION:"+esc("34-hour restart complete. Shut down "+started+" "+tzTag(R.tz)+"."),
+    "DESCRIPTION:"+esc("34-hour restart complete. Shut down "+started+" "+tzTag(R.tz, new Date(R.shutMs))+"."),
     "BEGIN:VALARM","TRIGGER:-PT30M","ACTION:DISPLAY",
     "DESCRIPTION:70 hours restored in 30 minutes","END:VALARM",
     "BEGIN:VALARM","TRIGGER:PT0S","ACTION:DISPLAY",
@@ -2121,21 +2140,21 @@ function renderReset(){
   const done = now >= legal.getTime();
   const pending = now < R.shutMs;          // planned, not started
 
-  $("rsLabel").textContent = done ? "Legal now · 70 hours back" : "Legal at · "+tzTag(R.tz);
+  $("rsLabel").textContent = done ? "Legal now · 70 hours back" : "Legal at · "+tzTag(R.tz, legal);
   $("rsClock").innerHTML = clockWithTz(legal, R.tz);
   $("rsDay").textContent = dayOf(legal, R.tz);
   // Exit tab: the legal day + tz this pass just computed, in guide-sign shorthand.
   // Its green-clear "done" look rides the same .done class toggled two lines down.
-  $("rsExit").textContent = dayOf(legal, R.tz).split(",")[0].toUpperCase() + " · " + tzTag(R.tz);
+  $("rsExit").textContent = dayOf(legal, R.tz).split(",")[0].toUpperCase() + " · " + tzTag(R.tz, legal);
   show($("rsExit"), true);
   $("rsClock").classList.toggle("done", done);
   $("rsReadout").classList.toggle("done", done);
-  $("stamp").textContent = clockOf(legal,R.tz)+" · "+dayOf(legal,R.tz)+" · "+tzTag(R.tz);
+  $("stamp").textContent = clockOf(legal,R.tz)+" · "+dayOf(legal,R.tz)+" · "+tzTag(R.tz, legal);
 
   ["rsCount","bars","rsScale"].forEach(id=>show($(id), true));
   if(pending){
     $("rsCount").innerHTML = "Clock starts in <b>"+hms(R.shutMs-now)+"</b> · "+
-      clockOf(shut,R.tz)+" "+tzTag(R.tz)+" "+dayOf(shut,R.tz);
+      clockOf(shut,R.tz)+" "+tzTag(R.tz, shut)+" "+dayOf(shut,R.tz);
   } else if(done){
     const secs = Math.max(0, Math.ceil((R.shutMs + RESET_HOURS*3600e3 + AUTO_CLEAR_MS - now)/1000));
     const clr = Math.floor(secs/60)+":"+String(secs%60).padStart(2,"0");

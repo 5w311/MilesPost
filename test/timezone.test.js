@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fromWall, toWall, offsetMs } from "../lib/logic.js";
+import { fromWall, toWall, offsetMs, tzTag } from "../lib/logic.js";
 
 const ZONES = ["America/New_York", "America/Chicago", "America/Denver",
   "America/Los_Angeles", "America/Phoenix", "Pacific/Honolulu"];
@@ -51,5 +51,22 @@ describe("offsetMs", () => {
     expect(offsetMs(jan, "America/New_York")).toBe(-5 * 3600e3);
     const jul = new Date("2026-07-15T12:00:00Z");
     expect(offsetMs(jul, "America/New_York")).toBe(-4 * 3600e3);
+  });
+});
+
+describe("tzTag labels a time with the abbreviation in effect AT that time", () => {
+  // Fall-back 2026: Sun Nov 1, 02:00 EDT -> 01:00 EST. A label taken from "now" put EDT on
+  // a Monday arrival seen on a Friday — the digits right, the zone wrong.
+  const NY = "America/New_York";
+  it("before the change it's EDT, after it EST — whenever you look", () => {
+    expect(tzTag(NY, new Date("2026-10-31T16:00:00Z"))).toBe("EDT");
+    expect(tzTag(NY, new Date("2026-11-02T14:00:00Z"))).toBe("EST");
+  });
+  it("the repeated hour carries both labels, one per pass", () => {
+    expect(tzTag(NY, new Date("2026-11-01T05:30:00Z"))).toBe("EDT");   // first 01:30
+    expect(tzTag(NY, new Date("2026-11-01T06:30:00Z"))).toBe("EST");   // second 01:30
+  });
+  it("Arizona never changes", () => {
+    expect(tzTag("America/Phoenix", new Date("2026-11-02T14:00:00Z"))).toBe("MST");
   });
 });

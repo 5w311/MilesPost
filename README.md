@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.3**
+**Current version: v5.4**
 
 ## Files
 
@@ -99,6 +99,26 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v5.4
+
+Ready for daylight saving ending (Sun, Nov 1, 2026: 2:00 AM EDT → 1:00 AM EST).
+
+- **Fixed: times on the other side of the change carried the wrong zone.** Every time was
+  labelled with the abbreviation in effect *right now*, so on a Friday a Monday 9:00 AM
+  arrival read "09:00 EDT" when it's really EST. The digits were always right; now the label
+  is too — on arrivals, the device-clock line, the stop list, the day tab and the 34 reset.
+- **Fixed: arrivals an hour early during the repeated hour.** When clocks fall back, 1:00–2:00
+  AM happens twice. With RUNNING on (or after tapping NOW) during the second one, the app
+  read the departure as the first 1:30 — an hour before the real now — so both arrivals came
+  up an hour early. RUNNING now takes the departure straight from the clock, and NOW
+  remembers the exact moment it was tapped.
+- Already right, and now covered by tests on this exact weekend: swaps stay on their wall
+  clock (6:00 / 18:00 either side of the change), DOT breaks stay 5 real hours into the
+  shift, and a 34 counts 34 real hours — a Saturday 20:00 EDT shutdown is legal Monday 05:00
+  EST.
+- A departure *typed* as 1:00–1:59 AM on the change night is still read as the first
+  (EDT) one; use NOW or RUNNING in that hour.
 
 ### v5.3
 

@@ -757,6 +757,58 @@ try {
     fail("re-timing the departure should re-solve the quote in hand, not fetch again");
   await dayCtx.close();
 
+  // ---- Daylight saving ends Sun 2026-11-01 (02:00 EDT -> 01:00 EST). The browser clock
+  // is frozen at real moments of that weekend, in New York.
+  const dstPage = async (iso, opts = {}) => {
+    const ctx = await browser.newContext({ timezoneId: "America/New_York" });
+    const pg = await ctx.newPage();
+    await pg.clock.setFixedTime(new Date(iso));
+    if (opts.runningOff) await runningOff(pg);
+    await pg.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+    return { ctx, pg };
+  };
+  const arrival = pg => pg.textContent("#etaClock").then(t => (t || "").replace(/\s+/g, " ").trim());
+  {
+    // Friday noon EDT, 2,000 mi -> 40h -> Sunday 03:00, which is after the change: EST.
+    const { ctx, pg } = await dstPage("2026-10-30T16:00:00Z");
+    await pg.fill("#miles", "2000"); await pg.dispatchEvent("#miles", "input");
+    await pg.waitForTimeout(150);
+    if ((await arrival(pg)) !== "03:00 EST")
+      fail(`an arrival after the change should be labelled EST even while it's EDT now, got ${JSON.stringify(await arrival(pg))}`);
+    await ctx.close();
+  }
+  {
+    // 01:30 EST — the SECOND 1:30 — with RUNNING on: 400 mi -> 8h -> 09:30 EST. Read back
+    // through the field it was the first 1:30, an hour early.
+    const { ctx, pg } = await dstPage("2026-11-01T06:30:00Z");
+    await pg.fill("#miles", "400"); await pg.dispatchEvent("#miles", "input");
+    await pg.waitForTimeout(150);
+    if ((await arrival(pg)) !== "09:30 EST")
+      fail(`in the repeated hour, RUNNING should depart from the real now (09:30 EST arrival), got ${JSON.stringify(await arrival(pg))}`);
+    await ctx.close();
+  }
+  {
+    // Same moment, RUNNING off, departure set with NOW: NOW means that instant, too.
+    const { ctx, pg } = await dstPage("2026-11-01T06:30:00Z", { runningOff: true });
+    await pg.click("#nowBtn");
+    await pg.fill("#miles", "400"); await pg.dispatchEvent("#miles", "input");
+    await pg.waitForTimeout(150);
+    if ((await arrival(pg)) !== "09:30 EST")
+      fail(`NOW in the repeated hour should mean that instant (09:30 EST arrival), got ${JSON.stringify(await arrival(pg))}`);
+    await ctx.close();
+  }
+  {
+    // A 34 started Saturday 20:00 EDT is legal after 34 REAL hours: Monday 05:00 EST.
+    const { ctx, pg } = await dstPage("2026-11-01T00:00:00Z");
+    await pg.click("#tabReset"); await pg.waitForTimeout(100);
+    await pg.click("#rsNow"); await pg.waitForTimeout(150);
+    const legal = ((await pg.textContent("#rsClock")) || "").replace(/\s+/g, " ").trim();
+    const legalDay = ((await pg.textContent("#rsDay")) || "").trim();
+    if (legal !== "05:00 EST" || legalDay !== "Mon, Nov 2")
+      fail(`a 34 from Sat 20:00 EDT should read legal Mon, Nov 2 05:00 EST, got ${JSON.stringify(legal)} ${JSON.stringify(legalDay)}`);
+    await ctx.close();
+  }
+
   // Same-tz case: no second clock at all — a driver whose origin and destination share a
   // timezone doesn't need to be told their own clock twice.
   const sameTzCtx = await browser.newContext({ timezoneId: "America/Los_Angeles" });
