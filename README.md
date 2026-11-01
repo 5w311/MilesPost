@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.6**
+**Current version: v5.7**
 
 ## Files
 
@@ -101,6 +101,14 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v5.7
+
+- **Dark mode's light cards are off-white now, not bright white.** Your Load, How You Run and
+  their fields were a cool gray-white that glared against the dark background at night.
+  They're a slightly dimmer, warmer off-white (`#DAD8D2`) — still clearly the white sign,
+  easier on the eyes at night, and the text on them is just as sharp. The faint gray used
+  for small labels is a shade darker so it stays easy to read. Day mode is unchanged.
 
 ### v5.6
 

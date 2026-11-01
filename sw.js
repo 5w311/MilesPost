@@ -1,7 +1,7 @@
 // Build marker. Bump it on every single deploy, or installed phones will decide they're
 // already current and quietly ignore the new build. Keep it "milespost-v" + the app
-// version: the update offer names a waiting build by this ("UPDATE AVAILABLE (v5.6)").
-const CACHE = "milespost-v5.6";
+// version: the update offer names a waiting build by this ("UPDATE AVAILABLE (v5.7)").
+const CACHE = "milespost-v5.7";
 const ASSETS = [
   "./",
   "./index.html",
