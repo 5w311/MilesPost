@@ -804,6 +804,35 @@ try {
     fail("re-timing the departure should re-solve the quote in hand, not fetch again");
   await dayCtx.close();
 
+  // ---- Home-screen app on an iPhone: the page is drawn under the status bar
+  // (black-translucent + viewport-fit=cover), so its top padding has to clear the
+  // status bar's own height. v5.5 dropped that term and put the masthead — and the
+  // day/night switch — behind the clock, where taps don't reach. Chromium can fake the
+  // inset (62pt, an iPhone Pro's status bar) through DevTools.
+  {
+    const sbPage = await browser.newPage({ viewport: { width: 430, height: 932 } });
+    const cdp = await sbPage.context().newCDPSession(sbPage);
+    await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: { top: 62, bottom: 34, left: 0, right: 0 } });
+    await sbPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+    const top = await sbPage.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.style.cssText = "position:fixed;top:0;height:env(safe-area-inset-top)";
+      document.body.appendChild(probe);
+      const inset = probe.getBoundingClientRect().height; probe.remove();
+      return { inset, brand: document.querySelector(".brand").getBoundingClientRect().top,
+               theme: document.getElementById("themeBtn").getBoundingClientRect().top };
+    });
+    if (top.inset !== 62) fail(`status-bar emulation didn't take (inset ${top.inset}) — this check would be blind`);
+    if (top.brand < 62 + 16)
+      fail(`the masthead must start below the status bar (62) plus its margin, got ${top.brand}`);
+    if (top.theme < 62)
+      fail(`the day/night switch sits under the status bar (top ${top.theme}) — taps there never reach it`);
+    // And the blur band below the bar: v5.4's 24px extra still applies.
+    if (top.brand !== 62 + 16 + 24)
+      fail(`top clearance should be status bar + 16 + 24 = 102, got ${top.brand}`);
+    await sbPage.close();
+  }
+
   // ---- Daylight saving ends Sun 2026-11-01 (02:00 EDT -> 01:00 EST). The browser clock
   // is frozen at real moments of that weekend, in New York.
   const dstPage = async (iso, opts = {}) => {
