@@ -14,8 +14,12 @@ import { fileURLToPath } from "url";
 import { chromium } from "playwright";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const TYPES = { ".html":"text/html", ".js":"text/javascript",
-  ".webmanifest":"application/manifest+json", ".png":"image/png" };
+/* Anything missing here is served as application/octet-stream. That fails quietly rather
+   than loudly: Chromium refuses a stylesheet under the wrong type, so a page whose CSS is
+   in a linked file would be checked unstyled and still pass most assertions. */
+const TYPES = { ".html":"text/html", ".js":"text/javascript", ".css":"text/css",
+  ".webmanifest":"application/manifest+json", ".png":"image/png",
+  ".woff2":"font/woff2" };
 
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split("?")[0]);
@@ -1961,9 +1965,15 @@ try {
     fs.readFile(path.join(ROOT, p), (err, data) => {
       if (err) { res.writeHead(404); res.end("not found"); return; }
       let body = data;
-      // Restamp the two files that carry a version so "deploying" is a one-line change.
+      /* Restamp the two files that carry a version so "deploying" is a one-line change.
+         The trailing (-suffix)? matters for a build that names itself for its branch
+         ("milespost-v5.5-rig", so a phone that has seen two deployments of the same site
+         can't end up with one cache entry holding the other's files). Without it the
+         suffix survives the rewrite, every restamped build reads "v0.0.1-rig", and the
+         version the page offers stops matching the one this test asked for. */
       if (p === "/index.html" || p === "/sw.js")
-        body = data.toString().replace(/(MilesPost v|milespost-v)[0-9][0-9.]*/g, "$1" + swVersion);
+        body = data.toString()
+          .replace(/(MilesPost v|milespost-v)[0-9][0-9.]*(-[A-Za-z0-9.]+)?/g, "$1" + swVersion);
       res.writeHead(200, headers(TYPES[path.extname(p)] || "application/octet-stream"));
       res.end(body);
     });
