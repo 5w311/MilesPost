@@ -71,6 +71,12 @@
     --amber:#B98700; --amber-hi:#FFB020; --amber-dim:#E3B584;
     --reefer:#5AC8E8; --good:#4FD18B; --late:#B3261E;
     --cms-bg:#0a0c0a; --cms-line:#494f45; --cms-dim:#8a7638;
+    /* Rings and outlines are green, not amber. Amber in this language means ADVISORY —
+       the 34-rule panel, the calendar CTA — and a focus ring isn't advising anything; it
+       was only amber because that's the Rig default. One value for both themes: nearly
+       everything focusable sits on a panel, and panels are light day and night. The green
+       sign is the exception and overrides it below. */
+    --ring:#12A05C;
     --bar-off:rgba(255,255,255,.22);
     --on-green:rgba(255,255,255,.3);     /* hairlines and pills on a green panel */
     --mono:"Overpass Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -96,8 +102,8 @@
     --rig-accent-hover:#5BBE87;
     --rig-accent-ink:#06220F;
     --rig-accent-soft:rgba(63,168,110,.18);
-    --rig-signal:var(--amber-hi);
-    --rig-signal-soft:rgba(255,176,32,.2);
+    --rig-signal:var(--ring);
+    --rig-signal-soft:rgba(18,160,92,.22);
     --rig-ok:#0f7a4b; --rig-ok-soft:rgba(15,122,75,.14);
     --rig-bad:var(--late); --rig-bad-soft:rgba(179,38,30,.12);
     --rig-overlay:rgba(6,8,10,.72);
@@ -123,8 +129,8 @@
     --rig-accent-hover:var(--panel-green-dk);
     --rig-accent-ink:#fff;
     --rig-accent-soft:rgba(0,107,61,.11);
-    --rig-signal:var(--amber);
-    --rig-signal-soft:rgba(185,135,0,.2);
+    --rig-signal:var(--ring);
+    --rig-signal-soft:rgba(18,160,92,.18);
     --rig-ok:#0f7a4b; --rig-ok-soft:rgba(15,122,75,.12);
     --rig-bad:var(--late); --rig-bad-soft:rgba(179,38,30,.1);
     --rig-overlay:rgba(15,20,25,.45);
@@ -193,6 +199,12 @@
   .lbl-row .lbl{margin-bottom:0}
   .readout .lbl{color:#fff;opacity:.92}
   .readout .help-btn{color:#fff}
+  /* AMBER is advisory, and that is this panel's whole job — so it keeps the signal colour
+     the focus rings just gave up. */
+  rig-alert[variant="warn"]{--rig-signal:var(--amber);--rig-signal-soft:rgba(185,135,0,.2)}
+  /* A deep green ring disappears against the guide sign; the bright one reads on it. */
+  .readout :focus-visible{outline-color:var(--good)}
+  .readout .help-btn:focus-visible{outline-color:var(--good)}
   .help-btn{width:34px;height:34px;flex:none;font-weight:700;font-size:14px;padding:0;
     border-radius:999px;box-shadow:inset 0 0 0 2px currentColor;opacity:.5}
   .help-btn:hover,.help-btn:focus-visible{opacity:1}
@@ -316,6 +328,9 @@
   .rig-btn--danger.armed{box-shadow:0 0 0 3px var(--rig-surface)}
   .link{background:none;border:none;color:var(--rig-ink);font-size:11px;padding:0;
     text-decoration:underline;font-family:var(--mono);font-weight:600;cursor:pointer}
+  /* These are bare buttons, so without a rule they fall back to the browser's own
+     outline — which is the one ring on the page Rig's tokens never reached. */
+  .link:focus-visible{outline:2px solid var(--ring);outline-offset:3px;border-radius:3px}
 
   /* The town fields keep v5.4's own suggestion dropdown — it carries the HERE
      autocomplete/autosuggest fallback, the out-of-order-response guard and the
@@ -330,7 +345,7 @@
     font-family:var(--sans);font-weight:600;font-size:14px;cursor:pointer}
   .suggest button:hover,.suggest button:focus-visible{background:var(--rig-surface-2);
     outline:none}
-  .suggest button:focus-visible{box-shadow:inset 0 0 0 2px var(--rig-signal)}
+  .suggest button:focus-visible{box-shadow:inset 0 0 0 2px var(--ring)}
 
   /* ============================ the gauge (v5.2, unchanged) ============================ */
   /* Still hand-drawn: the two floors are painted onto the track as bands, and no
@@ -341,7 +356,7 @@
   .greadout{font-weight:700;font-size:16px;line-height:22px;color:var(--rig-ink);
     margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
   .gauge{-webkit-tap-highlight-color:transparent;outline:none}
-  .gauge:focus-visible .gtrack{box-shadow:0 0 0 3px var(--rig-signal)}
+  .gauge:focus-visible .gtrack{box-shadow:0 0 0 3px var(--ring)}
   .glabels{position:relative;height:13px;margin-bottom:4px}
   .glabels span{position:absolute;top:0;transform:translateX(-50%);font-size:11px;
     font-weight:700;color:var(--rig-ink-3);white-space:nowrap}
@@ -366,8 +381,8 @@
   .mapwrap{margin-top:16px}
   .mapwrap rig-route-map{display:block;max-width:100%}
   .roadtag{display:inline-flex;align-items:center;font-family:var(--mono);font-weight:700;
-    font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--rig-signal);
-    border:1px dashed var(--rig-signal);border-radius:999px;padding:2px 8px}
+    font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--ring);
+    border:1px dashed var(--ring);border-radius:999px;padding:2px 8px}
 
   /* ============================ 34 reset ============================ */
   /* rig-progress draws its segments from the surface tokens, which disappear on a

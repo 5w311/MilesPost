@@ -380,8 +380,14 @@ try {
           { items: [{ position: { lat: 36.1627, lng: -86.7816 } }] })));
       if (u.includes("router.hereapi.com"))
         return Promise.resolve(new Response(JSON.stringify(
-          // 6h drive, 20min of it traffic, 400 mi (643,738 m)
-          { routes: [{ sections: [{ summary: { duration: 21600, baseDuration: 20400, length: 643738 } }] }] })));
+          /* 14h drive, 20min of it traffic, 900 mi (1,448,410 m).
+             Long on purpose. Swaps are twelve hours apart, so a shorter run crosses one
+             only for about half the departures in a day — and this block leaves the
+             departure at "now". At six hours it checked the stop list against whatever
+             time the suite happened to run at, and quietly had nothing to show in the
+             window after a shift's DOT mark passes and before the next swap. Anything
+             past twelve hours takes a swap whatever the clock says. */
+          { routes: [{ sections: [{ summary: { duration: 50400, baseDuration: 49200, length: 1448410 } }] }] })));
       return realFetch(url, ...rest);
     };
   });
@@ -462,7 +468,7 @@ try {
   // The gap must be run-time vs run-time. Dispatch's number departs from the typed
   // "rolling out"; the quote departs from when it was fetched. Push the typed departure
   // months out — differencing the two ARRIVALS would fold that separation into the answer
-  // and report a gap in the thousands of hours. 400 mi ÷ 50 is 8h against a 6h drive plus
+  // and report a gap in the thousands of hours. 400 mi ÷ 50 is 8h against a 14h drive plus
   // stops, so the honest gap stays inside a single-digit hour count either way.
   await livePage.fill("#depart", "2027-01-20T08:00");
   await livePage.dispatchEvent("#depart", "input");
