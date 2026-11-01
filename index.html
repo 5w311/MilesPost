@@ -323,6 +323,8 @@
      the datetime-local inputs they replace, so nothing that reads them changed. One-minute
      steps: a 34 is counted to the minute. */
   .dtField rig-date-picker{display:block;width:100%}
+  /* Focusable so a tap's focus stays inside the picker (see v5.11 in the script); no ring. */
+  .rig-datepick__pop:focus,.rig-timepick__pop:focus{outline:none}
   /* RUNNING disables Rolling out: Rig already fades the picker's box to .5; the label
      stands down with it. (Fading the whole field as well would stack to ~.28.) */
   .dtField:has(rig-date-picker[disabled]) .rig-field__label{opacity:.55}
@@ -793,7 +795,7 @@
   </rig-tabs>
 
   <div class="footWrap">
-    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.10</button>
+    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.11</button>
   </div>
 </div>
 
@@ -1525,8 +1527,32 @@ document.addEventListener("scroll", e => {
   }, 140));
 }, true);
 
+/* v5.11 — what the phone itself does differently.
+
+   FOCUS. On an iPhone (and in Mac Safari) a tapped button never takes focus; Safari focuses
+   the nearest focusable thing AROUND it instead. Around the calendar's month arrows and
+   title, that was the whole tab panel — Rig gives every panel tabindex=0 — which is
+   outside the picker, so Rig read it as focus leaving and closed: "changing the month
+   closes it", however much room it had. Making the picker's own popups focusable
+   (tabindex=-1: a tap can land there, Tab can't) keeps that focus inside. Chrome and
+   Linux WebKit focus the button itself, which is why no test browser here saw it.
+
+   DIALS. With no time set, the hour/minute columns open on a suggestion — now — that is
+   only drawn, not chosen, so Done kept nothing unless a dial moved. Like the iPhone's own
+   wheels, what they show when they open is the value: take it right away. */
 ["depart","appt","shut"].forEach(id => {
   const el = $(id), tp = el.timePicker;
+  for(const pop of el.querySelectorAll(".rig-datepick__pop, .rig-timepick__pop")) pop.tabIndex = -1;
+  if(tp) tp.addEventListener("rig-open", () => {
+    if(tp.value) return;
+    const shown = part => tp.querySelector(`.rig-timecols__col--${part} .rig-timecols__opt.is-seed`);
+    const h = shown("hour"), m = shown("minute"), ap = shown("period");
+    if(!h || !m) return;
+    let hh = Number(h.dataset.v);
+    if(ap) hh = (hh % 12) + (ap.dataset.v === "pm" ? 12 : 0);
+    tp.value = String(hh).padStart(2, "0") + ":" + String(Number(m.dataset.v)).padStart(2, "0");
+    tp.dispatchEvent(new Event("change"));      // the date picker (and the relay below) hear it
+  });
   if(tp) tp.addEventListener("change", () => {
     el.dispatchEvent(new Event("input", {bubbles:true}));
     el.dispatchEvent(new Event("change", {bubbles:true}));
