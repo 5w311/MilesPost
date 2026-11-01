@@ -22,6 +22,9 @@ import './src/display/separator.js';// <rig-separator> — mileposts
 import './src/display/item.js';     // <rig-item> — the stop list
 import './src/display/progress.js'; // <rig-progress> — the 34 bars
 import './src/display/empty.js';    // <rig-empty>
+import './src/display/collapsible.js'; // <rig-collapsible> — the tuning fields fold away
+import './src/genui/route-map.js'; // <rig-route-map> — the run drawn from HERE's geometry
+import './src/data/table.js';      // <rig-table> — the swap schedule
 
 export { toast } from './src/toast.js';
 export { setButtonLoading, withButtonLoading } from './src/forms/button.js';

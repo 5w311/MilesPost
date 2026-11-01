@@ -356,6 +356,18 @@
   .gneedle{top:-5px;bottom:-5px;width:8px;border-radius:5px;background:#0A6CD6;
     box-shadow:0 1px 4px rgba(0,0,0,.35);transform:translateX(-50%);transition:left .12s ease}
   .ghint{margin-top:6px;font-weight:600;font-size:12px;color:var(--rig-ink-2)}
+  .tuneBody{display:flex;flex-direction:column;gap:14px;padding-top:14px}
+  .sublab{font-family:var(--mono);font-weight:600;font-size:9.5px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--rig-ink-3);margin-bottom:8px}
+  .tablewrap{overflow-x:auto}
+  rig-table{display:block;min-width:0}
+  /* The run card: let it use the panel's full width, and keep the "straight line" tag
+     reading as a caveat rather than a label. */
+  .mapwrap{margin-top:16px}
+  .mapwrap rig-route-map{display:block;max-width:100%}
+  .roadtag{display:inline-flex;align-items:center;font-family:var(--mono);font-weight:700;
+    font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--rig-signal);
+    border:1px dashed var(--rig-signal);border-radius:999px;padding:2px 8px}
 
   /* ============================ 34 reset ============================ */
   /* rig-progress draws its segments from the surface tokens, which disappear on a
@@ -585,49 +597,63 @@
         <div class="hide" id="grangeWrap" style="margin-top:10px">
           <rig-alert id="grange" variant="warn" heading=""></rig-alert>
         </div>
-        <!-- Centered settings link above the tuning fields. -->
-        <button class="link" id="tuneToggle" type="button"
-                style="display:block;margin:14px auto 0">+ TUNE TO YOUR TRUCK</button>
+        <!-- The stop rules fold away: five numbers a driver sets once, and then wants out
+             of the way of the gauge they read every run. -->
+        <rig-collapsible id="tuneWrap" style="margin-top:14px">
+          <button slot="trigger" class="rig-btn rig-btn--ghost rig-btn--sm" id="tuneToggle"
+                  style="display:block;margin:0 auto">Tune to your truck</button>
+          <div class="tuneBody">
+            <div class="grid" id="tuneGrid" style="margin-top:0">
+              <rig-input id="fuelMaxField" label="Fuel every" suffix="mi max" size="sm">
+                <input id="fuelMax" name="fuelMax" type="number" inputmode="decimal" step="50">
+              </rig-input>
+              <rig-input id="fuelMinField" label="Fuel stop" suffix="min" size="sm">
+                <input id="fuelMin" name="fuelMin" type="number" inputmode="decimal">
+              </rig-input>
+              <rig-input id="swapMinField" label="Swap takes" suffix="min" size="sm">
+                <input id="swapMin" name="swapMin" type="number" inputmode="decimal">
+              </rig-input>
+              <rig-input id="dotMinField" label="DOT break" suffix="min" size="sm">
+                <input id="dotMin" name="dotMin" type="number" inputmode="decimal" min="30" step="5">
+              </rig-input>
+              <rig-input id="dotAtField" label="DOT after" suffix="hr" size="sm">
+                <input id="dotAt" name="dotAt" type="number" inputmode="decimal" min="1" step="1">
+              </rig-input>
+            </div>
+            <div id="swapBox">
+              <div class="sublab">Swap schedule</div>
+              <div class="meta">
+                <rig-badge id="swapChip" variant="accent"></rig-badge>
+                <button class="rig-btn rig-btn--ghost rig-btn--sm" id="swapEdit"
+                        data-rig-drawer="swapDrawer">Edit swaps</button>
+              </div>
+            </div>
+          </div>
+        </rig-collapsible>
         <div id="overrideRow">
           <div class="lbl-row" style="margin-top:14px;margin-bottom:0">
             <div style="display:flex;align-items:center;gap:2px;min-width:0">
               <div class="lbl" style="margin-bottom:0">Override</div>
-              <button class="rig-btn rig-btn--ghost rig-btn--sm rig-btn--icon help-btn"
+              <button class="rig-btn rig-btn--ghost rig-btn--sm rig-btn--icon"
                       id="overrideHelp" type="button" aria-label="What is this?"
                       data-tip="What is this?">?</button>
             </div>
             <rig-switch id="overrideBtn"
                         aria-label="Always overwrite mileage with the live route distance"></rig-switch>
           </div>
+          <div class="note" id="overrideNote" style="margin-top:4px"></div>
         </div>
-        <div class="grid hide" id="tuneGrid">
-          <rig-input id="fuelMaxField" label="Fuel every" suffix="mi max" size="sm">
-            <input id="fuelMax" name="fuelMax" type="number" inputmode="decimal" step="50">
-          </rig-input>
-          <rig-input id="fuelMinField" label="Fuel stop" suffix="min" size="sm">
-            <input id="fuelMin" name="fuelMin" type="number" inputmode="decimal">
-          </rig-input>
-          <rig-input id="swapMinField" label="Swap takes" suffix="min" size="sm">
-            <input id="swapMin" name="swapMin" type="number" inputmode="decimal">
-          </rig-input>
-          <rig-input id="dotMinField" label="DOT break" suffix="min" size="sm">
-            <input id="dotMin" name="dotMin" type="number" inputmode="decimal" min="30" step="5">
-          </rig-input>
-          <rig-input id="dotAtField" label="DOT after" suffix="hr" size="sm">
-            <input id="dotAt" name="dotAt" type="number" inputmode="decimal" min="1" step="1">
-          </rig-input>
-        </div>
-        <div class="hide" id="swapBox">
-          <div class="lbl" style="margin-top:16px">Swap schedule — fixed clock, wherever you are</div>
-          <div class="grid" style="margin-top:0">
-            <rig-input id="swapAField" label="First swap" size="sm">
-              <input id="swapA" name="swapA" type="time">
-            </rig-input>
-            <rig-input id="swapBField" label="Second swap" size="sm">
-              <input id="swapB" name="swapB" type="time">
-            </rig-input>
+
+        <!-- The run as a line, from HERE's own road geometry. Fuel only: swaps and DOT
+             breaks land on the clock, not at a place, so pinning them to a map would be
+             inventing where they happen. -->
+        <div class="mapwrap hide" id="mapWrap">
+          <div class="meta" style="margin-bottom:8px">
+            <span class="sublab" style="margin:0">The run, stop to stop</span>
+            <span class="roadtag hide" id="mapEstimate">straight line</span>
           </div>
-          <rig-select id="swapTz" label="Swaps run on" style="margin-top:10px"></rig-select>
+          <rig-route-map id="routeMap" units="mi"></rig-route-map>
+          <div class="note" id="mapNote" style="margin-top:8px"></div>
         </div>
       </div>
     </div>
@@ -729,6 +755,18 @@
   <div id="helpBody"></div>
 </rig-dialog>
 
+<!-- The swap schedule. Two rows, always: the run is a day driver and a night driver, and
+     shiftAtArrival reads the earlier time as the day start and the later as the night's.
+     A third row would belong to no shift, so this table edits rather than grows. -->
+<rig-drawer id="swapDrawer" heading="Swap schedule">
+  <p class="note" style="margin:0 0 14px">Fixed clock times, wherever the truck is.
+    Changing one re-solves the run.</p>
+  <div class="tablewrap">
+    <rig-table id="swapTable" label="Swap times" noun="swap time"></rig-table>
+  </div>
+  <rig-select id="swapTz" label="Swaps run on" style="margin-top:14px"></rig-select>
+</rig-drawer>
+
 <!-- A stop's own details, off the solved schedule. -->
 <rig-drawer id="stopDrawer" heading="Stop">
   <div class="stopdetail" id="stopDetail"></div>
@@ -740,7 +778,7 @@ import {
   clockOf, dayOf, hm, hms,
   RATE, STOP_DEFAULTS, PRESET_VERSION, SWAP_DEFAULT, shiftAtArrival, dotDuration,
   solveEtaLive, liveFresh, LIVE_MAX_AGE_MS, formatPlaceSuggestions, metersToMiles,
-  TICKS, rangeForTick, fullRange, milesPerTick,
+  TICKS, rangeForTick, fullRange, milesPerTick, decodeFlexPolyline, pointAlong, sliceAlong,
   RESET_HOURS, AUTO_CLEAR_MS, autoClearElapsed, icsStamp, esc
 } from "./lib/logic.js";
 
@@ -1140,11 +1178,16 @@ async function fetchTruckRoute(destName, originPlace){
     : await geoPos().then(c => c.latitude + "," + c.longitude);
   const pos = await geocodeTown(destName, "geocode");
 
+  /* "polyline" alongside the summary is the road itself, which is what lets the run card
+     draw the lane instead of a ruler line between the two ends. Same request, same
+     transaction against the free tier — it only widens the response. Everything below
+     treats it as optional: a plan or a route that returns no geometry falls back to the
+     straight line between the ends, and the card says which one it drew. */
   const q = new URLSearchParams({
     transportMode:"truck",
     origin: from,
     destination: pos.lat + "," + pos.lng,
-    return: "summary",
+    return: "summary,polyline",
     apikey: HERE_API_KEY
   });
   Object.entries(TRUCK).forEach(([k,v]) => q.append("vehicle["+k+"]", v));
@@ -1156,7 +1199,19 @@ async function fetchTruckRoute(destName, originPlace){
   const secs = (j.routes && j.routes[0] && j.routes[0].sections) || [];
   if(!secs.length) throw new Error("route: no sections");
   const sum = k => secs.reduce((a,s) => a + (Number(s.summary && s.summary[k]) || 0), 0);
-  return { duration: sum("duration"), length: sum("length"), base: sum("baseDuration") };
+  // Sections are consecutive, so their lines join end to end; a section whose polyline is
+  // missing or unreadable simply contributes nothing rather than breaking the rest.
+  const line = [];
+  for(const sec of secs){
+    const pts = decodeFlexPolyline(sec.polyline);
+    for(const pt of pts){
+      const last = line[line.length-1];
+      if(!last || last[0] !== pt[0] || last[1] !== pt[1]) line.push(pt);
+    }
+  }
+  const [fromLat, fromLng] = from.split(",").map(Number);
+  return { duration: sum("duration"), length: sum("length"), base: sum("baseDuration"),
+           line, ends:{ from:{ lat:fromLat, lon:fromLng }, to:{ lat:pos.lat, lon:pos.lng } } };
 }
 
 async function updateLive(){
@@ -1165,7 +1220,7 @@ async function updateLive(){
   if(!E.destName){ LIVE.note = "set a destination to get a live ETA"; renderEta(); return; }
   LIVE.pending = true; renderLiveBtn();
   try{
-    const { duration, length, base } = await fetchTruckRoute(E.destName, E.originPlace);
+    const { duration, length, base, line, ends } = await fetchTruckRoute(E.destName, E.originPlace);
     /* v5.3: the run departs from Rolling Out — the same moment Predicted counts from — not
        from the tap. The two used to start hours apart whenever Rolling Out wasn't now:
        stops landed outside the run you'd entered, and "ahead of dispatch" could sit next
@@ -1174,7 +1229,7 @@ async function updateLive(){
     const startMs = rollOutMs();
     // Kept raw as well as solved: RUNNING re-solves these same numbers against a moving
     // departure, which is what lets the arrival stay current without another fetch.
-    LIVE.raw = { duration, length, base };
+    LIVE.raw = { duration, length, base, line, ends };
     LIVE.res = solveEtaLive({ driveSeconds:duration, meters:length, p:E.p, swap:E.swap, startMs, tick });
     // Convenience only: fill miles from the real road distance when the field is blank, or
     // when it still holds a number we put there ourselves — so re-quoting for a new
@@ -1317,14 +1372,44 @@ TUNE_KEYS.forEach(k=>{
 $("dotMin").addEventListener("change", ()=>{
   if(E.p.dotMin !== "" && Number(E.p.dotMin) < 30){ E.p.dotMin = 30; syncTune(); saveEta(); renderEta(); }
 });
-const syncSwap = () => {
-  $("swapA").value = E.swap.times[0];
-  $("swapB").value = E.swap.times[1];
-  $("swapTz").value = E.swap.tz;
+/* Two rows, and only ever two. shiftAtArrival reads the earlier time as the day driver's
+   start and the later as the night driver's, so a third row would belong to no shift —
+   the table edits the pair rather than growing. The clock is the editable column; the
+   shift name is derived, which is the point of showing it. */
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const swapTable = $("swapTable");
+swapTable.columns = [
+  { key:"shift", label:"Driver", width:"7rem", sortable:false },
+  { key:"time", label:"Clock", editable:true, sortable:false,
+    validate:v => HHMM.test(String(v).trim()) ? "" : "A 24-hour clock time, like 18:00." }
+];
+const swapRows = () => {
+  const [day, night] = [...E.swap.times].sort();
+  return [{ id:"day", shift:"Day driver", time:day },
+          { id:"night", shift:"Night driver", time:night }];
 };
-$("swapA").addEventListener("input", e=>{ if(e.target.value){ E.swap.times[0]=e.target.value; saveEta(); renderEta(); }});
-$("swapB").addEventListener("input", e=>{ if(e.target.value){ E.swap.times[1]=e.target.value; saveEta(); renderEta(); }});
-$("swapTz").addEventListener("change", e=>{ E.swap.tz=e.target.value; saveEta(); renderEta(); });
+const syncSwap = () => {
+  swapTable.rows = swapRows();
+  $("swapTz").value = E.swap.tz;
+  $("swapChip").textContent = [...E.swap.times].sort().join(" / ") + " " + tzTag(E.swap.tz);
+};
+swapTable.addEventListener("cellchange", e => {
+  if(e.detail.key !== "time") return;
+  const v = String(e.detail.value).trim();
+  if(!HHMM.test(v)) return;                       // the column's own validate already said so
+  const rows = swapRows();
+  const next = rows.map(r => r.id === e.detail.row.id ? v : r.time);
+  if(next[0] === next[1]) {                       // both drivers starting at once isn't a schedule
+    e.preventDefault();
+    toast.error("Both swaps can't be the same time", { description:"The day and night driver need two different clock times." });
+    queueMicrotask(syncSwap);
+    return;
+  }
+  E.swap.times = next;
+  saveEta();
+  queueMicrotask(() => { syncSwap(); renderEta(); });
+});
+$("swapTz").addEventListener("change", e=>{ E.swap.tz=e.target.value; saveEta(); syncSwap(); renderEta(); });
 
 // Ahead of the renderEta listeners below, so the state these settle is what that pass reads.
 $("miles").addEventListener("input", () => {
@@ -1338,18 +1423,15 @@ $("nowBtn").onclick = ()=>{
   departPinned = new Date(Math.floor(Date.now()/60000)*60000);
   $("depart").value = toWall(departPinned, E.originTz); renderEta();
 };
-$("tuneToggle").onclick = ()=>{
-  const on = $("tuneGrid").classList.contains("hide");
-  show($("tuneGrid"), on); show($("swapBox"), on);
-  // The two switch rows step aside while tuning is open, so the fields sit directly under
-  // the toggle that revealed them instead of being split off below. The LIVE CTA no longer
-  // does: it lives in the load card now, not in the panel these fields expand into, so
-  // hiding it here would strand the driver with no way to refresh while tuning is open.
-  // Hiding overrideRow doesn't touch E.liveOverride or overrideBtn's aria-checked — it's
-  // still there, just off-screen, and reappears exactly as it was.
+/* <rig-collapsible> owns the open/close and springs the height; this is what still has to
+   happen alongside. The Override row steps aside while tuning is open, so the fields sit
+   directly under the control that revealed them instead of being split off below it.
+   Hiding it doesn't touch E.liveOverride or the switch — it's off-screen, not reset. */
+$("tuneWrap").addEventListener("openchange", e => {
+  const on = e.detail.open;
   show($("overrideRow"), !on);
-  $("tuneToggle").textContent = on ? "− HIDE TUNING" : "+ TUNE TO YOUR TRUCK";
-};
+  $("tuneToggle").textContent = on ? "Hide tuning" : "Tune to your truck";
+});
 
 // Same .switch pill as the day/night toggle, driven by its own aria-checked (see the
 // generic .switch[aria-checked="true"] CSS rule) rather than the page theme. Left visible
@@ -1357,12 +1439,12 @@ $("tuneToggle").onclick = ()=>{
 // whenever the driver might tap UPDATE LIVE ETA.
 const renderOverrideBtn = () => {
   if($("overrideBtn").checked !== E.liveOverride) $("overrideBtn").checked = E.liveOverride;
+  $("overrideNote").textContent = E.liveOverride
+    ? "GET ETA overwrites miles with the real road distance, even one you typed."
+    : "GET ETA only fills miles when the field is blank, or still holds its own number.";
 };
 $("overrideBtn").addEventListener("change", e => {
-  E.liveOverride = e.target.checked; saveEta();
-  toast(E.liveOverride ? "Override on" : "Override off", { description: E.liveOverride
-    ? "GET ETA will overwrite a mileage you typed."
-    : "GET ETA only fills miles when the field is blank." });
+  E.liveOverride = e.target.checked; saveEta(); renderOverrideBtn();
 });
 renderOverrideBtn();
 
@@ -1845,6 +1927,8 @@ function renderEta(){
       dots.length+" DOT break"+(dots.length===1?"":"s");
   }
 
+  renderMap();
+
   const apptVal = $("appt").value;
   if(apptVal){
     const apptDate = fromWall(apptVal, showTz);
@@ -2094,6 +2178,72 @@ function renderReset(){
   // <rig-progress steps="34">: one segment an hour, springing as each one lands.
   $("bars").setAttribute("tone", done ? "ok" : "accent");
   $("bars").value = pending ? 0 : Math.min(RESET_HOURS, Math.floor(elapsedH));
+}
+
+/* The run drawn as a line. HERE's own road geometry when the plan returns it, the
+   straight line between the two ends when it doesn't — the card says which, because a
+   ruler line across three states is a different claim from a road.
+
+   Only fuel is marked. A swap and a DOT break land on the CLOCK, so where they happen
+   depends on where the truck has got to; the schedule already says the mile, and putting
+   a pin on a map would dress that up as a place the driver can aim at. Fuel is a place.
+
+   Redrawn only when something about the line actually changes — rig-route-map animates
+   the line in each time its stops are replaced, and the RUNNING tick comes round once a
+   second. */
+let lastMapKey = "";
+function renderMap(){
+  const raw = LIVE.raw, res = LIVE.res;
+  const live = !!(res && liveFresh(LIVE.at, Date.now()) && raw && raw.ends);
+  show($("mapWrap"), live);
+  if(!live){ lastMapKey = ""; return; }
+  const road = Array.isArray(raw.line) && raw.line.length > 1;
+  const line = road ? raw.line
+    : [[raw.ends.from.lat, raw.ends.from.lon], [raw.ends.to.lat, raw.ends.to.lon]];
+  const fuel = res.schedule.filter(x => x.kind === "fuel");
+  const tz = E.destTz || E.originTz;
+  const key = [road, line.length, Math.round(res.miles), fuel.map(x => Math.round(x.mile)).join(","),
+               E.destName, Math.round(res.driveH*60)].join("|");
+  if(key === lastMapKey) return;
+  lastMapKey = key;
+
+  const total = res.miles || 1;
+  const map = $("routeMap");
+  map.setAttribute("label", (E.originName === "Your device" ? "Here" : E.originName)
+    + " to " + (E.destName || "destination"));
+
+  /* The card draws a leg from the `path` on the stop that leg ENDS at — it has no notion
+     of one line under the whole run — so the route is cut at each stop and handed over
+     leg by leg. Pass only the stops and it smooths a straight leg between each pair,
+     which would make the caption below a lie. The start has no leg before it. */
+  const cuts = [0, ...fuel.map(x => Math.max(0, Math.min(1, x.mile / total))), 1];
+  const at = f => pointAlong(line, f) || { lat:raw.ends.from.lat, lon:raw.ends.from.lon };
+  const legFor = i => road ? sliceAlong(line, cuts[i-1], cuts[i]) : undefined;
+
+  map.stops = [
+    { name:(E.originPlace || (E.originName === "Your device" ? "Where you are" : E.originName)),
+      lat:raw.ends.from.lat, lon:raw.ends.from.lon, kind:"start",
+      eta:clockOf(new Date(LIVE.start), tz) + " " + tzTag(tz, new Date(LIVE.start)),
+      note:"Rolling out" },
+    ...fuel.map((x, i) => {
+      const p = at(cuts[i+1]);
+      return { name:"Fuel · mile " + Math.round(x.mile), lat:p.lat, lon:p.lon, kind:"fuel",
+               eta:clockOf(new Date(x.atMs), tz) + " " + tzTag(tz, new Date(x.atMs)),
+               note:x.min + " min off the clock", dwell:x.min, path:legFor(i+1) };
+    }),
+    { name:E.destName || "Destination", lat:raw.ends.to.lat, lon:raw.ends.to.lon, kind:"end",
+      eta:clockOf(res.liveEta, tz) + " " + tzTag(tz, res.liveEta), note:"Receiver",
+      path:legFor(cuts.length-1) }
+  ];
+  // The road distance and drive time are HERE's, so hand them over rather than letting the
+  // card estimate from the geometry.
+  map.summary = { distanceMi:Math.round(res.miles), durationMinutes:Math.round(res.driveH*60) };
+  show($("mapEstimate"), !road);
+  $("mapNote").textContent = (road
+    ? "HERE's road geometry. "
+    : "No geometry came back, so this is the straight line between the two ends. ")
+    + "Fuel only — swaps and DOT breaks land on the clock, not at a place, and they're in "
+    + "the list above.";
 }
 
 /* A stop's own details. The app has always solved these positions to draw the strip and

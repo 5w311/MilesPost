@@ -53,6 +53,14 @@ const clearBtn = id => `#${id} .rig-input__clear`;
 const helpOpen = pg => pg.$eval("#helpDlg", el => !!el.open);
 const helpHeading = pg => pg.$eval("#helpDlg", el => (el.getAttribute("heading") || "").trim());
 const closeHelp = pg => pg.keyboard.press("Escape");
+/* Rig springs heights (the collapsible, the tab panels), so a region is measurably still
+   open part-way through closing. Wait for the state rather than guessing a duration — a
+   region that never gets there still fails, which is the assertion that matters. */
+const settlesTo = async (pg, sel, want, ms = 3000) => {
+  for(const end = Date.now() + ms; Date.now() < end; await pg.waitForTimeout(100))
+    if((await pg.isVisible(sel)) === want) return true;
+  return false;
+};
 // <rig-select> is data-driven, so a zone is chosen by committing a value rather than by
 // driving its listbox open — what matters here is the app's reaction to the change.
 const pickZone = (pg, id, value) => pg.$eval("#" + id, (el, v) => {
@@ -489,14 +497,12 @@ try {
   if (!(await switchOn(livePage, "overrideBtn")))
     fail("override should flip on as soon as the switch is toggled");
   await livePage.click("#tuneToggle");
-  await livePage.waitForTimeout(150);
-  if (!(await livePage.isVisible("#tuneGrid"))) fail("tuning grid should open");
+  if (!(await settlesTo(livePage, "#tuneGrid", true))) fail("tuning grid should open");
   // The CTA lives in the load card now, so tuning no longer hides it — see the live-CTA
   // block below, which owns that assertion. The switch rows still step aside.
   if (await livePage.isVisible("#overrideRow")) fail("override row should be hidden while tuning is open");
   await livePage.click("#tuneToggle");
-  await livePage.waitForTimeout(150);
-  if (await livePage.isVisible("#tuneGrid")) fail("tuning grid should close again");
+  if (!(await settlesTo(livePage, "#tuneGrid", false))) fail("tuning grid should close again");
   if (!(await livePage.isVisible("#overrideRow"))) fail("override row must come back when tuning closes");
   if (!(await switchOn(livePage, "overrideBtn")))
     fail("override state must survive being hidden behind tuning, not reset");
@@ -915,7 +921,9 @@ try {
     fail("LIVE line should be showing before CLEAR (setup check)");
   const tuneBefore = await clearLivePage.evaluate(() => ({
     tune: ["fuelMax","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
-    swap: ["swapA","swapB","swapTz"].map(id => document.getElementById(id).value),
+    // v5.5: the swap pair is a <rig-table>, so read the two times off its rows.
+    swap: [...document.getElementById("swapTable").rows.map(r => r.time),
+           document.getElementById("swapTz").value],
   }));
   await clearLivePage.click("#etaClear");                   // arm
   await clearLivePage.click("#etaClear");                   // confirm
@@ -937,7 +945,9 @@ try {
   await clearLivePage.evaluate(() => { window.__blockRoute = false; });
   const tuneAfter = await clearLivePage.evaluate(() => ({
     tune: ["fuelMax","fuelMin","swapMin","dotMin","dotAt"].map(id => document.getElementById(id).value),
-    swap: ["swapA","swapB","swapTz"].map(id => document.getElementById(id).value),
+    // v5.5: the swap pair is a <rig-table>, so read the two times off its rows.
+    swap: [...document.getElementById("swapTable").rows.map(r => r.time),
+           document.getElementById("swapTz").value],
   }));
   if (JSON.stringify(tuneBefore) !== JSON.stringify(tuneAfter))
     fail(`CLEAR must not touch tuning/preset/swap, got ${JSON.stringify(tuneBefore)} -> ${JSON.stringify(tuneAfter)}`);

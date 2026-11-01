@@ -29,7 +29,7 @@ road can't back up. Predicted holds its place either way.
 | File | What it is |
 |---|---|
 | `index.html` | The app — markup, styles, and all the DOM wiring. Loads `lib/logic.js`. |
-| `lib/logic.js` | The pure logic — timezone resolver, ETA solver, 34-reset and ICS math. No DOM, no dependencies. Imported by the app and covered by the test suite. |
+| `lib/logic.js` | The pure logic — timezone resolver, ETA solver, tank model, route-geometry decoding, 34-reset and ICS math. No DOM, no dependencies. Imported by the app and covered by the test suite. |
 | `sw.js` | Service worker. Caches everything so it works with zero bars. |
 | `manifest.webmanifest` | Makes it installable to the home screen. |
 | `icon-192.png` `icon-512.png` `icon-1024.png` `apple-touch-icon.png` | Home-screen and install icons — the green MILE 34 marker. Full-bleed and opaque, as iOS requires. |
@@ -123,6 +123,14 @@ changed: `lib/logic.js` is byte-for-byte what v5.4 shipped and its 297 tests pas
   none of which are styling. Moving them to `<rig-combobox>` is a follow-up that wants a
   live key to validate.
 - **New: tap a stop row** for its times, its miles and which rule put it there.
+- **New: the run drawn as a line.** The route call now asks HERE for `polyline` as well as
+  the summary — same request, same transaction — and the card draws the real road. Only
+  fuel is marked: a swap and a DOT break land on the clock, so pinning them to a map would
+  dress up a time as a place. If no geometry comes back the card draws the straight line
+  between the two ends and says so.
+- **Tuning folds away** behind a collapsible, and the swap pair moved into a drawer. Two
+  rows, always — `shiftAtArrival` reads the earlier time as the day driver's start and the
+  later as the night's, so a third would belong to no shift.
 - **The branch names its own cache** (`milespost-v5.5-rig`). Caches are keyed per origin,
   so pointing Pages here and later back at main would otherwise leave one phone holding
   this build's files under the name main's build expects for its own.
