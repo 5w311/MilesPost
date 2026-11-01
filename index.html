@@ -149,11 +149,14 @@
   *{box-sizing:border-box}
   html,body{margin:0;color:var(--page-ink);font-family:var(--sans);
     -webkit-text-size-adjust:100%}
-  /* Same top clearance as v5.4: safe-area inset, plus up to 24px more to clear iOS's
-     edge effect, which blurs a band below the status bar as well. In a Safari tab the
-     inset is 0, min() gives 0, and the page keeps its plain 16px. */
+  /* Top clearance (v5.4, restored in v5.6): the status bar's own height, plus up to 24px
+     more to clear iOS's edge effect, which blurs a band below the status bar as well. The
+     v5.5 port kept the 24px and dropped the inset itself, which put the masthead and its
+     day/night switch behind the clock, where taps don't reach. In a Safari tab the inset
+     is 0, both terms vanish, and the page keeps its plain 16px. */
   body{min-height:100vh; min-height:100dvh; position:relative; background:var(--rig-bg);
-    padding:calc(16px + min(24px, env(safe-area-inset-top))) calc(14px + env(safe-area-inset-right))
+    padding:calc(16px + env(safe-area-inset-top) + min(24px, env(safe-area-inset-top)))
+      calc(14px + env(safe-area-inset-right))
       calc(24px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
     transition:background-color .2s ease, color .2s ease}
   .wrap{max-width:430px;margin:0 auto}
@@ -761,7 +764,7 @@
   </rig-tabs>
 
   <div class="footWrap">
-    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.5-rig</button>
+    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.6</button>
   </div>
 </div>
 

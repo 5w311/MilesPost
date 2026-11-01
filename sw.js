@@ -1,10 +1,7 @@
 // Build marker. Bump it on every single deploy, or installed phones will decide they're
 // already current and quietly ignore the new build. Keep it "milespost-v" + the app
-// version: the update offer names a waiting build by this ("UPDATE AVAILABLE (v5.4)").
-// This branch carries a suffix as well. Caches are keyed per origin, so pointing Pages at
-// rig-ui-preview and later back at main would otherwise have one phone holding this
-// build's files under the name main's build expects to find its own under.
-const CACHE = "milespost-v5.5-rig";
+// version: the update offer names a waiting build by this ("UPDATE AVAILABLE (v5.6)").
+const CACHE = "milespost-v5.6";
 const ASSETS = [
   "./",
   "./index.html",

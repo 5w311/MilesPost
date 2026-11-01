@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.4** (this branch: **v5.5**, the Rig UI preview — see below)
+**Current version: v5.6**
 
 ## Files
 
@@ -102,7 +102,18 @@ path is relative — and the HERE key is locked to trusted domains that include
 
 ## Version history
 
-### v5.5 — Rig UI preview (`rig-ui-preview` branch)
+### v5.6
+
+- **Fixed: the top of the app sat behind the iPhone's clock.** The Rig UI rebuild (v5.5)
+  kept the extra room below the status bar but dropped the status bar's own height, so in
+  the home-screen app the MILESPOST masthead and the day/night switch were drawn behind the
+  clock and battery — blurred, and out of reach of a tap, since iOS keeps that strip for
+  itself. The full clearance from v5.4 is back: the masthead starts below the status bar,
+  past the blur band. In a regular Safari tab nothing moves.
+- A browser test now fakes an iPhone status bar (62pt) and checks the masthead and switch
+  start below it, so this can't quietly come back.
+
+### v5.5 — Rig UI
 
 The same app on a new chassis. Every panel, field, switch, tab, chip, list row, alert and
 dialog is now a [Rig UI](https://github.com/5w311/rig-ui) component; the signage language
