@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.9**
+**Current version: v5.10**
 
 ## Files
 
@@ -101,6 +101,19 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v5.10
+
+- **Fixed: changing the month closed the date picker.** On a phone, Appointment and Shut down
+  had no room for the ~400px calendar above or below them, so it opened upward with the
+  month bar off the top of the screen. Reaching it meant dragging the page, which the picker
+  took as a tap outside — and closed. Now the page scrolls just enough when a picker opens
+  that the whole calendar fits below its field, month arrows and all.
+- **The hour and minute columns work like iPhone wheels.** Scroll to the time you want and
+  let go — the row in the middle is picked, so Done keeps it. Before, scrolling only moved the
+  list and you had to tap the number.
+- **Shut down shows the whole day and time.** It shared its row with SET and NOW, which cut
+  the time off ("Dec 4, 2026, …"). SET and NOW now sit side by side under the field.
 
 ### v5.9
 

@@ -908,6 +908,56 @@ try {
     await ctx.close();
   }
 
+  // ---- v5.10: the picker on a phone-height screen (iPhone Safari, 393 x 659).
+  {
+    const ctx = await browser.newContext({ timezoneId: "America/Chicago", viewport: { width: 393, height: 659 } });
+    const pg = await ctx.newPage();
+    const errs = []; pg.on("pageerror", e => errs.push(e.message));
+    await pg.clock.setFixedTime(new Date("2026-11-01T19:20:00Z"));
+    await runningOff(pg);
+    await pg.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+    await clickTab(pg, "reset");
+    await pg.locator("#shutField").scrollIntoViewIfNeeded();
+    // Room to open: no room above or below Shut down, so it used to open upward with the
+    // month bar off the top of the screen — and reaching it closed the picker.
+    await pg.click("#shut .rig-datepick__trigger"); await pg.waitForTimeout(400);
+    const box = await pg.evaluate(() => {
+      const p = document.querySelector("#shut .rig-datepick__pop").getBoundingClientRect();
+      const n = document.querySelector("#shut .rig-cal__nav--next").getBoundingClientRect();
+      return { top: p.top, bottom: p.bottom, navTop: n.top, vh: innerHeight };
+    });
+    if (box.top < 0 || box.bottom > box.vh || box.navTop < 0)
+      fail(`the picker should open fully on screen with its month bar reachable, got ${JSON.stringify(box)}`);
+    await pg.click("#shut .rig-cal__nav--next"); await pg.waitForTimeout(500);
+    if (!(await pg.$eval("#shut", el => el.open))) fail("changing the month must not close the picker");
+    const months = await pg.$$eval("#shut .rig-cal__title", ts => ts.map(t => t.getAttribute("aria-label") || "").join(" | "));
+    if (!/December 2026/.test(months)) fail(`next month should show December 2026, got ${JSON.stringify(months)}`);
+    // Wheels: scroll a column and let it settle — the centred row is the pick, no tap.
+    await pg.click('#shut .rig-cal__day[data-date="2026-12-04"]');
+    await pg.click("#shut .rig-timepick__input"); await pg.waitForTimeout(400);
+    const minuteCol = '#shut .rig-timecols__col[aria-label="Minutes"]';
+    const scrollTo = (minute, touch) => pg.$eval(minuteCol, (col, [minute, touch]) => {
+      if (touch) col.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      const o = [...col.children].find(o => o.textContent.trim() === minute);
+      col.scrollTop = o.offsetTop - (col.clientHeight - o.offsetHeight) / 2 + 6;    // a little off centre
+    }, [minute, touch]);
+    await scrollTo("30", false); await pg.waitForTimeout(400);  // the app scrolling it itself
+    if (/T\d\d:30$/.test(await wallOf(pg, "#shut")))
+      fail("a column the app scrolled itself must not pick — only the driver's scroll counts");
+    await scrollTo("45", true); await pg.waitForTimeout(500);   // the driver's scroll
+    const picked = await wallOf(pg, "#shut");
+    if (!/^2026-12-04T\d\d:45$/.test(picked))
+      fail(`scrolling the minutes to 45 and letting go should pick :45, got ${JSON.stringify(picked)}`);
+    if (!(await pg.$eval("#shut", el => el.open))) fail("picking on a wheel must leave the picker open for Done");
+    await pg.locator("#shut .rig-datepick__time > button", { hasText: "Done" }).click(); await pg.waitForTimeout(300);
+    // And the whole day and time shows in the field — SET and NOW sit under it now.
+    const shown = await pg.$eval("#shut .rig-datepick__text", el => ({ t: el.textContent, clipped: el.scrollWidth > el.clientWidth }));
+    if (shown.clipped || !/Dec 4, 2026.*:45/.test(shown.t))
+      fail(`Shut down should show the full day and time, got ${JSON.stringify(shown)}`);
+    if (errs.length) fail("phone picker page errors: " + JSON.stringify(errs));
+    await ctx.close();
+  }
+
   // ---- Daylight saving ends Sun 2026-11-01 (02:00 EDT -> 01:00 EST). The browser clock
   // is frozen at real moments of that weekend, in New York.
   const dstPage = async (iso, opts = {}) => {

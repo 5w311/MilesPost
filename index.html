@@ -326,6 +326,11 @@
   /* RUNNING disables Rolling out: Rig already fades the picker's box to .5; the label
      stands down with it. (Fading the whole field as well would stack to ~.28.) */
   .dtField:has(rig-date-picker[disabled]) .rig-field__label{opacity:.55}
+  /* Shut down shares its row with SET and NOW — too narrow for "Dec 4, 2026, 1:45 PM", which
+     cut the time off. The field takes the row; the two buttons go under it, side by side. */
+  #rsInputCard .row{flex-wrap:wrap}
+  #rsInputCard .row > .dtField{flex:1 1 100%}
+  #rsInputCard .row > .rig-btn{flex:1}
   /* RUNNING disables the departure input directly rather than the <rig-input> around it —
      the field is the thing the clock has taken over — so the wrapper has to be told to
      stand down with it, label and all. */
@@ -788,7 +793,7 @@
   </rig-tabs>
 
   <div class="footWrap">
-    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.9</button>
+    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.10</button>
   </div>
 </div>
 
@@ -1464,6 +1469,62 @@ $("miles").addEventListener("input", () => {
    time didn't — the arrival and the 34 would sit on the old time. Listen on the inner
    time field as well and pass the change on. If Rig fixes it upstream, the cost is one
    extra render. */
+/* v5.10 — two things Rig's picker gets wrong on a phone.
+
+   ROOM TO OPEN. The calendar is ~400px tall and opens above or below its field, whichever
+   has more room. On a phone, Appointment and Shut down have room on neither side, so it
+   opened upward with the month bar off the top of the screen. Reaching it meant dragging
+   the page — and a drag starts outside the popup, which Rig reads as a tap outside: it
+   closed. So when a picker opens without room below its field, the page scrolls up just
+   enough (adding space past the bottom if the page is too short to scroll that far), and
+   Rig, which re-places the popup on scroll, settles it below the field, all on screen. */
+const pickerSpacer = document.createElement("div");
+pickerSpacer.setAttribute("aria-hidden", "true");
+document.body.append(pickerSpacer);
+["depart","appt","shut"].forEach(id => {
+  const el = $(id);
+  el.addEventListener("rig-open", () => requestAnimationFrame(() => {
+    const trig = el.querySelector(".rig-datepick__trigger"), pop = el.querySelector(".rig-datepick__pop");
+    if(!trig || !pop) return;
+    const vh = window.visualViewport?.height ?? window.innerHeight;
+    const need = trig.getBoundingClientRect().bottom + 6 + pop.offsetHeight + 8 - vh;
+    if(need <= 0) return;
+    const canScroll = document.documentElement.scrollHeight - vh - window.scrollY;
+    if(canScroll < need) pickerSpacer.style.height = Math.ceil(need - canScroll) + "px";
+    window.scrollBy({ top: need, behavior: "instant" });
+  }));
+  el.addEventListener("rig-close", () => { pickerSpacer.style.height = ""; });
+});
+
+/* WHEELS. Rig's hour/minute columns pick on a tap only; scrolling just moved the list, so
+   scrolling to 14:30 and tapping Done kept the old time. On a phone they should behave like
+   iOS's wheels: when a column you scrolled comes to rest, the row in its centre is the
+   pick (Rig then snaps it dead centre). Only a scroll the driver started counts — Rig
+   scrolls the columns itself on opening and after each pick, and those must not pick. */
+const wheelTouched = new WeakSet(), wheelTimer = new WeakMap();
+const isWheel = t => t instanceof Element && t.classList.contains("rig-timecols__col");
+for(const ev of ["pointerdown","touchstart","wheel"])
+  document.addEventListener(ev, e => {
+    const col = e.target instanceof Element && e.target.closest(".rig-timecols__col");
+    if(col) wheelTouched.add(col);
+  }, { capture:true, passive:true });
+document.addEventListener("scroll", e => {
+  const col = e.target;
+  if(!isWheel(col) || !wheelTouched.has(col)) return;
+  clearTimeout(wheelTimer.get(col));
+  wheelTimer.set(col, setTimeout(() => {
+    wheelTouched.delete(col);
+    const mid = col.getBoundingClientRect().top + col.clientHeight / 2;
+    let best = null, gap = Infinity;
+    for(const o of col.children){
+      if(o.getAttribute("aria-disabled") === "true") continue;
+      const r = o.getBoundingClientRect(), d = Math.abs(r.top + r.height / 2 - mid);
+      if(d < gap){ gap = d; best = o; }
+    }
+    if(best && best.getAttribute("aria-selected") !== "true") best.click();
+  }, 140));
+}, true);
+
 ["depart","appt","shut"].forEach(id => {
   const el = $(id), tp = el.timePicker;
   if(tp) tp.addEventListener("change", () => {
