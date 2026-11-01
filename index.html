@@ -97,6 +97,7 @@
     --rig-surface:#DAD8D2;
     --rig-surface-2:#CDCBC4;
     --rig-surface-3:#BEBBB3;
+    --field-bg:#CDCBC4;                /* inside text boxes: a step under the card (v5.8) */
     --rig-ink:#15181b;                 /* panel ink */
     --rig-ink-2:#4a545c;
     --rig-ink-3:#5a6369;               /* darker for the off-white: 4.3:1, was 3.6 on the old white */
@@ -124,6 +125,7 @@
     --rig-surface:#F5F6F4;
     --rig-surface-2:#e9ebe7;
     --rig-surface-3:#dcdfda;
+    --field-bg:#E9EBE7;                /* inside text boxes: a step under the card (v5.8) */
     --rig-ink:#15181b;
     --rig-ink-2:#4a545c;
     --rig-ink-3:#6b757d;
@@ -311,6 +313,10 @@
   .group{margin-bottom:14px}
   .group:last-child{margin-bottom:0}
   .row{display:flex;gap:8px;align-items:flex-end}
+  /* Text boxes and dropdowns sit a step darker than the card around them (v5.8), so the
+     place to type reads at a glance, day and night. Rig paints both with the card's own
+     --rig-surface; this sheet loads after rig.css, so the plain class rule wins. */
+  .rig-input__box,.rig-pick-field{background:var(--field-bg)}
   .row > rig-input{flex:1;min-width:0}
   /* RUNNING disables the departure input directly rather than the <rig-input> around it —
      the field is the thing the clock has taken over — so the wrapper has to be told to
@@ -768,7 +774,7 @@
   </rig-tabs>
 
   <div class="footWrap">
-    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.7</button>
+    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.8</button>
   </div>
 </div>
 
