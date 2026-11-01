@@ -1,7 +1,7 @@
 // Build marker. Bump it on every single deploy, or installed phones will decide they're
 // already current and quietly ignore the new build. Keep it "milespost-v" + the app
 // version: the update offer names a waiting build by this ("UPDATE AVAILABLE (v5.4)").
-const CACHE = "milespost-v5.4";
+const CACHE = "milespost-v5.5";
 const ASSETS = [
   "./",
   "./index.html",
@@ -20,7 +20,47 @@ const ASSETS = [
   "./fonts/overpass-latin-800-normal.woff2",
   "./fonts/overpass-mono-latin-400-normal.woff2",
   "./fonts/overpass-mono-latin-600-normal.woff2",
-  "./fonts/overpass-mono-latin-700-normal.woff2"
+  "./fonts/overpass-mono-latin-700-normal.woff2",
+  // rig-ui, from rig-ui/milespost.js — regenerate with `npm run rig:manifest`
+  "./rig-ui/rig.css",
+  "./rig-ui/milespost.js",
+  "./rig-ui/src/display/alert.js",
+  "./rig-ui/src/display/badge.js",
+  "./rig-ui/src/display/empty.js",
+  "./rig-ui/src/display/format.js",
+  "./rig-ui/src/display/height.js",
+  "./rig-ui/src/display/icons.js",
+  "./rig-ui/src/display/item.js",
+  "./rig-ui/src/display/progress.js",
+  "./rig-ui/src/display/separator.js",
+  "./rig-ui/src/forms/button.js",
+  "./rig-ui/src/forms/face.js",
+  "./rig-ui/src/forms/field-logic.js",
+  "./rig-ui/src/forms/field.js",
+  "./rig-ui/src/forms/input.js",
+  "./rig-ui/src/forms/switch.js",
+  "./rig-ui/src/forms/text-field.js",
+  "./rig-ui/src/fuzzy.js",
+  "./rig-ui/src/icon-data.js",
+  "./rig-ui/src/morph-icon.js",
+  "./rig-ui/src/motion.js",
+  "./rig-ui/src/navigation/nav-math.js",
+  "./rig-ui/src/navigation/tabs.js",
+  "./rig-ui/src/overlays/dialog.js",
+  "./rig-ui/src/overlays/drawer.js",
+  "./rig-ui/src/overlays/layer.js",
+  "./rig-ui/src/overlays/modal.js",
+  "./rig-ui/src/overlays/overlay-math.js",
+  "./rig-ui/src/overlays/tooltip.js",
+  "./rig-ui/src/pickers/combobox.js",
+  "./rig-ui/src/pickers/listbox.js",
+  "./rig-ui/src/pickers/pick-logic.js",
+  "./rig-ui/src/pickers/select.js",
+  "./rig-ui/src/pickers/shared.js",
+  "./rig-ui/src/position.js",
+  "./rig-ui/src/sound.js",
+  "./rig-ui/src/toast.js",
+  "./rig-ui/src/util.js"
 ];
 
 /* Updates wait for the driver. A new build downloads in the background and then WAITS:

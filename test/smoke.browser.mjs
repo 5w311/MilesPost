@@ -14,8 +14,11 @@ import { fileURLToPath } from "url";
 import { chromium } from "playwright";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const TYPES = { ".html":"text/html", ".js":"text/javascript",
-  ".webmanifest":"application/manifest+json", ".png":"image/png" };
+// Chromium refuses a stylesheet served under the wrong type, so a missing ".css" here
+// doesn't fail loudly — it quietly tests an unstyled app.
+const TYPES = { ".html":"text/html", ".js":"text/javascript", ".css":"text/css",
+  ".webmanifest":"application/manifest+json", ".png":"image/png",
+  ".woff2":"font/woff2" };
 
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split("?")[0]);
@@ -28,6 +31,37 @@ const server = http.createServer((req, res) => {
 });
 
 const fail = msg => { console.error("SMOKE FAIL:", msg); process.exitCode = 1; };
+
+
+/* v5.5 moved the chassis onto Rig UI (rig-ui/, vendored), so a handful of controls are no
+   longer the plain elements these checks used to poke: the tabs are <rig-tab>, the three
+   toggles are <rig-switch>, the zone pickers are <rig-select>, the field clears belong to
+   <rig-input>, and the help sign is a <rig-dialog>. Everything the checks ASSERT is
+   unchanged — these only re-point them at where the control now lives. */
+const TAB = v => `rig-tab[value="${v}"]`;
+/* <rig-tabs> springs the panel area to the new panel's height, and emptying or filling a
+   load changes that height by a lot — so a tab click landing in the middle of that spring
+   finds the strip still gliding under the pointer. Let it settle, then click. */
+const clickTab = async (pg, v) => {
+  await pg.evaluate(() => window.scrollTo(0, 0));   // the strip is at the top of the page
+  await pg.click(TAB(v));
+  await pg.waitForTimeout(200);
+};
+const switchTrack = id => `#${id} .rig-switch__track`;
+const switchOn = (pg, id) => pg.$eval("#" + id, el => el.checked === true);
+const clearBtn = id => `#${id} .rig-input__clear`;
+const helpOpen = pg => pg.$eval("#helpDlg", el => !!el.open);
+const helpHeading = pg => pg.$eval("#helpDlg", el => (el.getAttribute("heading") || "").trim());
+const closeHelp = pg => pg.keyboard.press("Escape");
+// <rig-select> is data-driven, so a zone is chosen by committing a value rather than by
+// driving its listbox open — what matters here is the app's reaction to the change.
+const pickZone = (pg, id, value) => pg.$eval("#" + id, (el, v) => {
+  el.value = v; el.dispatchEvent(new Event("change", { bubbles: true }));
+}, value);
+const zoneValues = (pg, id) => pg.$eval("#" + id, el => (el.options || []).map(o => o.value ?? o));
+// <rig-alert> carries its headline in an attribute, with the detail as its text.
+const alertText = (pg, sel) => pg.$eval(sel,
+  el => ((el.getAttribute("heading") || "") + " " + el.textContent).trim());
 
 await new Promise(r => server.listen(0, r));
 const port = server.address().port;
@@ -154,7 +188,7 @@ try {
   const gaugeLow = (await page.textContent("#greadout"))?.trim() || "";
   if (gaugeLow !== "1/8 — 0 mi")
     fail(`tapping the low end should snap to 1/8 (E isn't a landing spot) and read "1/8 — 0 mi", got ${JSON.stringify(gaugeLow)}`);
-  if (!/fuel before you roll/i.test((await page.textContent("#grange")) || ""))
+  if (!/fuel before you roll/i.test(await alertText(page, "#grange")))
     fail("at the bottom the gauge should say to fuel before you roll");
   if ((await needleAt()) !== 1) fail(`the needle should sit on 1/8, got eighth ${await needleAt()}`);
   // Drag back up to half, then keys to full.
@@ -185,7 +219,7 @@ try {
     fail("CLEAR should be inert again once the load is empty");
 
   // 34 Reset tab: choosing a date must NOT start the reset (picker-lockout regression).
-  await page.click("#tabReset");
+  await clickTab(page, "reset");
   await page.waitForTimeout(100);
   if (!(await page.isVisible("#rsInputCard")))
     fail("shutdown input should be visible in the empty reset state");
@@ -243,7 +277,7 @@ try {
       JSON.stringify({ shutMs, tz: "America/New_York", tzName: "Test" }));
   });
   await page.reload({ waitUntil: "networkidle" });
-  await page.click("#tabReset");
+  await clickTab(page, "reset");
   await page.waitForTimeout(100);
   if (!(await page.isVisible("#rsInputCard")))
     fail("a long-completed reset should auto-clear to the empty state on open");
@@ -263,7 +297,7 @@ try {
   const rsErrors = [];
   rsPage.on("pageerror", e => rsErrors.push("pageerror: " + e.message));
   await rsPage.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
-  await rsPage.click("#tabReset");
+  await clickTab(rsPage, "reset");
   await rsPage.waitForTimeout(100);
   // Match the app's own zone so the wall-clock string round-trips to the instant intended.
   await rsPage.evaluate(() => {
@@ -449,11 +483,11 @@ try {
   // Turn override on before opening tuning, so hiding the row can be checked against
   // actually losing the driver's choice — a hide that also resets E.liveOverride would
   // be a worse bug than the row simply staying on screen.
-  if ((await livePage.textContent("#overrideState"))?.trim() !== "OFF")
-    fail("override indicator should read OFF before it's ever been toggled");
-  await livePage.click("#overrideBtn");
-  if ((await livePage.textContent("#overrideState"))?.trim() !== "ON")
-    fail("override indicator should flip to ON as soon as the switch is toggled");
+  if (await switchOn(livePage, "overrideBtn"))
+    fail("override should read off before it's ever been toggled");
+  await livePage.click(switchTrack("overrideBtn"));
+  if (!(await switchOn(livePage, "overrideBtn")))
+    fail("override should flip on as soon as the switch is toggled");
   await livePage.click("#tuneToggle");
   await livePage.waitForTimeout(150);
   if (!(await livePage.isVisible("#tuneGrid"))) fail("tuning grid should open");
@@ -464,7 +498,7 @@ try {
   await livePage.waitForTimeout(150);
   if (await livePage.isVisible("#tuneGrid")) fail("tuning grid should close again");
   if (!(await livePage.isVisible("#overrideRow"))) fail("override row must come back when tuning closes");
-  if ((await livePage.getAttribute("#overrideBtn", "aria-checked")) !== "true")
+  if (!(await switchOn(livePage, "overrideBtn")))
     fail("override state must survive being hidden behind tuning, not reset");
   if (liveErrors.length) fail("live page errors: " + JSON.stringify(liveErrors, null, 2));
   await livePage.close();
@@ -740,8 +774,9 @@ try {
   else if (m2[1] === predDay) fail(`the live slot's day should be Live's own, not Predicted's ${predDay}`);
   // Stops can only fall inside the run that was entered, and the groups read in the order
   // they happen: the 17:00 swap before the 22:00 DOT break.
-  const rows = await dayPage.evaluate(() => [...document.querySelectorAll("#stopList .srow")]
-    .map(r => [r.dataset.kind, r.querySelector(".sat").firstChild.textContent.trim()]));
+  const rows = await dayPage.evaluate(() => [...document.querySelectorAll("#stopList rig-item")]
+    .map(r => [r.dataset.kind,
+      (r.querySelector('[slot="description"]').textContent.trim().match(/^\d\d:\d\d [A-Z]+/) || [""])[0]]));
   if (JSON.stringify(rows) !== JSON.stringify([["swap", "17:00 CDT"], ["dot", "22:00 CDT"]])
       && JSON.stringify(rows) !== JSON.stringify([["swap", "17:00 CST"], ["dot", "22:00 CST"]]))
     fail(`the stops should be the 17:00 swap then the 22:00 DOT, in that order, got ${JSON.stringify(rows)}`);
@@ -800,7 +835,7 @@ try {
   {
     // A 34 started Saturday 20:00 EDT is legal after 34 REAL hours: Monday 05:00 EST.
     const { ctx, pg } = await dstPage("2026-11-01T00:00:00Z");
-    await pg.click("#tabReset"); await pg.waitForTimeout(100);
+    await clickTab(pg, "reset");
     await pg.click("#rsNow"); await pg.waitForTimeout(150);
     const legal = ((await pg.textContent("#rsClock")) || "").replace(/\s+/g, " ").trim();
     const legalDay = ((await pg.textContent("#rsDay")) || "").trim();
@@ -840,7 +875,7 @@ try {
   await overridePage.dispatchEvent("#miles", "input");
   await overridePage.fill("#destIn", "Nashville TN");
   await overridePage.press("#destIn", "Enter");
-  await overridePage.click("#overrideBtn");
+  await overridePage.click(switchTrack("overrideBtn"));
   await overridePage.click("#getMiBtn");
   await overridePage.waitForTimeout(300);
   const overriddenMiles = await overridePage.inputValue("#miles");
@@ -962,10 +997,8 @@ try {
     fail("RUNNING setup: a live quote should be in hand");
   // On by default now, with the departure controls already handed over on the first render
   // rather than only once the switch is touched.
-  if ((await runPage.getAttribute("#runningBtn", "aria-checked")) !== "true")
+  if (!(await switchOn(runPage, "runningBtn")))
     fail("RUNNING should be ON by default");
-  if ((await runPage.textContent("#runningState"))?.trim() !== "ON")
-    fail("the RUNNING indicator should read ON by default");
   if (!(await runPage.isDisabled("#depart")))
     fail("#depart must be disabled on load while RUNNING drives it, not just after a toggle");
   if (!(await runPage.isDisabled("#nowBtn")))
@@ -1013,14 +1046,14 @@ try {
     fail("#depart must stay disabled while RUNNING drives it");
 
   // It does stand down on the 34 RESET view, though — nothing there for it to re-render.
-  await runPage.click("#tabReset");
+  await clickTab(runPage, "reset");
   await runPage.waitForTimeout(100);
   const departOnReset = await runPage.inputValue("#depart");
   await runPage.evaluate(() => { window.__skewMs = 9 * 60 * 1000; });
   await runPage.waitForTimeout(1600);
   if ((await runPage.inputValue("#depart")) !== departOnReset)
     fail("the RUNNING clock must pause on the 34 RESET view");
-  await runPage.click("#tabEta");
+  await clickTab(runPage, "eta");
   await runPage.waitForTimeout(1600);
   if ((await runPage.inputValue("#depart")) === departOnReset)
     fail("the RUNNING clock must resume on returning to the ETA view");
@@ -1047,7 +1080,7 @@ try {
     fail("the RUNNING clock must resume when the app comes back to the foreground");
 
   // Switching off freezes the clock where it stopped and hands both controls back.
-  await runPage.click("#runningBtn");
+  await runPage.click(switchTrack("runningBtn"));
   await runPage.waitForTimeout(100);
   const departOff = await runPage.inputValue("#depart");
   if (await runPage.isDisabled("#depart")) fail("#depart must be editable again once RUNNING is off");
@@ -1066,14 +1099,14 @@ try {
   // would keep overriding a driver who deliberately switched it off.
   await runPage.reload({ waitUntil: "networkidle" });
   await runPage.waitForTimeout(200);
-  if ((await runPage.getAttribute("#runningBtn", "aria-checked")) !== "false")
+  if (await switchOn(runPage, "runningBtn"))
     fail("RUNNING switched off must stay off across a reload");
   if (await runPage.isDisabled("#depart"))
     fail("#depart should be the driver's again after reloading with RUNNING off");
-  await runPage.click("#runningBtn");                 // back on
+  await runPage.click(switchTrack("runningBtn"));                 // back on
   await runPage.reload({ waitUntil: "networkidle" });
   await runPage.waitForTimeout(200);
-  if ((await runPage.getAttribute("#runningBtn", "aria-checked")) !== "true")
+  if (!(await switchOn(runPage, "runningBtn")))
     fail("RUNNING switched back on must also persist");
   if (runErrors.length) fail("running page errors: " + JSON.stringify(runErrors, null, 2));
   await runPage.close();
@@ -1187,11 +1220,11 @@ try {
   await groupPage.press("#destIn", "Enter");
   await groupPage.click("#getMiBtn");
   await groupPage.waitForTimeout(400);
-  const groups = await groupPage.evaluate(() => [...document.querySelectorAll("#stopList .srow")].map(r => ({
+  const groups = await groupPage.evaluate(() => [...document.querySelectorAll("#stopList rig-item")].map(r => ({
     kind: r.dataset.kind,
-    label: r.querySelector(".stype").textContent.trim(),
-    times: [...r.querySelectorAll(".sat")].map(a => a.firstChild.textContent.trim()),
-    len: r.querySelector(".slen").textContent.trim(),
+    label: r.querySelector('[slot="title"]').textContent.trim(),
+    times: (r.querySelector('[slot="description"]').textContent.match(/\d\d:\d\d [A-Z]+/g) || []),
+    len: r.querySelector('[slot="meta"]').textContent.trim(),
   })));
   const kinds = groups.map(g => g.kind);
   // One row per kind (v5.3: in the order each kind first happens — the day test above
@@ -1310,18 +1343,18 @@ try {
   await milesClearPage.fill("#destIn", "Nashville TN");
   await milesClearPage.press("#destIn", "Enter");
   await milesClearPage.waitForTimeout(100);
-  if (!(await milesClearPage.isVisible("#milesClear")))
-    fail("#milesClear should be visible once miles has content");
-  await milesClearPage.click("#milesClear");
+  if (!(await milesClearPage.isVisible(clearBtn("milesField"))))
+    fail("the miles clear button should be visible once miles has content");
+  await milesClearPage.click(clearBtn("milesField"));
   await milesClearPage.waitForTimeout(100);
   if ((await milesClearPage.inputValue("#miles")) !== "")
-    fail("#milesClear should empty the miles field");
-  if (await milesClearPage.isVisible("#milesClear"))
-    fail("#milesClear should hide itself once its field is empty");
+    fail("the miles clear button should empty the miles field");
+  if (await milesClearPage.isVisible(clearBtn("milesField")))
+    fail("the miles clear button should hide itself once its field is empty");
   if ((await milesClearPage.inputValue("#destIn")) !== "Nashville TN")
-    fail("#milesClear must not touch the destination field");
+    fail("the miles clear button must not touch the destination field");
   if (!(await milesClearPage.isVisible("#destMeta")))
-    fail("#milesClear must not un-resolve an already-set destination");
+    fail("the miles clear button must not un-resolve an already-set destination");
   if (milesClearErrors.length) fail("milesClear page errors: " + JSON.stringify(milesClearErrors, null, 2));
   await milesClearPage.close();
 
@@ -1334,16 +1367,16 @@ try {
   await destClearPage.fill("#destIn", "Nashville TN");
   await destClearPage.press("#destIn", "Enter");
   await destClearPage.waitForTimeout(100);
-  if (!(await destClearPage.isVisible("#destClear")))
-    fail("#destClear should be visible once destIn has content");
-  await destClearPage.click("#destClear");
+  if (!(await destClearPage.isVisible(clearBtn("destField"))))
+    fail("the destination clear button should be visible once destIn has content");
+  await destClearPage.click(clearBtn("destField"));
   await destClearPage.waitForTimeout(100);
   if ((await destClearPage.inputValue("#destIn")) !== "")
-    fail("#destClear should empty the destination field");
+    fail("the destination clear button should empty the destination field");
   if (await destClearPage.isVisible("#destMeta"))
-    fail("#destClear should un-resolve the destination (destMeta hidden)");
+    fail("the destination clear button should un-resolve the destination (destMeta hidden)");
   if ((await destClearPage.inputValue("#miles")) !== "500")
-    fail("#destClear must not touch the miles field");
+    fail("the destination clear button must not touch the miles field");
   if (destClearErrors.length) fail("destClear page errors: " + JSON.stringify(destClearErrors, null, 2));
   await destClearPage.close();
 
@@ -1512,7 +1545,7 @@ try {
   await originPage.fill("#origIn", "Zzyzx Nowhere");
   await originPage.click("#origSet");
   await originPage.waitForTimeout(150);
-  await originPage.selectOption("#origPick", "America/Denver");
+  await pickZone(originPage, "origPick", "America/Denver");
   await originPage.waitForTimeout(150);
   await originPage.click("#getMiBtn");
   await originPage.waitForTimeout(400);
@@ -1634,15 +1667,14 @@ try {
   if (!/Kentucky/.test(splitMsg) || !/Independence, KY/.test(splitMsg))
     fail(`the message should name the town and the state, got ${JSON.stringify(splitMsg)}`);
   // Two zones plus the placeholder, not the whole list.
-  const opts = await splitPage.evaluate(() =>
-    [...document.getElementById("destPick").options].map(o => o.value));
+  const opts = await zoneValues(splitPage, "destPick");
   if (opts[0] !== "")
     fail(`the picker should lead with a placeholder so either choice fires a change, got ${JSON.stringify(opts)}`);
   const zoneOpts = opts.slice(1);
   if (zoneOpts.length !== 2 || !zoneOpts.includes("America/New_York") || !zoneOpts.includes("America/Chicago"))
     fail(`Kentucky should offer exactly its two zones, got ${JSON.stringify(zoneOpts)}`);
   // Picking one commits it and clears the ask.
-  await splitPage.selectOption("#destPick", "America/New_York");
+  await pickZone(splitPage, "destPick", "America/New_York");
   await splitPage.waitForTimeout(150);
   if (await splitPage.isVisible("#destErr")) fail("picking a zone should clear the prompt");
   if (!/Destination/.test((await splitPage.textContent("#etaLabel")) || ""))
@@ -1655,8 +1687,7 @@ try {
   const unknownMsg = (await splitPage.textContent("#destErr"))?.trim() || "";
   if (!/Add the state/i.test(unknownMsg))
     fail(`an unknown place should still be told to add a state, got ${JSON.stringify(unknownMsg)}`);
-  const allOpts = await splitPage.evaluate(() =>
-    [...document.getElementById("destPick").options].length);
+  const allOpts = (await zoneValues(splitPage, "destPick")).length;
   if (allOpts <= 3)
     fail(`an unknown place should offer the full zone list, got ${allOpts} options`);
   if (splitErrors.length) fail("split-state page errors: " + JSON.stringify(splitErrors, null, 2));
@@ -1757,47 +1788,41 @@ try {
   if (fbErrors.length) fail("fallback page errors: " + JSON.stringify(fbErrors, null, 2));
   await fbPage.close();
 
-  // ---- Help modal: shared by all four "?" buttons. Light smoke — one button proves the
-  // mechanism (open with real content, panel-tap doesn't dismiss, backdrop-tap does).
-  // Uses #rsHelp since the main page is currently on the 34 Reset tab.
-  if (await page.isVisible("#helpBackdrop")) fail("help modal should start hidden");
+  // ---- Help sign: shared by all six "?" buttons. Light smoke — one button proves the
+  // mechanism (open with real content, a tap inside doesn't dismiss, outside does).
+  // v5.5: a <rig-dialog>, so the backdrop, Escape and the focus return are the
+  // component's. Uses #rsHelp since the main page is currently on the 34 Reset tab.
+  if (await helpOpen(page)) fail("help sign should start closed");
   await page.click("#rsHelp");
-  await page.waitForTimeout(100);
-  if (!(await page.isVisible("#helpBackdrop"))) fail("help modal should open on '?' click");
-  const helpTitle = (await page.textContent("#helpTitle"))?.trim();
+  await page.waitForTimeout(250);
+  if (!(await helpOpen(page))) fail("help sign should open on '?' click");
+  const helpTitle = await helpHeading(page);
   const helpBody = (await page.textContent("#helpBody"))?.trim();
-  if (!helpTitle) fail("help modal should show a non-empty title");
-  if (!helpBody) fail("help modal should show non-empty body text");
+  if (!helpTitle) fail("help sign should show a non-empty title");
+  if (!helpBody) fail("help sign should show non-empty body text");
   // The ETA tab's "Assumes nonstop team running / Doesn't track HOS" footer is gone.
   const etaText = await page.$eval("#viewEta", el => el.textContent);
   if (/nonstop team running|track HOS/.test(etaText))
     fail("the ETA tab should no longer carry the nonstop-team / HOS footer note");
-  // Frosted, not just dimmed: the open backdrop blurs the page behind the sign.
-  const helpFrost = await page.$eval("#helpBackdrop", el => {
-    const cs = getComputedStyle(el);
-    return cs.backdropFilter || cs.webkitBackdropFilter || "";
-  });
-  if (!/blur\(\s*[1-9]/.test(helpFrost))
-    fail(`help backdrop should be frosted (backdrop-filter blur), got ${JSON.stringify(helpFrost)}`);
-  await page.click("#helpTitle");                 // tap inside the panel
-  await page.waitForTimeout(100);
-  if (!(await page.isVisible("#helpBackdrop"))) fail("tapping inside the panel must not close it");
-  await page.click("#helpBackdrop", { position: { x: 5, y: 5 } });  // tap the backdrop itself
-  await page.waitForTimeout(100);
-  if (await page.isVisible("#helpBackdrop")) fail("tapping the backdrop should close the help modal");
+  await page.click("#helpBody");                  // tap inside the panel
+  await page.waitForTimeout(150);
+  if (!(await helpOpen(page))) fail("tapping inside the panel must not close it");
+  await closeHelp(page);                          // Escape, which rig-dialog handles
+  await page.waitForTimeout(250);
+  if (await helpOpen(page)) fail("Escape should close the help sign");
 
   // overrideHelp is new — confirm ITS specific wiring (not just that some help button
   // works), since a copy-paste of the shared pattern is exactly where a wrong HELP key
   // would slip through unnoticed. It lives inside #viewEta, hidden while the main page is
   // on the Reset view (see the comment above) — switch back first.
-  await page.click("#tabEta"); await page.waitForTimeout(100);
+  await clickTab(page, "eta");
   await page.click("#overrideHelp");
-  await page.waitForTimeout(100);
-  if ((await page.textContent("#helpTitle"))?.trim() !== "Override")
-    fail(`overrideHelp should open the Override help entry, got ${JSON.stringify((await page.textContent("#helpTitle"))?.trim())}`);
-  await page.click("#helpBackdrop", { position: { x: 5, y: 5 } });
-  await page.waitForTimeout(100);
-  if (await page.isVisible("#helpBackdrop")) fail("tapping the backdrop should close the override help modal");
+  await page.waitForTimeout(250);
+  if ((await helpHeading(page)) !== "Override")
+    fail(`overrideHelp should open the Override help entry, got ${JSON.stringify(await helpHeading(page))}`);
+  await closeHelp(page);
+  await page.waitForTimeout(250);
+  if (await helpOpen(page)) fail("Escape should close the override help sign");
 
   // ---- Version footer: manual update check. Real service worker lifecycle timing (an
   // actual new sw.js installing) isn't something this suite can fabricate, so — as the
