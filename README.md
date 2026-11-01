@@ -22,14 +22,14 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.4**
+**Current version: v5.4** (this branch: **v5.5**, the Rig UI preview — see below)
 
 ## Files
 
 | File | What it is |
 |---|---|
 | `index.html` | The app — markup, styles, and all the DOM wiring. Loads `lib/logic.js`. |
-| `lib/logic.js` | The pure logic — timezone resolver, ETA solver, 34-reset and ICS math. No DOM, no dependencies. Imported by the app and covered by the test suite. |
+| `lib/logic.js` | The pure logic — timezone resolver, ETA solver, tank model, route-geometry decoding, 34-reset and ICS math. No DOM, no dependencies. Imported by the app and covered by the test suite. |
 | `sw.js` | Service worker. Caches everything so it works with zero bars. |
 | `manifest.webmanifest` | Makes it installable to the home screen. |
 | `icon-192.png` `icon-512.png` `icon-1024.png` `apple-touch-icon.png` | Home-screen and install icons — the green MILE 34 marker. Full-bleed and opaque, as iOS requires. |
@@ -37,6 +37,8 @@ road can't back up. Predicted holds its place either way.
 | `.nojekyll` | Tells GitHub Pages to serve the files as-is. Don't delete it. |
 | `CNAME` | Points GitHub Pages at the custom domain, `milespost.figari.dev`. Don't delete it — the app's address depends on it. |
 | `fonts/` | Vendored Overpass + Overpass Mono (woff2, SIL OFL — licenses included). No fonts CDN: the shell stays fully offline. |
+| `rig-ui/` | Vendored [Rig UI](https://github.com/5w311/rig-ui) — `rig.css` plus the 38 modules `rig-ui/milespost.js` imports, and nothing else. See `rig-ui/VENDORED.md`. |
+| `tools/rig-manifest.mjs` | Prints that module closure in the shape `sw.js` wants, and flags anything missing. `npm run rig:manifest`. |
 | `design/highway-reference.html` | The driver-approved Highway mockup — design source of truth for v4.0. Not shipped to the app (not in `sw.js` ASSETS). |
 
 ## Install it to the home screen
@@ -99,6 +101,44 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v5.5 — Rig UI preview (`rig-ui-preview` branch)
+
+The same app on a new chassis. Every panel, field, switch, tab, chip, list row, alert and
+dialog is now a [Rig UI](https://github.com/5w311/rig-ui) component; the signage language
+is untouched — green guide, white regulatory, amber advisory, red prohibitive, the same day
+and night. Nothing about the ETA math, the tank model, the HERE calls or the 34-hour clock
+changed: `lib/logic.js` is byte-for-byte what v5.4 shipped and its 297 tests pass unchanged.
+
+- **Rig is vendored, not linked.** `rig-ui/` holds the 38 modules this app imports plus
+  `rig.css` — 696 KB of the library's 2.2 MB — because every file the page imports has to
+  go in the service worker's precache and the app has to come up with no bars. See
+  `rig-ui/VENDORED.md`, and `npm run rig:manifest` to regenerate the list.
+- **Three things stayed hand-built, on purpose.** The fuel gauge paints its two floors as
+  bands on the track and no slider component draws a band. The run strip's notch widths are
+  proportional to time, which equal segments would throw away. The CMS board is a
+  dot-matrix sign, and nothing in a component library is one.
+- **The town fields kept v5.4's own dropdown.** It carries the HERE autocomplete →
+  autosuggest fallback, the out-of-order-response guard and the Mobile Safari repaint —
+  none of which are styling. Moving them to `<rig-combobox>` is a follow-up that wants a
+  live key to validate.
+- **New: tap a stop row** for its times, its miles and which rule put it there.
+- **New: the run drawn as a line.** The route call now asks HERE for `polyline` as well as
+  the summary — same request, same transaction — and the card draws the real road. Only
+  fuel is marked: a swap and a DOT break land on the clock, so pinning them to a map would
+  dress up a time as a place. If no geometry comes back the card draws the straight line
+  between the two ends and says so.
+- **Tuning folds away** behind a collapsible, and the swap pair moved into a drawer. Two
+  rows, always — `shiftAtArrival` reads the earlier time as the day driver's start and the
+  later as the night's, so a third would belong to no shift.
+- **The branch names its own cache** (`milespost-v5.5-rig`). Caches are keyed per origin,
+  so pointing Pages here and later back at main would otherwise leave one phone holding
+  this build's files under the name main's build expects for its own.
+- Fixed along the way, in the browser smoke test (both also apply to `main`): it had no
+  `.css` in its MIME table, so `rig.css` was served as `application/octet-stream` and
+  Chromium refused it — the suite had been checking an unstyled page. And its build
+  restamp stopped at the version digits, so it couldn't fake a deploy of a build whose
+  name carries a suffix.
 
 ### v5.4
 

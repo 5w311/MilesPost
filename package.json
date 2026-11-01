@@ -1,13 +1,14 @@
 {
   "name": "milespost",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "private": true,
   "description": "Team-driver ETA and 34-hour reset PWA. Runs offline.",
   "type": "module",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:browser": "node test/smoke.browser.mjs"
+    "test:browser": "node test/smoke.browser.mjs",
+    "rig:manifest": "node tools/rig-manifest.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.1",

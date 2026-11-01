@@ -21,18 +21,29 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MilesPost">
+<link rel="stylesheet" href="./rig-ui/rig.css">
 <style>
-  /* ============================ Highway (v4.0) ============================
-     Interstate guide-sign language, from design/highway-reference.html (the
-     driver-approved mockup — source of truth for visual details). Panel color
-     carries meaning, like real signage:
-       GREEN  guide info      — the two arrival readouts
-       WHITE  regulatory      — every input card + the help sign
-       AMBER  advisory        — primary CTAs, the 34-rule warning
+  /* =================== Highway on Rig UI (v5.5-rig) ===================
+     The signage language is unchanged from v5.4 — panel colour still carries
+     meaning, the way real signs do:
+       GREEN  guide info      — the two arrival readouts, the GO buttons
+       WHITE  regulatory      — every input panel
+       AMBER  advisory        — the calendar handoff, the 34-rule warning
        RED    prohibitive     — BROKE THE 34, and nothing else
+     What changed is the chassis: the panels, fields, switches, tabs, dialogs,
+     chips, list rows and alerts are Rig UI components now (rig-ui/, vendored).
+
+     Rig is themed entirely through --rig-* variables, so this file repoints
+     them at the signage palette rather than editing rig.css — re-vendoring
+     upstream stays a straight copy. Two jobs the one --rig-accent token has to
+     do are split by hand: SURFACES (the green sign) pin to --panel-green in
+     both themes because a sign reads the same day and night, while the accent
+     ROLE (badge text, a sorted column, a focus mark) lifts to --green-lit at
+     night so it stays legible on a dark panel.
+
      Signs read the same day and night — only the road around them changes, so
      the theme blocks below swap the road surface and ambient chrome, never the
-     panels' own colors (one exception: white panels dim slightly at night so a
+     panels' own colours (one exception: white panels dim slightly at night so a
      2 AM cab doesn't take a flashlight to the face). */
 
   /* Vendored Overpass (SIL OFL, license in fonts/) — this is an offline PWA:
@@ -53,290 +64,185 @@
   @font-face{font-family:"Overpass Mono";font-style:normal;font-weight:700;font-display:swap;
     src:url(./fonts/overpass-mono-latin-700-normal.woff2) format("woff2")}
 
-  /* Night (default): dark road, ambient chrome light, white panels dimmed. */
-  :root, [data-theme="night"]{
-    color-scheme: dark;
-    background-color:#13161a;
-    --asphalt:#13161a;                 /* the road */
-    --panel:#E0E2DE;                   /* white regulatory panels, night-dimmed */
-    --page-ink:#F5F6F4;                /* ambient text on the road */
-    --mute:#8b959e;                    /* ambient secondary on the road */
-    --line:#39424a;                    /* ambient hairlines / inactive borders */
-    --shadow:0 6px 18px rgba(0,0,0,.4);
-    --accent-line:#FFB020;             /* active-subtab border: bright on dark road */
-    /* Legacy triplets — nothing composites translucently anymore, kept so any
-       stray rgba(var(--x-rgb)) never breaks. */
-    --asphalt-rgb:19,22,26; --panel-rgb:224,226,222; --line-rgb:57,66,74;
-    --ink-rgb:21,24,27; --amber-rgb:185,135,0;
-  }
-  /* Day: light road (cool concrete), ambient chrome dark, panels at full white
-     with a firmer shadow so they separate from the light surface. The signs
-     themselves keep identical colors — that's what they're designed for. */
-  [data-theme="day"]{
-    color-scheme: light;
-    background-color:#E8EAED;
-    --asphalt:#E8EAED;
-    --panel:#F5F6F4;
-    --page-ink:#15181b;
-    --mute:#5c666f;
-    --line:#9aa4ad;
-    --shadow:0 4px 14px rgba(15,20,25,.25);
-    --accent-line:#B98700;             /* bright amber border vanishes on a light road */
-    --asphalt-rgb:232,234,237; --panel-rgb:245,246,244; --line-rgb:154,164,173;
-    --ink-rgb:21,24,27; --amber-rgb:185,135,0;
-  }
-  /* Sign colors — identical in both themes, per the design language. */
+  /* Sign colours — identical in both themes, by design. Declared once, outside
+     the theme blocks, so neither block can drift them apart. */
   :root{
-    --panel-green:#006B3D; --panel-green-dk:#00552F;
-    --amber:#B98700;                   /* advisory panel fill */
-    --amber-hi:#FFB020;                /* CMS dot-matrix + highlights on dark */
-    --amber-dim:#E3B584;               /* fuel notch family — assignment unchanged */
+    --panel-green:#006B3D; --panel-green-dk:#00552F; --green-lit:#3FA86E;
+    --amber:#B98700; --amber-hi:#FFB020; --amber-dim:#E3B584;
     --reefer:#5AC8E8; --good:#4FD18B; --late:#B3261E;
-    --ink:#15181b;                     /* panel ink: text on white/amber signs */
-    --on-solid:#fff;
-    --sign-line:#39424a;               /* inactive sign-button border, both themes */
-    --btn-dark:#20262c;                /* inactive sign-button fill, both themes */
     --cms-bg:#0a0c0a; --cms-line:#494f45; --cms-dim:#8a7638;
-    --panel-mute:#4a545c;              /* secondary ink on white panels */
+    /* Rings and outlines are green, not amber. Amber in this language means ADVISORY —
+       the 34-rule panel, the calendar CTA — and a focus ring isn't advising anything; it
+       was only amber because that's the Rig default. One value for both themes: nearly
+       everything focusable sits on a panel, and panels are light day and night. The green
+       sign is the exception and overrides it below. */
+    --ring:#12A05C;
     --bar-off:rgba(255,255,255,.22);
-    --warn-bg:var(--amber);
+    --on-green:rgba(255,255,255,.3);     /* hairlines and pills on a green panel */
     --mono:"Overpass Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     --sans:"Overpass", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --r-sm:8px; --r-card:14px; --r-sheet:14px; --r-pill:999px;
   }
 
-  body,body::before,.card,input,select,button,.stamp{
-    transition:background-color .2s ease, color .2s ease, border-color .2s ease}
-  /* Restrained motion — a utility read at 70 mph. A press confirms itself with a
-     small scale; tab/panel color swaps stay quick (~150ms). */
-  button{transition:background-color .15s ease, color .15s ease, border-color .15s ease,
-    transform .12s ease}
-  .primary:active,.go:active,.ghost:active,.danger:active,.muted:active,
-  .tabs button:active{transform:scale(.97)}
-  @keyframes helpFade{from{opacity:0} to{opacity:1}}
-  @keyframes helpRise{from{transform:translateY(10px)} to{transform:translateY(0)}}
-  .helpBackdrop:not(.hide){animation:helpFade .15s ease}
-  .helpBackdrop:not(.hide) .helpPanel{animation:helpRise .18s ease}
-  @media (prefers-reduced-motion: reduce){
-    *{transition:none !important; animation:none !important}
-    .primary:active,.go:active,.ghost:active,.danger:active,.muted:active,
-    .tabs button:active{transform:none}
+  /* The road at night (default), and Rig's tokens for a dark surface. These come
+     after rig.css, so they beat its own prefers-color-scheme block — which would
+     otherwise hand a night road light-theme panels whenever the phone is in day
+     mode. The app always writes data-theme, so nothing here depends on the OS. */
+  :root, :root[data-theme="night"]{
+    color-scheme: dark;
+    --rig-bg:#13161a;
+    --rig-surface:#E0E2DE;             /* white regulatory panels, night-dimmed */
+    --rig-surface-2:#d3d6d0;
+    --rig-surface-3:#c3c7c0;
+    --rig-ink:#15181b;                 /* panel ink */
+    --rig-ink-2:#4a545c;
+    --rig-ink-3:#6b757d;
+    --rig-line:rgba(21,24,27,.16);
+    --rig-line-2:rgba(21,24,27,.3);
+    --rig-accent:var(--green-lit);     /* the accent ROLE, lifted to read on dark */
+    --rig-accent-hover:#5BBE87;
+    --rig-accent-ink:#06220F;
+    --rig-accent-soft:rgba(63,168,110,.18);
+    --rig-signal:var(--ring);
+    --rig-signal-soft:rgba(18,160,92,.22);
+    --rig-ok:#0f7a4b; --rig-ok-soft:rgba(15,122,75,.14);
+    --rig-bad:var(--late); --rig-bad-soft:rgba(179,38,30,.12);
+    --rig-overlay:rgba(6,8,10,.72);
+    --rig-shadow-sm:0 1px 2px rgba(0,0,0,.35);
+    --rig-shadow-md:0 6px 18px rgba(0,0,0,.4);
+    --rig-shadow-lg:0 22px 48px -14px rgba(0,0,0,.7), 0 6px 12px -6px rgba(0,0,0,.5);
+    /* ambient chrome, on the road rather than on a panel */
+    --page-ink:#F5F6F4; --mute:#8b959e; --road-line:#39424a;
+    --btn-dark:#20262c; --sign-line:#39424a;
   }
+  :root[data-theme="day"]{
+    color-scheme: light;
+    --rig-bg:#E8EAED;
+    --rig-surface:#F5F6F4;
+    --rig-surface-2:#e9ebe7;
+    --rig-surface-3:#dcdfda;
+    --rig-ink:#15181b;
+    --rig-ink-2:#4a545c;
+    --rig-ink-3:#6b757d;
+    --rig-line:rgba(21,24,27,.14);
+    --rig-line-2:rgba(21,24,27,.28);
+    --rig-accent:var(--panel-green);   /* dark green reads on a light panel as-is */
+    --rig-accent-hover:var(--panel-green-dk);
+    --rig-accent-ink:#fff;
+    --rig-accent-soft:rgba(0,107,61,.11);
+    --rig-signal:var(--ring);
+    --rig-signal-soft:rgba(18,160,92,.18);
+    --rig-ok:#0f7a4b; --rig-ok-soft:rgba(15,122,75,.12);
+    --rig-bad:var(--late); --rig-bad-soft:rgba(179,38,30,.1);
+    --rig-overlay:rgba(15,20,25,.45);
+    --rig-shadow-sm:0 1px 2px rgba(21,25,30,.06);
+    --rig-shadow-md:0 4px 14px rgba(15,20,25,.25);
+    --rig-shadow-lg:0 22px 48px -14px rgba(21,25,30,.3), 0 6px 12px -6px rgba(21,25,30,.12);
+    --page-ink:#15181b; --mute:#5c666f; --road-line:#9aa4ad;
+    --btn-dark:#20262c; --sign-line:#39424a;
+  }
+
+  /* Rig toggles parts with [hidden]; this app toggles them with .hide. Both have
+     to beat a class rule that sets display, so both are declared !important. */
+  .hide{ display:none !important }
+  [hidden]{ display:none !important }
 
   *{box-sizing:border-box}
-  /* No background-color on body on purpose: body::before is the fixed, z-index:-1
-     layer that actually paints the road (a host page can force html/body
-     transparent — the app owns this layer). :root carries the opaque themed
-     background-color so html still paints the base. */
   html,body{margin:0;color:var(--page-ink);font-family:var(--sans);
     -webkit-text-size-adjust:100%}
-  /* The top clearance has two parts. env(safe-area-inset-top) gets content out from under
-     the status bar; the min(24px, inset) on top of it gets it clear of iOS's edge effect,
-     which blurs and dims whatever sits just BELOW the status bar too — a feathered band
-     roughly 35pt deep. At a bare 16px the masthead sat inside that band even scrolled to
-     the top, so its top half rendered soft. The extra only applies where there IS a
-     status-bar inset (a home-screen app, drawn under the bar); in a Safari tab the inset is
-     0, min() gives 0, and the page keeps its plain 16px. Content scrolling up under the bar
-     still blurs as it passes — that part is iOS working as intended. */
-  body{min-height:100vh; min-height:100dvh; position:relative;
-    padding:16px calc(14px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom))
-    calc(14px + env(safe-area-inset-left));
-    padding-top:calc(16px + env(safe-area-inset-top) + min(24px, env(safe-area-inset-top)))}
-  body::before{content:"";position:fixed;inset:0;background-color:var(--asphalt);
-    z-index:-1;pointer-events:none}
-  .wrap{max-width:470px;margin:0 auto}
+  /* Same top clearance as v5.4: safe-area inset, plus up to 24px more to clear iOS's
+     edge effect, which blurs a band below the status bar as well. In a Safari tab the
+     inset is 0, min() gives 0, and the page keeps its plain 16px. */
+  body{min-height:100vh; min-height:100dvh; position:relative; background:var(--rig-bg);
+    padding:calc(16px + min(24px, env(safe-area-inset-top))) calc(14px + env(safe-area-inset-right))
+      calc(24px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+    transition:background-color .2s ease, color .2s ease}
+  .wrap{max-width:430px;margin:0 auto}
 
-  /* Masthead: MP route shield + wordmark + motto; the day/night switch beside it. */
-  .brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-  .shield{display:flex;align-items:center;gap:10px}
-  .shield svg,.shield img{display:block;flex:none}
-  .brand h1{margin:0;font-family:var(--sans);font-weight:800;font-size:17px;line-height:1;
-    letter-spacing:.12em;color:var(--page-ink)}
+  /* Restrained motion — a utility read at 70 mph. */
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important; animation:none !important}
+  }
+
+  /* ============================ masthead ============================ */
+  .brand{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .shield{display:flex;align-items:center;gap:10px;min-width:0}
+  .shield img{display:block;flex:none}
+  .brand h1{margin:0;font-weight:800;font-size:17px;line-height:1;letter-spacing:.12em;
+    color:var(--page-ink)}
   .motto{font-family:var(--mono);font-weight:600;font-size:10px;line-height:1;
     letter-spacing:.08em;color:var(--mute);margin-top:4px}
+  .brand-r{display:flex;align-items:center;gap:8px;flex:none}
+  #themeBtn{--rig-switch-on:var(--panel-green)}
 
-  /* Toggles: sign-language pills. Track dark, knob white, ON = green fill.
-     Same ids, same aria, same JS as always. */
-  .switch{width:52px;height:28px;flex:none;padding:0;border-radius:var(--r-pill);
-    position:relative;background:var(--btn-dark);border:2px solid var(--sign-line)}
-  .switch .knob{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;
-    background:#fff;transition:transform .2s ease, background-color .2s ease;
-    display:flex;align-items:center;justify-content:center}
-  /* themeBtn's knob position tracks the page theme (its aria-checked is kept in
-     sync by applyTheme); every other switch travels off its own aria-checked. */
-  [data-theme="day"] #themeBtn .knob{transform:translateX(24px)}
-  .switch svg{width:12px;height:12px;display:block}
-  .switch .moon{fill:var(--ink)}
-  .switch .sun{fill:none;stroke:var(--ink);stroke-width:2.1;stroke-linecap:round;display:none}
-  [data-theme="day"] .switch .moon{display:none}
-  [data-theme="day"] .switch .sun{display:block}
-  .switch[aria-checked="true"] .knob{transform:translateX(24px)}
-  .switch[aria-checked="true"]{background:var(--panel-green);border-color:#fff}
-  [data-theme="day"] #themeBtn{background:var(--panel-green);border-color:#fff}
+  /* ============================ tabs ============================ */
+  /* Two equal halves across the full width, the proportion v5.4 had. Rig sizes segmented
+     tabs to their text; with only two, splitting the row reads better. The list keeps its
+     own overflow-x:auto — left alone on purpose, so a longer label still scrolls rather
+     than spilling. */
+  #tabs .rig-tabs__list{display:flex;width:100%}
+  #tabs .rig-tabs__tab{flex:1 1 0;min-width:0;justify-content:center;text-align:center}
 
-  /* ============================ sign panels ============================
-     .card is the white regulatory panel; .readout layers the green guide panel
-     on top of it. position:relative carries the exit tab; deliberately NOT
-     overflow:hidden — the suggestion dropdown must hang past the card edge. */
-  .card{background:var(--panel);color:var(--ink);border:3px solid var(--ink);
-    border-radius:var(--r-card);padding:16px;margin-bottom:16px;box-shadow:var(--shadow);
-    position:relative}
-  .readout{background:var(--panel-green);color:#fff;border-color:#fff;
-    padding:16px 16px 14px;margin-top:22px}
-  /* Status now reads through the panel itself (the old top accent border is
-     retired): the same .done toggle that used to recolor the accent now turns
-     the whole sign's border + exit tab green-clear. Same trigger, new voice. */
-  .readout.done{border-color:var(--good)}
-  .readout.done .exit-tab{border-color:var(--good);color:var(--good)}
-  .exit-tab{position:absolute;top:-16px;right:14px;background:var(--panel-green);
-    border:3px solid #fff;border-radius:8px;padding:4px 12px;
-    font-family:var(--sans);font-weight:700;font-size:12px;line-height:1.2;color:#fff}
-
-  label,.lbl{display:block;font-family:var(--sans);font-weight:700;font-size:11px;
-    letter-spacing:.1em;text-transform:uppercase;color:var(--panel-mute);margin-bottom:6px}
-  .readout .lbl{color:#fff;opacity:.92}
+  /* ============================ panels ============================ */
+  .card{background:var(--rig-surface);color:var(--rig-ink);
+    border:1px solid var(--rig-line-2);border-radius:var(--rig-radius-lg);
+    padding:16px;margin-top:16px;box-shadow:var(--rig-shadow-sm);position:relative}
+  /* GREEN guide sign. Pinned to the sign colour, not the accent token: at night the
+     accent lifts so it can be read as text, and a sign that changed shade with the
+     road would stop being the same sign. */
+  .readout{background:var(--panel-green);color:#fff;border-color:transparent;
+    box-shadow:var(--rig-shadow-md);padding:16px 16px 14px;margin-top:20px}
+  .readout.done{box-shadow:var(--rig-shadow-md), 0 0 0 2px var(--good)}
+  .exit-tab{position:absolute;top:-11px;right:14px}
   .lbl-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+  .lbl{display:block;font-weight:700;font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--rig-ink-2);margin-bottom:6px}
   .lbl-row .lbl{margin-bottom:0}
-  .help-btn{width:44px;height:44px;padding:0;border:none;background:transparent;
-    display:inline-flex;align-items:center;justify-content:center;flex:none;cursor:pointer}
-  .help-btn span{width:26px;height:26px;border-radius:var(--r-pill);
-    border:2px solid rgba(21,24,27,.5);
-    display:flex;align-items:center;justify-content:center;font-family:var(--sans);
-    font-weight:700;font-size:13px;color:var(--ink);line-height:1}
-  .readout .help-btn span{border-color:rgba(255,255,255,.75);color:#fff}
-  .help-btn:hover span,.help-btn:focus-visible span,.help-btn:active span{
-    border-color:var(--amber-hi);color:var(--amber-hi)}
+  .readout .lbl{color:#fff;opacity:.92}
+  .readout .help-btn{color:#fff}
+  /* AMBER is advisory, and that is this panel's whole job — so it keeps the signal colour
+     the focus rings just gave up. */
+  rig-alert[variant="warn"]{--rig-signal:var(--amber);--rig-signal-soft:rgba(185,135,0,.2)}
+  /* A deep green ring disappears against the guide sign; the bright one reads on it. */
+  .readout :focus-visible{outline-color:var(--good)}
+  .readout .help-btn:focus-visible{outline-color:var(--good)}
+  .help-btn{width:34px;height:34px;flex:none;font-weight:700;font-size:14px;padding:0;
+    border-radius:999px;box-shadow:inset 0 0 0 2px currentColor;opacity:.5}
+  .help-btn:hover,.help-btn:focus-visible{opacity:1}
 
-  /* Help modal: a white sign on a post, centered. Tap-outside/Escape dismissal
-     and the hint line keep their exact behavior — this restyles the container. */
-  .helpBackdrop{position:fixed;inset:0;background:rgba(6,8,10,.72);z-index:50;
-    display:flex;align-items:center;justify-content:center;
-    padding:22px calc(22px + env(safe-area-inset-right)) calc(22px + env(safe-area-inset-bottom))
-      calc(22px + env(safe-area-inset-left))}
-  /* Frosted behind the sign: the page blurs out instead of just dimming. The flat
-     .72 above stays as the fallback for an engine without backdrop-filter; with the
-     blur doing the separating, the tint can ease off so it reads as frost, not a
-     blackout. Day gets a lighter, cooler frost so the light road stays light. */
-  @supports ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
-    .helpBackdrop{background:rgba(6,8,10,.45);
-      -webkit-backdrop-filter:blur(14px) saturate(140%);
-      backdrop-filter:blur(14px) saturate(140%)}
-    [data-theme="day"] .helpBackdrop{background:rgba(15,20,25,.28)}
-  }
-  .helpPanel{background:var(--panel);color:var(--ink);border:3px solid var(--ink);
-    border-radius:var(--r-sheet);box-shadow:var(--shadow);
-    width:100%;max-width:400px;max-height:80vh;overflow-y:auto;padding:18px}
-  .helpPanel .lbl{font-family:var(--sans);font-weight:800;font-size:16px;line-height:1.2;
-    letter-spacing:.03em;text-transform:none;color:var(--ink);margin-bottom:8px}
-  .helpPanel p{font-family:var(--sans);font-weight:600;font-size:13.5px;line-height:1.55;
-    color:var(--ink);margin:0 0 10px}
-  .helpPanel ul{font-family:var(--sans);font-weight:600;font-size:12.5px;line-height:1.6;
-    color:#3a434b;margin:0 0 4px;padding-left:18px}
-  .helpPanel li{margin-bottom:6px}
-  .helpHint{text-align:center;font-family:var(--mono);font-weight:600;font-size:10px;
-    letter-spacing:.06em;text-transform:uppercase;color:#8b959e;margin-top:14px}
-
-  /* Form fields on the white panels. */
-  input,select{width:100%;background:#fff;color:var(--ink);border:2px solid var(--ink);
-    border-radius:var(--r-sm);padding:11px 12px;font-family:var(--mono);font-weight:600;
-    font-size:16px;outline:none;-webkit-appearance:none;appearance:none}
-  input[type=number]::-webkit-inner-spin-button{display:none}
-  :focus-visible{box-shadow:0 0 0 3px var(--amber-hi)}
-  .row{display:flex;gap:8px}
-  .row > input{flex:1}
-  .group{margin-bottom:14px}
-  .group:last-child{margin-bottom:0}
-  .fieldwrap{position:relative}
-  .suffix{position:absolute;right:12px;top:14px;font-family:var(--mono);font-weight:600;
-    font-size:12px;color:var(--panel-mute);pointer-events:none}
-  .fieldClear{position:absolute;top:11px;width:24px;height:24px;
-    padding:0;border:2px solid var(--panel-mute);border-radius:6px;background:#fff;
-    color:var(--ink);font-size:14px;font-weight:700;
-    line-height:1;display:flex;align-items:center;justify-content:center}
-  .fieldClear:hover,.fieldClear:focus-visible{border-color:var(--ink)}
-  #milesClear{right:40px}         /* sits left of the "mi" suffix, clear of its text */
-  #destClear{right:10px}          /* no suffix on this field, so it can sit at the edge */
-
-  /* Buttons. Field-scoped ones (.go SET/NOW-green, .ghost, DEVICE) are compact;
-     the sign CTAs (.primary/.danger/.muted) are full-width panels of their own. */
-  button{font-family:var(--sans);font-weight:700;cursor:pointer;border-radius:var(--r-sm);
-    border:2px solid var(--panel-mute);background:#fff;color:var(--panel-mute);
-    font-size:12px;letter-spacing:.05em}
-  .go{background:var(--panel-green);color:#fff;border:2px solid var(--panel-green);
-    padding:10px 16px;font-weight:800}
-  .ghost{background:#fff;color:var(--ink);border:2px solid var(--ink);padding:0 14px;font-weight:800}
-  .primary{display:block;width:100%;margin-top:14px;padding:15px 0;
-    background:var(--amber);color:#fff;border:3px solid var(--ink);border-radius:12px;
-    font-weight:800;font-size:14px;letter-spacing:.06em}
-  .primary:disabled{opacity:.4}
-  .danger{display:block;width:100%;margin-top:10px;padding:13px 0;
-    background:var(--late);color:#fff;border:3px solid var(--ink);border-radius:12px;
-    font-weight:800;font-size:12.5px;letter-spacing:.04em}
-  .muted{display:block;width:100%;margin-top:10px;padding:12px 0;
-    background:#fff;color:var(--ink);border:2px solid var(--ink);border-radius:12px;
-    font-weight:700;font-size:12px;letter-spacing:.05em}
-  /* Armed states: same two-tap flow the logic already drives — the label swap is
-     the message, the ring is the siren. */
-  .danger.armed{border-color:#F5F6F4;box-shadow:0 0 0 3px var(--late)}
-  .muted.armed{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .danger:disabled,.muted:disabled{opacity:.35;cursor:default}
-  /* RUNNING takes the departure clock over and disables both of its controls. Neither the
-     NOW button nor a disabled input had any styling to say so, which made a live control
-     and a dead one look identical — tap it, nothing happens, no reason given. Same
-     stood-down look the other buttons already use. */
-  .go:disabled{opacity:.35;cursor:default}
-  input:disabled,select:disabled{opacity:.45;cursor:default}
-  .link{background:none;border:none;color:var(--ink);font-size:11px;padding:0;
-    text-decoration:underline;font-family:var(--mono);font-weight:600}
-
-  /* Tab rows: solid sign-buttons, identical in both themes (signs don't retheme). */
-  .tabs{display:flex;gap:8px;margin-bottom:10px}
-  .tabs button{flex:1;padding:12px 4px;font-family:var(--sans);font-weight:700;
-    font-size:12.5px;letter-spacing:.05em;background:var(--btn-dark);color:#8b959e;
-    border:2px solid var(--sign-line);border-radius:9px}
-  .tabs button[aria-selected=true]{background:var(--panel-green);color:#fff;border-color:#fff}
-  /* Dual arrival readout. Predicted anchors the panel because it never needs the
-     network — the big number holds its place and its size whether or not there's a
-     quote. Live rides alongside in CMS amber, tying it to the message board below;
-     with no fresh quote that slot alone goes quiet, so the panel keeps its shape. */
+  /* ============================ the two arrivals ============================ */
   .dual{display:flex;align-items:flex-end;gap:12px;margin-top:12px}
-  .dual-k{font-family:var(--sans);font-weight:700;font-size:9.5px;letter-spacing:.11em;
-    text-transform:uppercase;color:rgba(255,255,255,.78)}
+  .dual-k{font-weight:700;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
+    color:rgba(255,255,255,.78)}
   .dual-main{min-width:0}
   .dual-main .big{margin-top:6px}
   .dual-side{flex:1;text-align:right;padding-bottom:5px;min-width:0}
   .dual-side .dual-k{color:rgba(255,255,255,.85)}
-  .liveVal{font-family:var(--sans);font-weight:700;font-size:27px;line-height:1;
-    margin-top:5px;color:var(--amber-hi);font-variant-numeric:tabular-nums}
+  .liveVal{font-weight:800;font-size:22px;line-height:1.1;color:var(--amber-hi);
+    font-variant-numeric:tabular-nums}
   .liveVal .big-tz{font-size:12px;color:rgba(255,176,32,.78)}
-  .liveSub{font-family:var(--mono);font-weight:600;font-size:10.5px;
-    color:rgba(255,255,255,.72);margin-top:5px}
+  .liveSub{font-family:var(--mono);font-weight:600;font-size:9.5px;letter-spacing:.06em;
+    text-transform:uppercase;color:rgba(255,255,255,.6);margin-top:3px}
   .dual-side.dead .liveVal{color:rgba(255,255,255,.45)}
   .dual-side.dead .liveVal .big-tz{color:rgba(255,255,255,.4)}
-  /* Empty state: nothing to compare yet, so the labels and the Live slot stand down
-     and the panel reads as one plain placeholder instead of an unfilled table. */
   .dual.solo .dual-side,.dual.solo .dual-k{display:none}
   .dual.solo .dual-main .big{margin-top:0}
-
-  /* Green-panel readout typography. */
-  .big{font-family:var(--sans);font-size:52px;font-weight:800;color:#fff;
-    letter-spacing:-.01em;line-height:1;font-variant-numeric:tabular-nums}
+  .big{font-size:52px;font-weight:800;color:#fff;letter-spacing:-.01em;line-height:1;
+    font-variant-numeric:tabular-nums}
   .big.done{color:var(--good)}
   .big-tz{font-size:15px;font-weight:600;color:rgba(255,255,255,.75);letter-spacing:normal}
-  .day{font-family:var(--sans);font-weight:700;font-size:15px;margin-top:4px}
+  .day{font-weight:700;font-size:15px;margin-top:4px}
   .sub{font-family:var(--mono);font-weight:600;font-size:12.5px;color:rgba(255,255,255,.88);
-    margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.3);
+    margin-top:10px;padding-top:10px;border-top:1px solid var(--on-green);
     font-variant-numeric:tabular-nums}
   .sub b{color:#fff;font-weight:700}
-  .readout .note{color:rgba(255,255,255,.85);font-weight:600}
-  .readout .note span[style]{color:#fff !important}
+  .note{font-family:var(--mono);font-weight:600;font-size:11px;color:var(--rig-ink-2);
+    line-height:1.6;margin-top:14px}
+  .readout .note{color:rgba(255,255,255,.85)}
 
-  /* The LIVE line as an amber changeable-message board. The [LIVE] tag is a
-     bordered chip; the caveat (#liveNote right after it) fuses into the board's
-     lower half when a quote is live — when there's no live line, #liveNote is
-     just a plain muted note (the "live unavailable…" path), not a CMS board. */
+  /* The CMS board keeps its own character: nothing in a component library is a
+     dot-matrix sign, and this is the one surface that has to read as one. */
   .liveLine{display:block;margin-top:12px;background:var(--cms-bg);
-    border:3px solid var(--cms-line);border-radius:8px;padding:10px 12px;
+    border:2px solid var(--cms-line);border-radius:var(--rig-radius-sm);padding:10px 12px;
     font-family:var(--mono);font-weight:700;font-size:14px;line-height:1.5;
     color:var(--amber-hi);letter-spacing:.05em;text-transform:uppercase;
     text-shadow:0 0 8px rgba(255,176,32,.5);font-variant-numeric:tabular-nums}
@@ -344,82 +250,17 @@
     letter-spacing:.06em;color:var(--amber-hi);background:transparent;
     border:2px solid var(--amber-hi);border-radius:4px;padding:1px 7px;margin-right:6px;
     vertical-align:2px;text-shadow:none}
-  .liveText{font-family:inherit;font-size:inherit;font-weight:inherit;color:inherit}
-  .liveText b{font-weight:700}
-  .liveLine span[style]{color:var(--cms-dim) !important;text-shadow:none}
+  .liveText{font:inherit;color:inherit}
   .liveLine:has(+ .note:not(.hide)):not(.hide){
     border-bottom:none;border-bottom-left-radius:0;border-bottom-right-radius:0;
     padding-bottom:4px}
-  .liveLine:not(.hide) + .note{background:var(--cms-bg);border:3px solid var(--cms-line);
-    border-top:none;border-radius:0 0 8px 8px;margin-top:0;padding:0 12px 10px;
-    color:var(--cms-dim);font-family:var(--mono);font-weight:600;font-size:10.5px;
-    letter-spacing:.04em;line-height:1.5;text-transform:uppercase}
+  .liveLine:not(.hide) + .note{background:var(--cms-bg);border:2px solid var(--cms-line);
+    border-top:none;border-radius:0 0 var(--rig-radius-sm) var(--rig-radius-sm);margin-top:0;
+    padding:0 12px 10px;color:var(--cms-dim);font-family:var(--mono);font-weight:600;
+    font-size:10.5px;letter-spacing:.04em;line-height:1.5;text-transform:uppercase}
 
-
-  /* The fuel gauge — FuelPost's, look for look (v5.2): a needle, not a fill bar. A flat
-     track with the reserve painted on its low end like a tachometer redline — red over
-     the limp eighth nothing ever spends, amber over the backup band a plan only dips into
-     at the floor — a tick at every eighth and a finer one at every half, and a blue
-     needle you tap or drag to where your own gauge sits. The bands are sized from the
-     model (backupTicks, reserveTicks) in renderGauge(), so they can't disagree with it. */
-  .ghead{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;
-    column-gap:10px;margin-top:16px;margin-bottom:6px}
-  .ghead .gq{font-family:var(--sans);font-weight:600;font-size:13px;color:var(--panel-mute)}
-  .greadout{font-family:var(--sans);font-weight:700;font-size:16px;line-height:22px;
-    color:var(--ink);margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
-  .gauge{-webkit-tap-highlight-color:transparent;outline:none}
-  .gauge:focus-visible{box-shadow:none}
-  .gauge:focus-visible .gtrack{box-shadow:0 0 0 3px var(--amber-hi)}
-  .glabels{position:relative;height:13px;margin-bottom:4px}
-  .glabels span{position:absolute;top:0;transform:translateX(-50%);font-family:var(--sans);
-    font-size:11px;font-weight:700;color:var(--panel-mute);white-space:nowrap}
-  .gtrack{position:relative;height:44px;border-radius:12px;background:rgba(21,24,27,.07);
-    touch-action:none;cursor:pointer}
-  .gdanger,.gwarn,.gtick,.gneedle{position:absolute;pointer-events:none}
-  .gdanger{top:0;bottom:0;left:0;background:rgba(255,59,48,.32);border-radius:12px 0 0 12px}
-  .gwarn{top:0;bottom:0;background:rgba(255,159,10,.3)}
-  .gtick{top:5px;bottom:5px;width:2px;background:rgba(0,0,0,.25);transform:translateX(-50%)}
-  .gtick.minor{top:11px;bottom:11px;width:1px;background:rgba(0,0,0,.14)}
-  .gneedle{top:-5px;bottom:-5px;width:8px;border-radius:5px;background:#0A6CD6;
-    box-shadow:0 1px 4px rgba(0,0,0,.35);transform:translateX(-50%);transition:left .12s ease}
-  .ghint{margin-top:6px;font-family:var(--sans);font-weight:600;font-size:12px;
-    color:var(--panel-mute)}
-  .grange{margin-top:8px;font-family:var(--sans);font-weight:600;font-size:13px;
-    line-height:1.4;color:var(--ink)}
-  .grange.warn{color:var(--late)}
-  .grange b{font-weight:700}
-
-  /* The stop schedule, on the green panel directly under the strip that draws it. Each
-     row carries its own colour, which is why the old DOT/Fuel/Swap legend chips came out:
-     the list labels every colour it uses. */
-  .stops{margin-top:12px;border-top:1px solid rgba(255,255,255,.3)}
-  .srow{display:flex;align-items:flex-start;gap:10px;padding:10px 0;
-    border-bottom:1px solid rgba(255,255,255,.16)}
-  .srow:last-child{border-bottom:none}
-  .srow i.pip{width:9px;height:9px;border-radius:99px;flex:none;margin-top:3px}
-  .stype{font-family:var(--sans);font-weight:800;font-size:11.5px;letter-spacing:.06em;
-    min-width:100px;white-space:nowrap}
-  .stype b{font-weight:800;opacity:.75}
-  .sat + .sat{margin-top:8px}
-  .swhen{flex:1;font-family:var(--mono);font-weight:600;font-size:12px;
-    font-variant-numeric:tabular-nums}
-  .swhen em{font-style:normal;opacity:.66;font-size:10px;display:block;margin-top:4px;
-    letter-spacing:.03em}
-  .slen{font-family:var(--sans);font-weight:700;font-size:11px;opacity:.82;text-align:right;
-    white-space:nowrap}
-  .slen em{font-style:normal;display:block;font-size:9.5px;opacity:.8;margin-top:3px;
-    letter-spacing:.04em;text-transform:uppercase}
-  .srow i.pip.dot{background:var(--good)}
-  .srow i.pip.fuel{background:var(--amber-dim)}
-  .srow i.pip.swap{background:var(--reefer)}
-  .overrideState{font-family:var(--mono);font-weight:600;font-size:10px;
-    letter-spacing:.08em;color:var(--panel-mute)}
-  .overrideState.on{color:var(--panel-green);font-weight:700}
-  .note{font-family:var(--mono);font-weight:600;font-size:11px;color:var(--panel-mute);
-    line-height:1.6;margin-top:14px}
-
-  /* Run strip: white driving segments on the green panel; the stop notches keep
-     their exact existing colors (DOT --good, fuel --amber-dim, swap --reefer). */
+  /* The run strip: notch widths are proportional to time, which is the whole point,
+     so it stays hand-drawn rather than becoming equal segments. */
   .strip{display:flex;height:14px;margin-top:14px;border-radius:7px;overflow:hidden;
     border:2px solid rgba(255,255,255,.85)}
   .strip i{display:block}
@@ -427,97 +268,164 @@
   .strip i.swap{background:var(--reefer);min-width:2px}
   .strip i.fuel{background:var(--amber-dim);min-width:2px}
   .strip i.dot{background:var(--good);min-width:2px}
-  .legend{display:flex;justify-content:space-between;font-family:var(--mono);font-weight:600;
-    font-size:11px;color:rgba(255,255,255,.85);margin-top:10px;letter-spacing:.04em}
-  .stripkey{display:flex;justify-content:center;gap:8px;font-family:var(--sans);
-    font-weight:600;font-size:11px;color:#fff;margin-top:10px;flex-wrap:wrap}
+  .stripkey{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:10px}
   .stripkey span{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;
-    border-radius:var(--r-pill);background:rgba(255,255,255,.14);
-    border:1.5px solid rgba(255,255,255,.5)}
+    border-radius:999px;background:var(--on-green);border:1.5px solid var(--on-green);
+    font-weight:700;font-size:11px;color:#fff}
   .stripkey i{width:9px;height:9px;border-radius:50%;flex:none}
   .stripkey i.dot{background:var(--good)}
   .stripkey i.fuel{background:var(--amber-dim)}
   .stripkey i.swap{background:var(--reefer)}
+  .legend{display:flex;justify-content:space-between;font-family:var(--mono);font-weight:600;
+    font-size:11px;color:rgba(255,255,255,.85);margin-top:10px;letter-spacing:.04em}
+  .stops{margin-top:12px;border-top:1px solid var(--on-green)}
+  /* rig-item-group is a panel by default. Inside the guide sign it must not be: a sign
+     is one surface, and v5.4's rows were hairlines on the green. */
+  .stops rig-item-group{background:transparent;box-shadow:none;border-radius:0}
+  .stops rig-item{background:transparent;box-shadow:none;cursor:pointer;
+    border-bottom:1px solid var(--on-green);padding-inline:0}
+  .stops rig-item:last-child{border-bottom:none}
+  /* rig-item takes its three text weights from the ink tokens, which assume a light
+     panel underneath. On the green sign they all have to come off the sign's own ink. */
+  .stops rig-item{color:#fff}
+  .stops .rig-item__title{font-weight:800;letter-spacing:.06em;font-size:11.5px;color:#fff}
+  .stops .rig-item__desc{font-family:var(--mono);font-size:12px;
+    font-variant-numeric:tabular-nums;color:rgba(255,255,255,.85);-webkit-line-clamp:3}
+  .stops .rig-item__meta{font-weight:700;font-size:11px;color:rgba(255,255,255,.82)}
+  .pip{width:10px;height:10px;border-radius:99px;display:block}
+  .pip.dot{background:var(--good)} .pip.fuel{background:var(--amber-dim)}
+  .pip.swap{background:var(--reefer)}
+  .stopdetail dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px}
+  .stopdetail dt{font-family:var(--mono);font-weight:700;font-size:10px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--rig-ink-3)}
+  .stopdetail dd{margin:0;font-weight:600;font-size:14px;font-variant-numeric:tabular-nums}
 
-  /* 34 reset: one bar per hour, on the green panel. */
-  .bars{display:flex;gap:2px;height:22px;margin-top:14px}
-  .bars i{flex:1;display:block;border-radius:1px;background:var(--bar-off)}
-  .bars i.on{background:var(--amber-hi)}
-  .bars i.now{background:var(--amber-hi);opacity:.45}
-  .bars.done i.on{background:var(--good)}
+  /* ============================ fields ============================ */
+  .group{margin-bottom:14px}
+  .group:last-child{margin-bottom:0}
+  .row{display:flex;gap:8px;align-items:flex-end}
+  .row > rig-input{flex:1;min-width:0}
+  /* RUNNING disables the departure input directly rather than the <rig-input> around it —
+     the field is the thing the clock has taken over — so the wrapper has to be told to
+     stand down with it, label and all. */
+  rig-input:has(input:disabled){opacity:.55}
+  rig-input input:disabled{opacity:.9;cursor:not-allowed}
+  .row > .rig-btn{flex:none}
+  .meta{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .err{font-family:var(--mono);font-weight:600;font-size:11px;color:var(--rig-bad);margin-top:8px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .actions{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+  .actions .rig-btn{width:100%}
+  /* GREEN is guide: the GO buttons are the sign colour in both themes, like the
+     panels, rather than following the accent token when it lifts at night. */
+  .rig-btn--accent{--_bg:var(--panel-green);--_fg:#fff;--_ring:transparent}
+  .rig-btn--accent:hover{--_bg:var(--panel-green-dk)}
+  /* AMBER is advisory — the calendar handoff is the app's one advisory CTA. */
+  .btn-advisory{--_bg:var(--amber);--_fg:#fff;--_ring:transparent}
+  .btn-advisory:hover{--_bg:color-mix(in srgb, var(--amber) 86%, var(--rig-ink))}
+  /* A two-tap guard arms itself rather than opening a dialog: one hand, moving truck. */
+  .rig-btn.armed{--_bg:var(--late);--_fg:#fff;box-shadow:0 0 0 3px var(--rig-bad-soft)}
+  .rig-btn--danger.armed{box-shadow:0 0 0 3px var(--rig-surface)}
+  .link{background:none;border:none;color:var(--rig-ink);font-size:11px;padding:0;
+    text-decoration:underline;font-family:var(--mono);font-weight:600;cursor:pointer}
+  /* These are bare buttons, so without a rule they fall back to the browser's own
+     outline — which is the one ring on the page Rig's tokens never reached. */
+  .link:focus-visible{outline:2px solid var(--ring);outline-offset:3px;border-radius:3px}
+
+  /* The town fields keep v5.4's own suggestion dropdown — it carries the HERE
+     autocomplete/autosuggest fallback, the out-of-order-response guard and the
+     Mobile Safari repaint, none of which are styling. Dressed in Rig's tokens
+     so it belongs to the new panels. */
+  .suggest{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;
+    background:var(--rig-surface);border:1px solid var(--rig-line-2);
+    border-radius:var(--rig-radius);box-shadow:var(--rig-shadow-lg);
+    max-height:220px;overflow-y:auto;padding:4px}
+  .suggest button{display:block;width:100%;text-align:left;padding:10px 12px;border:none;
+    border-radius:var(--rig-radius-sm);background:transparent;color:var(--rig-ink);
+    font-family:var(--sans);font-weight:600;font-size:14px;cursor:pointer}
+  .suggest button:hover,.suggest button:focus-visible{background:var(--rig-surface-2);
+    outline:none}
+  .suggest button:focus-visible{box-shadow:inset 0 0 0 2px var(--ring)}
+
+  /* ============================ the gauge (v5.2, unchanged) ============================ */
+  /* Still hand-drawn: the two floors are painted onto the track as bands, and no
+     slider component draws a band. Matches FuelPost's gauge, which is the point. */
+  .ghead{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;
+    column-gap:10px;margin-top:16px;margin-bottom:6px}
+  .gq{font-weight:600;font-size:13px;color:var(--rig-ink-2)}
+  .greadout{font-weight:700;font-size:16px;line-height:22px;color:var(--rig-ink);
+    margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .gauge{-webkit-tap-highlight-color:transparent;outline:none}
+  .gauge:focus-visible .gtrack{box-shadow:0 0 0 3px var(--ring)}
+  .glabels{position:relative;height:13px;margin-bottom:4px}
+  .glabels span{position:absolute;top:0;transform:translateX(-50%);font-size:11px;
+    font-weight:700;color:var(--rig-ink-3);white-space:nowrap}
+  .gtrack{position:relative;height:44px;border-radius:12px;background:rgba(21,24,27,.07);
+    touch-action:none;cursor:pointer}
+  .gdanger,.gwarn,.gtick,.gneedle{position:absolute;pointer-events:none}
+  .gdanger{top:0;bottom:0;left:0;background:rgba(255,59,48,.32);border-radius:12px 0 0 12px}
+  .gwarn{top:0;bottom:0;background:rgba(255,159,10,.3)}
+  .gtick{top:50%;width:1px;height:10px;transform:translate(-50%,-50%);
+    background:rgba(21,24,27,.28)}
+  .gtick.minor{height:6px;background:rgba(21,24,27,.18)}
+  .gneedle{top:-5px;bottom:-5px;width:8px;border-radius:5px;background:#0A6CD6;
+    box-shadow:0 1px 4px rgba(0,0,0,.35);transform:translateX(-50%);transition:left .12s ease}
+  .ghint{margin-top:6px;font-weight:600;font-size:12px;color:var(--rig-ink-2)}
+  .tuneBody{display:flex;flex-direction:column;gap:14px;padding-top:14px}
+  .sublab{font-family:var(--mono);font-weight:600;font-size:9.5px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--rig-ink-3);margin-bottom:8px}
+  .tablewrap{overflow-x:auto}
+  rig-table{display:block;min-width:0}
+  /* The run card: let it use the panel's full width, and keep the "straight line" tag
+     reading as a caveat rather than a label. */
+  .mapwrap{margin-top:16px}
+  .mapwrap rig-route-map{display:block;max-width:100%}
+  .roadtag{display:inline-flex;align-items:center;font-family:var(--mono);font-weight:700;
+    font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--ring);
+    border:1px dashed var(--ring);border-radius:999px;padding:2px 8px}
+
+  /* ============================ 34 reset ============================ */
+  /* rig-progress draws its segments from the surface tokens, which disappear on a
+     green panel — so the 34 bars keep v5.4's colouring: amber hours on a
+     translucent track, turning green the moment the reset completes. */
+  .readout .rig-progress__steps{gap:2px}
+  .readout .rig-progress__seg{background:var(--bar-off);height:22px;border-radius:1px}
+  .readout .rig-progress__seg-fill{background:var(--amber-hi)}
+  .readout rig-progress[tone="ok"] .rig-progress__seg-fill{background:var(--good)}
   .scale{display:flex;justify-content:space-between;font-family:var(--mono);font-weight:600;
     font-size:9px;color:rgba(255,255,255,.7);margin-top:5px;letter-spacing:.08em}
-
-  .cushion{margin-top:14px;padding:10px 12px;border-radius:8px;font-family:var(--mono);
-    font-weight:600;font-size:13px;background:#fff;color:var(--ink)}
-  .cushion.ok{border:2px solid var(--good)}
-  .cushion.bad{border:2px solid var(--late)}
-
-  .chip{display:inline-block;font-family:var(--mono);font-weight:600;font-size:11px;
-    color:var(--ink);border:2px solid var(--ink);border-radius:999px;padding:3px 10px;
-    letter-spacing:.04em}
-  .chip.grey{color:var(--panel-mute);border-color:var(--panel-mute)}
-  .meta{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
-  .err{font-family:var(--mono);font-weight:600;font-size:11px;color:var(--late);margin-top:8px}
-
-  /* Suggestion dropdown: a white regulatory sign list. Absolutely positioned so
-     it overlays the fields below (behavior and wiring untouched). */
-  .suggest{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;
-    background:#fff;border:2px solid var(--ink);border-radius:8px;
-    box-shadow:var(--shadow);max-height:220px;overflow-y:auto}
-  .suggest button{display:block;width:100%;text-align:left;padding:11px 12px;
-    border:none;border-radius:0;background:transparent;color:var(--ink);
-    font-family:var(--sans);font-weight:600;font-size:14px;letter-spacing:normal;
-    text-transform:none}
-  .suggest button+button{border-top:1px solid #c8cdd2}
-  .suggest button:hover,.suggest button:focus-visible{background:#eef0ee}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-
-  /* Milepost markers between cards — presentational dividers. */
-  .mp{display:flex;justify-content:center;margin:-4px 0 12px}
-  .mp span{background:var(--panel-green);border:2px solid #fff;border-radius:5px;color:#fff;
-    padding:3px 9px;font-family:var(--sans);font-weight:700;font-size:10px;
-    letter-spacing:.06em;box-shadow:var(--shadow)}
-
-  /* Advisory: the amber warning sign. The 34-rule note carries the black
-     warning diamond; #frameWarn shares the panel without one. */
-  .warn{display:flex;gap:12px;align-items:flex-start;background:var(--amber);color:var(--ink);
-    border:3px solid #fff;border-radius:var(--r-card);padding:14px;margin-bottom:16px;
-    font-family:var(--sans);font-weight:600;font-size:13px;line-height:1.5;
-    box-shadow:var(--shadow);text-align:left}
-  .card .warn{margin-top:14px;margin-bottom:0;border-color:var(--ink)}
-  .warn .dia{flex:none;width:34px;height:34px;background:var(--ink);transform:rotate(45deg);
-    border-radius:6px;margin:4px 6px;display:flex;align-items:center;justify-content:center}
-  .warn .dia b{transform:rotate(-45deg);color:var(--amber-hi);
-    font-family:var(--sans);font-weight:800;font-size:18px;line-height:1}
-  .warn p{margin:0;font-family:var(--sans);font-weight:600;font-size:13px;line-height:1.5}
-  .warn b{color:var(--ink);font-weight:800}
-
-  .stamp{font-family:var(--mono);font-weight:600;font-size:16px;color:var(--ink);margin-top:8px;
-    padding:10px 12px;background:#fff;border:2px solid var(--ink);border-radius:8px;
+  .stamp{font-family:var(--mono);font-weight:600;font-size:16px;color:var(--rig-ink);
+    margin-top:8px;padding:10px 12px;background:var(--rig-surface-2);
+    border:1px solid var(--rig-line-2);border-radius:var(--rig-radius-sm);
     user-select:all;-webkit-user-select:all}
-  .foot{font-family:var(--mono);font-weight:600;font-size:10px;color:var(--mute);
+
+  /* ============================ mileposts + footer ============================ */
+  rig-separator.mp{margin:12px 0 0;--rig-separator-label-color:#fff}
+  .mp::part(label){}
+  .foot{font-family:var(--mono);font-weight:600;font-size:10px;color:var(--rig-ink-2);
     line-height:1.8;margin-top:14px;letter-spacing:.03em}
-  .card .foot{color:var(--panel-mute)}
   .foot p{margin:0;text-align:center}
   .foot p + p{margin-top:.9em}
-  /* Version footer: a small sign plate, still the tappable update check. */
-  .footWrap{text-align:center;margin-top:10px}
-  #verFoot{display:inline-block;width:auto;background:transparent;color:var(--mute);
-    border:2px solid var(--line);border-radius:6px;padding:4px 12px;
-    font-family:var(--mono);font-weight:600;font-size:11px;letter-spacing:.03em}
-  /* An update is downloaded and waiting on the tap: the plate lights up so it's noticed. */
-  #verFoot.ready{color:var(--amber-hi);border-color:var(--amber-hi)}
-  /* Amber text washes out on the light road — on day it's a solid advisory plate instead. */
-  [data-theme="day"] #verFoot.ready{background:var(--amber-hi);color:#15181b}
-  select.centered{text-align:center;text-align-last:center}
+  .roadfoot{font-family:var(--mono);font-weight:600;font-size:10px;color:var(--mute);
+    line-height:1.8;margin-top:14px;letter-spacing:.03em;text-align:center}
+  .roadfoot p{margin:0}
+  .roadfoot p + p{margin-top:.9em}
+  .footWrap{text-align:center;margin-top:14px}
+  #verFoot{font-family:var(--mono);font-weight:600;font-size:10px;letter-spacing:.06em;
+    color:var(--mute);text-decoration:underline}
+  #verFoot.ready{color:var(--amber-hi);text-decoration:none;font-weight:700}
 
-  /* Reduced transparency: no frost, back to the flat dim in both themes. */
-  @media (prefers-reduced-transparency: reduce){
-    .helpBackdrop,[data-theme="day"] .helpBackdrop{background:rgba(6,8,10,.72);
-      -webkit-backdrop-filter:none;backdrop-filter:none}
+  /* ============================ help sign ============================ */
+  #helpDlg{--rig-dialog-width:26rem}
+  #helpBody p{font-weight:600;font-size:13.5px;line-height:1.55;margin:0 0 10px}
+  #helpBody ul{font-weight:600;font-size:12.5px;line-height:1.6;color:var(--rig-ink-2);
+    margin:0 0 4px;padding-left:18px}
+  #helpBody li{margin-bottom:6px}
+
+  @media (max-width:400px){
+    .grid{grid-template-columns:1fr}
+    .big{font-size:44px}
   }
-  .hide{display:none !important}
 </style>
 </head>
 <body>
@@ -527,8 +435,7 @@
       <!-- The MILE 34 marker, same as the home-screen icons but cut out with alpha so the
            day theme doesn't get a dark box behind it. The h1 beside it carries the name, so
            the mark is decorative: empty alt. Height only — the asset is 70x132 (3x of the
-           44px it's shown at), and forcing a width would stretch it. 44px keeps "MILE 34"
-           legible beside a ~31px name block; 36px was too small to read. -->
+           44px it's shown at), and forcing a width would stretch it. -->
       <img src="marker.png" alt="" height="44" style="display:block;flex:none">
       <div>
         <h1>MILESPOST</h1>
@@ -536,297 +443,349 @@
       </div>
     </div>
     <div class="brand-r">
-      <button class="switch" id="themeBtn" role="switch" aria-checked="false"
-              aria-label="Switch to day mode">
-        <i class="knob">
-          <svg class="moon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
-          </svg>
-          <svg class="sun" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="4.4"/>
-            <path d="M12 1.8v2.6M12 19.6v2.6M4.2 4.2l1.9 1.9M17.9 17.9l1.9 1.9M1.8 12h2.6M19.6 12h2.6M4.2 19.8l1.9-1.9M17.9 6.1l1.9-1.9"/>
-          </svg>
-        </i>
-      </button>
+      <rig-switch id="themeBtn" aria-label="Day mode" data-tip="Day / night"></rig-switch>
     </div>
   </div>
 
-  <div class="tabs" role="tablist">
-    <button id="tabEta"   role="tab" aria-selected="true">ETA</button>
-    <button id="tabReset" role="tab" aria-selected="false">34 RESET</button>
-  </div>
+  <rig-tabs id="tabs" variant="segmented" value="eta" label="MilesPost views">
+    <rig-tab value="eta">ETA</rig-tab>
+    <rig-tab value="reset">34 Reset</rig-tab>
 
-  <!-- ============================ ETA ============================ -->
-  <div id="viewEta">
-    <div class="card readout">
-      <div class="exit-tab hide" id="etaExit"></div>
-      <div class="lbl-row">
-        <div class="lbl" id="etaLabel">Arrival</div>
-        <button class="help-btn" id="etaHelp" aria-label="What is this?" type="button"><span>?</span></button>
-      </div>
-      <!-- Both arrivals, side by side, no tab between them: dispatch's flat ÷50 anchors
-           the panel and a live quote rides alongside it. The gap between the two is the
-           thing worth knowing, and it can't be read one tab at a time. -->
-      <div class="dual solo" id="etaDual">
-        <div class="dual-main">
-          <div class="dual-k">Predicted · dispatch miles ÷50</div>
-          <div class="big" id="etaClock">--:--</div>
+    <!-- ============================ ETA ============================ -->
+    <rig-tab-panel value="eta">
+    <div id="viewEta">
+      <div class="card readout">
+        <rig-badge class="exit-tab hide" id="etaExit" variant="neutral"></rig-badge>
+        <div class="lbl-row">
+          <div class="lbl" id="etaLabel">Arrival</div>
+          <button class="rig-btn rig-btn--ghost rig-btn--sm rig-btn--icon help-btn" id="etaHelp"
+                  type="button" aria-label="What is this?" data-tip="What is this?">?</button>
         </div>
-        <div class="dual-side dead" id="liveSide">
-          <div class="dual-k">Live</div>
-          <div class="liveVal" id="liveClock">--:--</div>
-          <div class="liveSub" id="liveSub">needs signal</div>
+        <!-- Both arrivals, side by side, no tab between them: dispatch's flat ÷50 anchors
+             the panel and a live quote rides alongside it. The gap between the two is the
+             thing worth knowing, and it can't be read one tab at a time. -->
+        <div class="dual solo" id="etaDual">
+          <div class="dual-main">
+            <div class="dual-k">Predicted · dispatch miles ÷50</div>
+            <div class="big" id="etaClock">--:--</div>
+          </div>
+          <div class="dual-side dead" id="liveSide">
+            <div class="dual-k">Live</div>
+            <div class="liveVal" id="liveClock">--:--</div>
+            <div class="liveSub" id="liveSub">needs signal</div>
+          </div>
+        </div>
+        <div class="day" id="etaDay">Enter miles and a departure time.</div>
+        <div class="sub hide" id="etaYours"></div>
+        <div class="sub hide" id="etaShift"></div>
+        <div class="note hide" id="quickNote"></div>
+        <!-- #liveNote must stay directly after #liveLine: .liveLine fuses itself to a
+             following .note into one joined board, which is how the caveat becomes the
+             board's dim lower half. -->
+        <div class="liveLine hide" id="liveLine"></div>
+        <div class="note hide" id="liveNote"></div>
+        <div class="strip hide" id="strip"></div>
+        <div class="stripkey hide" id="stripKey">
+          <span><i class="dot"></i>DOT</span>
+          <span><i class="fuel"></i>Fuel</span>
+          <span><i class="swap"></i>Swap</span>
+        </div>
+        <div class="stops hide" id="stopsWrap">
+          <rig-item-group id="stopList" label="Stops on this run"></rig-item-group>
+        </div>
+        <div class="legend hide" id="legend"></div>
+        <div class="hide" id="cushionWrap" style="margin-top:14px">
+          <rig-alert id="cushion" variant="ok" heading=""></rig-alert>
         </div>
       </div>
-      <div class="day" id="etaDay">Enter miles and a departure time.</div>
-      <div class="sub hide" id="etaYours"></div>
-      <div class="sub hide" id="etaShift"></div>
-      <div class="note hide" id="quickNote"></div>
-      <!-- #liveNote must stay directly after #liveLine: .liveLine fuses itself to a
-           following .note into one joined board, which is how the caveat becomes the
-           board's dim lower half. -->
-      <div class="liveLine hide" id="liveLine"></div>
-      <div class="note hide" id="liveNote"></div>
-      <div class="strip hide" id="strip"></div>
-      <div class="stripkey hide" id="stripKey">
-        <span><i class="dot"></i>DOT</span>
-        <span><i class="fuel"></i>Fuel</span>
-        <span><i class="swap"></i>Swap</span>
-      </div>
-      <div class="stops hide" id="stopList"></div>
-      <div class="legend hide" id="legend"></div>
-      <div class="cushion hide" id="cushion"></div>
-    </div>
 
-    <div class="mp hide" id="mpTopWrap"><span id="mpTop"></span></div>
+      <rig-separator class="mp hide" id="mpTopWrap" label=""></rig-separator>
 
-    <div class="card">
-      <div class="lbl-row">
-        <div class="lbl">Your load</div>
-        <button class="help-btn" id="loadHelp" aria-label="What is this?" type="button"><span>?</span></button>
-      </div>
-      <div class="group">
-        <label for="miles">Miles remaining</label>
-        <div class="fieldwrap">
-          <input id="miles" type="number" inputmode="decimal">
-          <button type="button" class="fieldClear hide" id="milesClear" aria-label="Clear miles">×</button>
-          <span class="suffix">mi</span>
+      <div class="card">
+        <div class="lbl-row">
+          <div class="lbl">Your load</div>
+          <button class="rig-btn rig-btn--ghost rig-btn--sm rig-btn--icon help-btn" id="loadHelp"
+                  type="button" aria-label="What is this?" data-tip="What is this?">?</button>
+        </div>
+
+        <div class="group">
+          <rig-input id="milesField" label="Miles remaining" suffix="mi" clearable>
+            <input id="miles" name="miles" type="number" inputmode="decimal">
+          </rig-input>
           <!-- The one fetch button (v5.1 folded UPDATE ETA into it): a live, truck-legal
                quote, filling the miles on the way past. Shown whenever there's a
                destination to route to — visibility driven from renderEta() below. -->
-          <button type="button" class="go hide" id="getMiBtn" style="margin-top:8px">GET ETA</button>
+          <div class="meta">
+            <button type="button" class="rig-btn rig-btn--accent rig-btn--sm hide" id="getMiBtn">GET ETA</button>
+          </div>
           <div class="err hide" id="getMiNote"></div>
         </div>
-      </div>
 
-      <div class="group">
-        <label for="destIn">Destination town</label>
-        <div class="row" style="position:relative">
-          <div class="fieldwrap" style="flex:1">
-            <input id="destIn" placeholder="e.g. Laredo, TX" autocomplete="off" enterkeyhint="done">
-            <button type="button" class="fieldClear hide" id="destClear" aria-label="Clear destination">×</button>
+        <div class="group">
+          <div style="position:relative">
+            <rig-input id="destField" label="Destination town" clearable>
+              <input id="destIn" name="dest" placeholder="e.g. Laredo, TX" autocomplete="off"
+                     enterkeyhint="done">
+            </rig-input>
+            <div class="suggest hide" id="destSuggest"></div>
           </div>
-          <div class="suggest hide" id="destSuggest"></div>
+          <div class="meta hide" id="destMeta"><rig-badge id="destChip" variant="accent"></rig-badge></div>
+          <div class="err hide" id="destErr"></div>
+          <rig-select id="destPick" class="hide" label="Time zone" style="margin-top:8px"></rig-select>
         </div>
-        <div class="meta hide" id="destMeta"><span class="chip" id="destChip"></span></div>
-        <div class="err hide" id="destErr"></div>
-        <select id="destPick" class="hide" style="margin-top:8px"></select>
-      </div>
 
-      <div class="group">
-        <label for="depart">Rolling out</label>
-        <div class="row">
-          <input id="depart" type="datetime-local">
-          <button class="go" id="nowBtn">NOW</button>
-        </div>
-        <div class="meta">
-          <span class="chip grey" id="origChip"></span>
-          <button class="link" id="origToggle">change</button>
-        </div>
-        <div class="row hide" id="origEdit" style="margin-top:8px;position:relative">
-          <input id="origIn" placeholder="City, State" autocomplete="off">
-          <button class="go" id="origSet">SET</button>
-          <button id="origDev" style="padding:0 12px">DEVICE</button>
-          <div class="suggest hide" id="origSuggest"></div>
-        </div>
-        <div class="err hide" id="origErr"></div>
-        <select id="origPick" class="hide" style="margin-top:8px"></select>
-        <!-- Running belongs to the clock it takes over: it governs "Rolling out" above, and
-             it's why that field and NOW are greyed out. Inside this group so the spacing
-             binds it upward. Living in the load card also puts it on BOTH ETA tabs — parked
-             in the run panel it was Live-only, so a driver on Predicted met a disabled
-             departure with no visible way to free it. -->
-        <div id="runningRow">
-          <div class="lbl-row" style="margin-top:10px;margin-bottom:0">
-          <div style="display:flex;align-items:center;gap:2px">
-            <div class="lbl" style="margin-bottom:0">Running</div>
-            <button class="help-btn" id="runningHelp" aria-label="What is this?" type="button"><span>?</span></button>
+        <div class="group">
+          <div class="row">
+            <rig-input id="departField" label="Rolling out">
+              <input id="depart" name="depart" type="datetime-local">
+            </rig-input>
+            <button class="rig-btn rig-btn--accent" id="nowBtn">NOW</button>
           </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="overrideState" id="runningState">OFF</span>
-            <button class="switch" id="runningBtn" role="switch" aria-checked="false"
-                    aria-label="Keep the departure clock and arrival current">
-              <i class="knob"></i>
-            </button>
+          <div class="meta">
+            <rig-badge id="origChip" variant="neutral"></rig-badge>
+            <button class="link" id="origToggle" type="button">change</button>
           </div>
-        </div>
-      </div>
-      </div>
-
-
-      <div class="group">
-        <label for="appt" id="apptLbl">Appointment (optional)</label>
-        <input id="appt" type="datetime-local">
-      </div>
-
-      <button class="muted" id="etaClear" style="margin-top:10px">CLEAR</button>
-    </div>
-
-    <div class="mp hide" id="mpFuelWrap"><span id="mpFuel"></span></div>
-
-    <div class="card" id="panelTuned">
-      <div class="lbl-row">
-        <div class="lbl" id="runLabel">How you run</div>
-        <button class="help-btn" id="runHelp" aria-label="What is this?" type="button"><span>?</span></button>
-      </div>
-      <div class="note" id="runNote" style="margin-top:0"></div>
-      <div class="ghead">
-        <div class="gq" id="gaugeQ">How far can you run now?</div>
-        <div class="greadout" id="greadout"></div>
-      </div>
-      <div class="gauge" id="gauge" tabindex="0" role="slider" aria-labelledby="gaugeQ"
-           aria-valuemin="1" aria-valuemax="8">
-        <div class="glabels" id="glabels"></div>
-        <div class="gtrack" id="gtrack">
-          <div class="gdanger" id="gdanger"></div>
-          <div class="gwarn" id="gwarn"></div>
-          <div id="gticks"></div>
-          <div class="gneedle" id="gneedle"></div>
-        </div>
-      </div>
-      <div class="ghint">Tap or drag to where your gauge sits.</div>
-      <div class="grange hide" id="grange"></div>
-      <!-- Centered settings link above the full-width primary CTA. display:block + auto
-           side margins centers the button itself (it stays shrink-to-fit). -->
-      <button class="link" id="tuneToggle"
-              style="display:block;margin:14px auto 0">+ TUNE TO YOUR TRUCK</button>
-      <div id="overrideRow">
-        <div class="lbl-row" style="margin-top:14px;margin-bottom:0">
-          <div style="display:flex;align-items:center;gap:2px">
-            <div class="lbl" style="margin-bottom:0">Override</div>
-            <button class="help-btn" id="overrideHelp" aria-label="What is this?" type="button"><span>?</span></button>
+          <div class="row hide" id="origEdit" style="margin-top:8px;position:relative">
+            <rig-input id="origField" label="Start the route from">
+              <input id="origIn" name="origin" placeholder="City, State" autocomplete="off">
+            </rig-input>
+            <button class="rig-btn rig-btn--accent" id="origSet">SET</button>
+            <button class="rig-btn" id="origDev">DEVICE</button>
+            <div class="suggest hide" id="origSuggest"></div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="overrideState" id="overrideState">OFF</span>
-            <button class="switch" id="overrideBtn" role="switch" aria-checked="false"
-                    aria-label="Always overwrite mileage with the live route distance">
-              <i class="knob"></i>
-            </button>
+          <div class="err hide" id="origErr"></div>
+          <rig-select id="origPick" class="hide" label="Time zone" style="margin-top:8px"></rig-select>
+          <!-- Running belongs to the clock it takes over: it governs "Rolling out" above, and
+               it's why that field and NOW are greyed out. Inside this group so the spacing
+               binds it upward. Living in the load card also puts it on BOTH ETA tabs — parked
+               in the run panel it was Live-only, so a driver on Predicted met a disabled
+               departure with no visible way to free it. -->
+          <div id="runningRow" style="margin-top:14px">
+            <div class="lbl-row" style="margin-bottom:0">
+              <div style="display:flex;align-items:center;gap:2px;min-width:0">
+                <div class="lbl" style="margin-bottom:0">Running</div>
+                <button class="rig-btn rig-btn--ghost rig-btn--sm rig-btn--icon help-btn"
+                        id="runningHelp" type="button" aria-label="What is this?"
+                        data-tip="What is this?">?</button>
+              </div>
+              <rig-switch id="runningBtn"
+                          aria-label="Keep the departure clock and arrival current"></rig-switch>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="grid hide" id="tuneGrid">
-        <div><div class="lbl">Fuel every</div><div class="fieldwrap"><input id="fuelMax" type="number" inputmode="decimal" step="50"><span class="suffix">mi max</span></div></div>
-        <div><div class="lbl">Fuel stop</div><div class="fieldwrap"><input id="fuelMin" type="number" inputmode="decimal"><span class="suffix">min</span></div></div>
-        <div><div class="lbl">Swap takes</div><div class="fieldwrap"><input id="swapMin" type="number" inputmode="decimal"><span class="suffix">min</span></div></div>
-        <div><div class="lbl">DOT break</div><div class="fieldwrap"><input id="dotMin" type="number" inputmode="decimal" min="30" step="5"><span class="suffix">min</span></div></div>
-        <div><div class="lbl">DOT after</div><div class="fieldwrap"><input id="dotAt" type="number" inputmode="decimal" min="1" step="1"><span class="suffix">hr</span></div></div>
-      </div>
-      <div class="hide" id="swapBox">
-        <div class="lbl" style="margin-top:16px">Swap schedule — fixed clock, wherever you are</div>
-        <div class="grid" style="margin-top:0">
-          <div><input id="swapA" type="time"></div>
-          <div><input id="swapB" type="time"></div>
+
+        <div class="group">
+          <rig-input id="apptField" label="Appointment (optional)">
+            <input id="appt" name="appt" type="datetime-local">
+          </rig-input>
         </div>
-        <select id="swapTz" class="centered" style="margin-top:10px"></select>
-      </div>
-    </div>
-  </div>
 
-  <!-- ========================== 34 RESET ========================== -->
-  <div id="viewReset" class="hide">
-    <div class="card readout" id="rsReadout">
-      <div class="exit-tab hide" id="rsExit"></div>
-      <div class="lbl-row">
-        <div class="lbl" id="rsLabel">Legal at</div>
-        <button class="help-btn" id="rsHelp" aria-label="What is this?" type="button"><span>?</span></button>
-      </div>
-      <div class="big" id="rsClock">--:--</div>
-      <div class="day" id="rsDay">Set the time you shut down.</div>
-      <div class="sub hide" id="rsCount"></div>
-      <div class="bars hide" id="bars"></div>
-      <div class="scale hide" id="rsScale"><span>SHUT DOWN</span><span>17H</span><span>34H</span></div>
-    </div>
-
-    <div class="card" id="rsInputCard">
-      <div class="group">
-        <label for="shut">Shut down</label>
-        <div class="row">
-          <input id="shut" type="datetime-local">
-          <button class="go" id="rsSetShut">SET</button>
-          <button class="ghost" id="rsNow">NOW</button>
+        <div class="actions">
+          <button class="rig-btn" id="etaClear">CLEAR</button>
         </div>
-        <div class="meta">
-          <span class="chip grey" id="rsChip"></span>
-          <button class="link" id="rsToggle">change</button>
+      </div>
+
+      <rig-separator class="mp hide" id="mpFuelWrap" label=""></rig-separator>
+
+      <div class="card" id="panelTuned">
+        <div class="lbl-row">
+          <div class="lbl" id="runLabel">How you run</div>
+          <button class="rig-btn rig-btn--ghost rig-btn--sm rig-btn--icon help-btn" id="runHelp"
+                  type="button" aria-label="What is this?" data-tip="What is this?">?</button>
         </div>
-        <div class="row hide" id="rsEdit" style="margin-top:8px;position:relative">
-          <input id="rsIn" placeholder="City, State" autocomplete="off">
-          <button class="go" id="rsSet">SET</button>
-          <button id="rsDev" style="padding:0 12px">DEVICE</button>
-          <div class="suggest hide" id="rsSuggest"></div>
+        <div class="note" id="runNote" style="margin-top:0"></div>
+        <div class="ghead">
+          <div class="gq" id="gaugeQ">How far can you run now?</div>
+          <div class="greadout" id="greadout"></div>
         </div>
-        <div class="err hide" id="rsErr"></div>
-        <select id="rsPick" class="hide" style="margin-top:8px"></select>
-      </div>
-    </div>
+        <div class="gauge" id="gauge" tabindex="0" role="slider" aria-labelledby="gaugeQ"
+             aria-valuemin="1" aria-valuemax="8">
+          <div class="glabels" id="glabels"></div>
+          <div class="gtrack" id="gtrack">
+            <div class="gdanger" id="gdanger"></div>
+            <div class="gwarn" id="gwarn"></div>
+            <div id="gticks"></div>
+            <div class="gneedle" id="gneedle"></div>
+          </div>
+        </div>
+        <div class="ghint">Tap or drag to where your gauge sits.</div>
+        <div class="hide" id="grangeWrap" style="margin-top:10px">
+          <rig-alert id="grange" variant="warn" heading=""></rig-alert>
+        </div>
+        <!-- The stop rules fold away: five numbers a driver sets once, and then wants out
+             of the way of the gauge they read every run. -->
+        <rig-collapsible id="tuneWrap" style="margin-top:14px">
+          <button slot="trigger" class="rig-btn rig-btn--ghost rig-btn--sm" id="tuneToggle"
+                  style="display:block;margin:0 auto">Tune to your truck</button>
+          <div class="tuneBody">
+            <div class="grid" id="tuneGrid" style="margin-top:0">
+              <rig-input id="fuelMaxField" label="Fuel every" suffix="mi max" size="sm">
+                <input id="fuelMax" name="fuelMax" type="number" inputmode="decimal" step="50">
+              </rig-input>
+              <rig-input id="fuelMinField" label="Fuel stop" suffix="min" size="sm">
+                <input id="fuelMin" name="fuelMin" type="number" inputmode="decimal">
+              </rig-input>
+              <rig-input id="swapMinField" label="Swap takes" suffix="min" size="sm">
+                <input id="swapMin" name="swapMin" type="number" inputmode="decimal">
+              </rig-input>
+              <rig-input id="dotMinField" label="DOT break" suffix="min" size="sm">
+                <input id="dotMin" name="dotMin" type="number" inputmode="decimal" min="30" step="5">
+              </rig-input>
+              <rig-input id="dotAtField" label="DOT after" suffix="hr" size="sm">
+                <input id="dotAt" name="dotAt" type="number" inputmode="decimal" min="1" step="1">
+              </rig-input>
+            </div>
+            <div id="swapBox">
+              <div class="sublab">Swap schedule</div>
+              <div class="meta">
+                <rig-badge id="swapChip" variant="accent"></rig-badge>
+                <button class="rig-btn rig-btn--ghost rig-btn--sm" id="swapEdit"
+                        data-rig-drawer="swapDrawer">Edit swaps</button>
+              </div>
+            </div>
+          </div>
+        </rig-collapsible>
+        <div id="overrideRow">
+          <div class="lbl-row" style="margin-top:14px;margin-bottom:0">
+            <div style="display:flex;align-items:center;gap:2px;min-width:0">
+              <div class="lbl" style="margin-bottom:0">Override</div>
+              <button class="rig-btn rig-btn--ghost rig-btn--sm rig-btn--icon"
+                      id="overrideHelp" type="button" aria-label="What is this?"
+                      data-tip="What is this?">?</button>
+            </div>
+            <rig-switch id="overrideBtn"
+                        aria-label="Always overwrite mileage with the live route distance"></rig-switch>
+          </div>
+          <div class="note" id="overrideNote" style="margin-top:4px"></div>
+        </div>
 
-    <div class="card">
-      <button class="primary" id="icsBtn" disabled>ADD ALARM TO CALENDAR</button>
-      <div class="foot" style="margin-top:10px;text-align:center">
-        <p>No web app can wake your phone on its own.</p>
-        <p>This hands a real alarm to your Calendar, which fires whether MilesPost is
-          open, closed, or deleted.</p>
+        <!-- The run as a line, from HERE's own road geometry. Fuel only: swaps and DOT
+             breaks land on the clock, not at a place, so pinning them to a map would be
+             inventing where they happen. -->
+        <div class="mapwrap hide" id="mapWrap">
+          <div class="meta" style="margin-bottom:8px">
+            <span class="sublab" style="margin:0">The run, stop to stop</span>
+            <span class="roadtag hide" id="mapEstimate">straight line</span>
+          </div>
+          <rig-route-map id="routeMap" units="mi"></rig-route-map>
+          <div class="note" id="mapNote" style="margin-top:8px"></div>
+        </div>
       </div>
-      <div class="warn hide" id="frameWarn">
-        <p><b>You're viewing this inside an app preview.</b> Previews block downloads, so the
-        calendar handoff won't fire here. Open the page in Safari or Chrome and it'll work.</p>
-      </div>
-      <div class="hide" id="manual">
-        <div class="lbl" style="margin-top:14px">Or set an alarm by hand for</div>
-        <div class="stamp" id="stamp"></div>
-      </div>
-      <button class="danger" id="rsBroke">BROKE THE 34 — RESTART FROM NOW</button>
-      <button class="muted" id="rsClear">CLEAR TIMER</button>
     </div>
+    </rig-tab-panel>
 
-    <div class="warn">
-      <div class="dia" aria-hidden="true"><b>34</b></div>
-      <p><b>It has to be 34 consecutive hours off duty.</b> Going on duty for even a minute —
-      moving the truck, a quick pre-trip, signing something — starts the whole thing over
-      from zero. If that happens, hit restart above.</p>
-    </div>
+    <!-- ========================== 34 RESET ========================== -->
+    <rig-tab-panel value="reset">
+    <div id="viewReset">
+      <div class="card readout" id="rsReadout">
+        <rig-badge class="exit-tab hide" id="rsExit" variant="neutral"></rig-badge>
+        <div class="lbl-row">
+          <div class="lbl" id="rsLabel">Legal at</div>
+          <button class="rig-btn rig-btn--ghost rig-btn--sm rig-btn--icon help-btn" id="rsHelp"
+                  type="button" aria-label="What is this?" data-tip="What is this?">?</button>
+        </div>
+        <div class="big" id="rsClock">--:--</div>
+        <div class="day" id="rsDay">Set the time you shut down.</div>
+        <div class="sub hide" id="rsCount"></div>
+        <div class="hide" id="barsWrap" style="margin-top:14px">
+          <rig-progress id="bars" steps="34" value="0" tone="accent"
+                        label="Hours of the 34 completed"></rig-progress>
+        </div>
+        <div class="scale hide" id="rsScale"><span>SHUT DOWN</span><span>17H</span><span>34H</span></div>
+      </div>
 
-    <div class="foot" style="text-align:center">
-      <p>34-hour restart under 395.3(c).</p>
-      <p style="font-size:9px">Counts 34 real elapsed hours, so it stays right across a DST change.</p>
+      <div class="card" id="rsInputCard">
+        <div class="group">
+          <div class="row">
+            <rig-input id="shutField" label="Shut down">
+              <input id="shut" name="shut" type="datetime-local">
+            </rig-input>
+            <button class="rig-btn rig-btn--accent" id="rsSetShut">SET</button>
+            <button class="rig-btn" id="rsNow">NOW</button>
+          </div>
+          <div class="meta">
+            <rig-badge id="rsChip" variant="neutral"></rig-badge>
+            <button class="link" id="rsToggle" type="button">change</button>
+          </div>
+          <div class="row hide" id="rsEdit" style="margin-top:8px;position:relative">
+            <rig-input id="rsField" label="Where you shut down">
+              <input id="rsIn" name="rsIn" placeholder="City, State" autocomplete="off">
+            </rig-input>
+            <button class="rig-btn rig-btn--accent" id="rsSet">SET</button>
+            <button class="rig-btn" id="rsDev">DEVICE</button>
+            <div class="suggest hide" id="rsSuggest"></div>
+          </div>
+          <div class="err hide" id="rsErr"></div>
+          <rig-select id="rsPick" class="hide" label="Time zone" style="margin-top:8px"></rig-select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="actions" style="margin-top:0">
+          <button class="rig-btn btn-advisory" id="icsBtn" disabled>ADD ALARM TO CALENDAR</button>
+        </div>
+        <div class="foot" style="margin-top:10px">
+          <p>No web app can wake your phone on its own.</p>
+          <p>This hands a real alarm to your Calendar, which fires whether MilesPost is
+            open, closed, or deleted.</p>
+        </div>
+        <div class="hide" id="frameWarn" style="margin-top:12px">
+          <rig-alert variant="info" heading="You're viewing this inside an app preview.">
+            Previews block downloads, so the calendar handoff won't fire here. Open the page
+            in Safari or Chrome and it'll work.
+          </rig-alert>
+        </div>
+        <div class="hide" id="manual">
+          <div class="lbl" style="margin-top:14px">Or set an alarm by hand for</div>
+          <div class="stamp" id="stamp"></div>
+        </div>
+        <div class="actions">
+          <button class="rig-btn rig-btn--danger" id="rsBroke">BROKE THE 34 — RESTART FROM NOW</button>
+          <button class="rig-btn" id="rsClear">CLEAR TIMER</button>
+        </div>
+      </div>
+
+      <div style="margin-top:16px">
+        <rig-alert variant="warn" heading="It has to be 34 consecutive hours off duty.">
+          Going on duty for even a minute — moving the truck, a quick pre-trip, signing
+          something — starts the whole thing over from zero. If that happens, hit restart above.
+        </rig-alert>
+      </div>
+
+      <div class="roadfoot">
+        <p>34-hour restart under 395.3(c).</p>
+        <p style="font-size:9px">Counts 34 real elapsed hours, so it stays right across a DST change.</p>
+      </div>
     </div>
-  </div>
+    </rig-tab-panel>
+  </rig-tabs>
 
   <div class="footWrap">
-    <button type="button" id="verFoot" aria-label="Check for app updates">MilesPost v5.4</button>
+    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.5-rig</button>
   </div>
 </div>
 
-<!-- Shared help modal, reused by every "?" button. No close button — dismiss by
-     tapping the dimmed backdrop (or Escape). -->
-<div class="helpBackdrop hide" id="helpBackdrop">
-  <div class="helpPanel" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
-    <div class="lbl" id="helpTitle"></div>
-    <div id="helpBody"></div>
-    <div class="helpHint">tap outside to close</div>
+<!-- Shared help sign, reused by every "?" button. -->
+<rig-dialog id="helpDlg" heading="">
+  <div id="helpBody"></div>
+</rig-dialog>
+
+<!-- The swap schedule. Two rows, always: the run is a day driver and a night driver, and
+     shiftAtArrival reads the earlier time as the day start and the later as the night's.
+     A third row would belong to no shift, so this table edits rather than grows. -->
+<rig-drawer id="swapDrawer" heading="Swap schedule">
+  <p class="note" style="margin:0 0 14px">Fixed clock times, wherever the truck is.
+    Changing one re-solves the run.</p>
+  <div class="tablewrap">
+    <rig-table id="swapTable" label="Swap times" noun="swap time"></rig-table>
   </div>
-</div>
+  <rig-select id="swapTz" label="Swaps run on" style="margin-top:14px"></rig-select>
+</rig-drawer>
+
+<!-- A stop's own details, off the solved schedule. -->
+<rig-drawer id="stopDrawer" heading="Stop">
+  <div class="stopdetail" id="stopDetail"></div>
+</rig-drawer>
 
 <script type="module">
 import {
@@ -834,9 +793,13 @@ import {
   clockOf, dayOf, hm, hms,
   RATE, STOP_DEFAULTS, PRESET_VERSION, SWAP_DEFAULT, shiftAtArrival, dotDuration,
   solveEtaLive, liveFresh, LIVE_MAX_AGE_MS, formatPlaceSuggestions, metersToMiles,
-  TICKS, rangeForTick, fullRange, milesPerTick,
+  TICKS, rangeForTick, fullRange, milesPerTick, decodeFlexPolyline, pointAlong, sliceAlong,
   RESET_HOURS, AUTO_CLEAR_MS, autoClearElapsed, icsStamp, esc
 } from "./lib/logic.js";
+
+/* Rig UI, vendored. milespost.js registers only the components this app renders and
+   re-exports the two helpers it calls — see rig-ui/VENDORED.md. */
+import { toast, setButtonLoading } from "./rig-ui/milespost.js";
 
 /* Every clock in the app carries its own timezone marking — never just implied by a
    label elsewhere on the card. For the two big readout numbers (etaClock/rsClock) the
@@ -851,14 +814,14 @@ const applyTheme = t => {
   theme = t;
   document.documentElement.setAttribute("data-theme", t);
   const b = document.getElementById("themeBtn");
-  b.setAttribute("aria-checked", String(t === "day"));
+  if(b.checked !== (t === "day")) b.checked = (t === "day");
   b.setAttribute("aria-label", t === "day" ? "Switch to night mode" : "Switch to day mode");
   const m = document.querySelector('meta[name=theme-color]');
   if(m) m.setAttribute("content", t === "day" ? "#E8EAED" : "#13161a");
   try{ localStorage.setItem(THEME_KEY, t); }catch{}
 };
-document.getElementById("themeBtn").onclick = () =>
-  applyTheme(theme === "day" ? "night" : "day");
+document.getElementById("themeBtn").addEventListener("change", e =>
+  applyTheme(e.target.checked ? "day" : "night"));
 applyTheme(theme);
 
 /* Timezone tables, the resolver, and all time/format helpers now live in
@@ -900,18 +863,14 @@ const inFrame = (()=>{ try{ return window.self !== window.top; } catch { return 
 /* Purely informational — no state, nothing persisted. One shared panel, reused by
    every "?" button. Dismiss only by tapping the dimmed backdrop (or Escape) — there's
    no close button, so a tap inside the panel while reading must never close it. */
-function openHelp(title, bodyHtml){
-  $("helpTitle").textContent = title;
+/* <rig-dialog> brings the backdrop dismiss, Escape, the focus trap and returning focus
+   to the "?" that opened it — all of which this used to hand-roll. Passing the trigger
+   to show() is what makes the panel spring out of the button that asked for it. */
+function openHelp(title, bodyHtml, trigger){
+  $("helpDlg").setAttribute("heading", title);
   $("helpBody").innerHTML = bodyHtml;
-  show($("helpBackdrop"), true);
+  $("helpDlg").show(trigger);
 }
-function closeHelp(){ show($("helpBackdrop"), false); }
-$("helpBackdrop").addEventListener("click", e=>{
-  if(e.target.id==="helpBackdrop") closeHelp();   // backdrop itself only, not the panel
-});
-document.addEventListener("keydown", e=>{
-  if(e.key==="Escape" && !$("helpBackdrop").classList.contains("hide")) closeHelp();
-});
 
 const HELP = {
   eta:{ title:"Arrival", body:
@@ -978,12 +937,12 @@ const HELP = {
     "<li>\"BROKE THE 34\" restarts the clock from right now if your reset gets interrupted.</li>"+
     "<li>The timer clears itself automatically 10 minutes after you go legal.</li></ul>" }
 };
-$("etaHelp").onclick = ()=> openHelp(HELP.eta.title, HELP.eta.body);
-$("loadHelp").onclick = ()=> openHelp(HELP.load.title, HELP.load.body);
-$("runHelp").onclick = ()=> openHelp(HELP.run.title, HELP.run.body);
-$("overrideHelp").onclick = ()=> openHelp(HELP.override.title, HELP.override.body);
-$("runningHelp").onclick = ()=> openHelp(HELP.running.title, HELP.running.body);
-$("rsHelp").onclick = ()=> openHelp(HELP.reset.title, HELP.reset.body);
+$("etaHelp").onclick = e => openHelp(HELP.eta.title, HELP.eta.body, e.currentTarget);
+$("loadHelp").onclick = e => openHelp(HELP.load.title, HELP.load.body, e.currentTarget);
+$("runHelp").onclick = e => openHelp(HELP.run.title, HELP.run.body, e.currentTarget);
+$("overrideHelp").onclick = e => openHelp(HELP.override.title, HELP.override.body, e.currentTarget);
+$("runningHelp").onclick = e => openHelp(HELP.running.title, HELP.running.body, e.currentTarget);
+$("rsHelp").onclick = e => openHelp(HELP.reset.title, HELP.reset.body, e.currentTarget);
 
 // Old keys are read once so a rename never costs the driver their settings.
 const loadJSON = (...keys) => {
@@ -992,6 +951,13 @@ const loadJSON = (...keys) => {
   }
   return null;
 };
+
+/* How a stop reads, in one place: the rows in the readout and the drawer behind them
+   have to agree about when and where, down to the wording. */
+const STOP_NAMES = { swap:"SWAP", dot:"DOT BREAK", fuel:"FUEL" };
+const stopWhen = (x, tz) => x.mile < 1 ? "BEFORE YOU ROLL"
+  : clockOf(new Date(x.atMs), tz) + " " + tzTag(tz, new Date(x.atMs));
+const stopWhere = x => x.mile < 1 ? "AT THE YARD" : "MILE " + Math.round(x.mile);
 
 /* ======================= ETA ======================= */
 /* RATE, STOP_DEFAULTS, PRESET_VERSION, SWAP_DEFAULT, and solveEtaLive (which runs the
@@ -1055,6 +1021,10 @@ const LIVE = { at:null, start:null, res:null, trafficS:0, note:"", pending:false
 /* Shared clearing helpers — used by the small per-field "×" buttons AND by the big CLEAR
    button below, so all three sites clear exactly the same way instead of three copies of
    the same few lines drifting apart. */
+/* <rig-input clearable> draws the "x" and empties the control itself; what it can't know
+   is that an emptied mileage also drops our claim on it, and an emptied destination
+   invalidates the quote solved for it. Both hang off the emptied state below, so the
+   component's own button and these functions end in the same place. */
 function clearMilesField(){
   $("miles").value = "";
   LIVE.autoMiles = null;          // nothing of ours left in the field to claim ownership of
@@ -1223,11 +1193,16 @@ async function fetchTruckRoute(destName, originPlace){
     : await geoPos().then(c => c.latitude + "," + c.longitude);
   const pos = await geocodeTown(destName, "geocode");
 
+  /* "polyline" alongside the summary is the road itself, which is what lets the run card
+     draw the lane instead of a ruler line between the two ends. Same request, same
+     transaction against the free tier — it only widens the response. Everything below
+     treats it as optional: a plan or a route that returns no geometry falls back to the
+     straight line between the ends, and the card says which one it drew. */
   const q = new URLSearchParams({
     transportMode:"truck",
     origin: from,
     destination: pos.lat + "," + pos.lng,
-    return: "summary",
+    return: "summary,polyline",
     apikey: HERE_API_KEY
   });
   Object.entries(TRUCK).forEach(([k,v]) => q.append("vehicle["+k+"]", v));
@@ -1239,7 +1214,19 @@ async function fetchTruckRoute(destName, originPlace){
   const secs = (j.routes && j.routes[0] && j.routes[0].sections) || [];
   if(!secs.length) throw new Error("route: no sections");
   const sum = k => secs.reduce((a,s) => a + (Number(s.summary && s.summary[k]) || 0), 0);
-  return { duration: sum("duration"), length: sum("length"), base: sum("baseDuration") };
+  // Sections are consecutive, so their lines join end to end; a section whose polyline is
+  // missing or unreadable simply contributes nothing rather than breaking the rest.
+  const line = [];
+  for(const sec of secs){
+    const pts = decodeFlexPolyline(sec.polyline);
+    for(const pt of pts){
+      const last = line[line.length-1];
+      if(!last || last[0] !== pt[0] || last[1] !== pt[1]) line.push(pt);
+    }
+  }
+  const [fromLat, fromLng] = from.split(",").map(Number);
+  return { duration: sum("duration"), length: sum("length"), base: sum("baseDuration"),
+           line, ends:{ from:{ lat:fromLat, lon:fromLng }, to:{ lat:pos.lat, lon:pos.lng } } };
 }
 
 async function updateLive(){
@@ -1248,7 +1235,7 @@ async function updateLive(){
   if(!E.destName){ LIVE.note = "set a destination to get a live ETA"; renderEta(); return; }
   LIVE.pending = true; renderLiveBtn();
   try{
-    const { duration, length, base } = await fetchTruckRoute(E.destName, E.originPlace);
+    const { duration, length, base, line, ends } = await fetchTruckRoute(E.destName, E.originPlace);
     /* v5.3: the run departs from Rolling Out — the same moment Predicted counts from — not
        from the tap. The two used to start hours apart whenever Rolling Out wasn't now:
        stops landed outside the run you'd entered, and "ahead of dispatch" could sit next
@@ -1257,7 +1244,7 @@ async function updateLive(){
     const startMs = rollOutMs();
     // Kept raw as well as solved: RUNNING re-solves these same numbers against a moving
     // departure, which is what lets the arrival stay current without another fetch.
-    LIVE.raw = { duration, length, base };
+    LIVE.raw = { duration, length, base, line, ends };
     LIVE.res = solveEtaLive({ driveSeconds:duration, meters:length, p:E.p, swap:E.swap, startMs, tick });
     // Convenience only: fill miles from the real road distance when the field is blank, or
     // when it still holds a number we put there ourselves — so re-quoting for a new
@@ -1370,10 +1357,9 @@ async function getMileageOnly(){
    empty, having promised an arrival. The busy state reads LIVE.pending for the same
    reason — otherwise a live fetch would leave it sitting enabled and labelled as if
    nothing were happening. */
-const renderGetMiBtn = () => {
-  $("getMiBtn").textContent = LIVE.pending ? "GETTING ETA…" : "GET ETA";
-  $("getMiBtn").disabled = LIVE.pending;
-};
+/* setButtonLoading keeps focus on the button (unlike `disabled`, which drops it) and
+   swallows clicks while the fetch is out, so a double tap can't queue a second one. */
+const renderGetMiBtn = () => setButtonLoading($("getMiBtn"), LIVE.pending, { text:"GETTING ETA…" });
 $("getMiBtn").onclick = () => updateLive();
 
 const saveEta = () => { try{ localStorage.setItem("milespost.eta",
@@ -1381,12 +1367,12 @@ const saveEta = () => { try{ localStorage.setItem("milespost.eta",
     liveOverride:E.liveOverride, running:E.running}));
 }catch{} };
 
-ZONE_LIST.forEach(z=>{
-  [["destPick", tzTag(z)+" — "+z], ["origPick", tzTag(z)+" — "+z],
-   ["swapTz", "Swaps on "+tzTag(z)]].forEach(([id,text])=>{
-    const o=document.createElement("option"); o.value=z; o.textContent=text; $(id).appendChild(o);
-  });
-});
+/* <rig-select> takes its list as data, which suits these: two of them are rebuilt at
+   runtime when a split state needs a zone picked. */
+const zoneOptions = label => ZONE_LIST.map(z => ({ value:z, label:label(z) }));
+$("destPick").options = zoneOptions(z => tzTag(z)+" — "+z);
+$("origPick").options = zoneOptions(z => tzTag(z)+" — "+z);
+$("swapTz").options   = zoneOptions(z => "Swaps on "+tzTag(z));
 // The stop rules, and only the stop rules — cruise speed is gone with the preset
 // chooser, since live routing supplies drive time and nothing else reads an mph.
 const TUNE_KEYS = ["fuelMax","fuelMin","swapMin","dotMin","dotAt"];
@@ -1401,15 +1387,49 @@ TUNE_KEYS.forEach(k=>{
 $("dotMin").addEventListener("change", ()=>{
   if(E.p.dotMin !== "" && Number(E.p.dotMin) < 30){ E.p.dotMin = 30; syncTune(); saveEta(); renderEta(); }
 });
-const syncSwap = () => {
-  $("swapA").value = E.swap.times[0];
-  $("swapB").value = E.swap.times[1];
-  $("swapTz").value = E.swap.tz;
+/* Two rows, and only ever two. shiftAtArrival reads the earlier time as the day driver's
+   start and the later as the night driver's, so a third row would belong to no shift —
+   the table edits the pair rather than growing. The clock is the editable column; the
+   shift name is derived, which is the point of showing it. */
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const swapTable = $("swapTable");
+swapTable.columns = [
+  { key:"shift", label:"Driver", width:"7rem", sortable:false },
+  { key:"time", label:"Clock", editable:true, sortable:false,
+    validate:v => HHMM.test(String(v).trim()) ? "" : "A 24-hour clock time, like 18:00." }
+];
+const swapRows = () => {
+  const [day, night] = [...E.swap.times].sort();
+  return [{ id:"day", shift:"Day driver", time:day },
+          { id:"night", shift:"Night driver", time:night }];
 };
-$("swapA").addEventListener("input", e=>{ if(e.target.value){ E.swap.times[0]=e.target.value; saveEta(); renderEta(); }});
-$("swapB").addEventListener("input", e=>{ if(e.target.value){ E.swap.times[1]=e.target.value; saveEta(); renderEta(); }});
-$("swapTz").addEventListener("change", e=>{ E.swap.tz=e.target.value; saveEta(); renderEta(); });
+const syncSwap = () => {
+  swapTable.rows = swapRows();
+  $("swapTz").value = E.swap.tz;
+  $("swapChip").textContent = [...E.swap.times].sort().join(" / ") + " " + tzTag(E.swap.tz);
+};
+swapTable.addEventListener("cellchange", e => {
+  if(e.detail.key !== "time") return;
+  const v = String(e.detail.value).trim();
+  if(!HHMM.test(v)) return;                       // the column's own validate already said so
+  const rows = swapRows();
+  const next = rows.map(r => r.id === e.detail.row.id ? v : r.time);
+  if(next[0] === next[1]) {                       // both drivers starting at once isn't a schedule
+    e.preventDefault();
+    toast.error("Both swaps can't be the same time", { description:"The day and night driver need two different clock times." });
+    queueMicrotask(syncSwap);
+    return;
+  }
+  E.swap.times = next;
+  saveEta();
+  queueMicrotask(() => { syncSwap(); renderEta(); });
+});
+$("swapTz").addEventListener("change", e=>{ E.swap.tz=e.target.value; saveEta(); syncSwap(); renderEta(); });
 
+// Ahead of the renderEta listeners below, so the state these settle is what that pass reads.
+$("miles").addEventListener("input", () => {
+  if($("miles").value === "") LIVE.autoMiles = null;   // nothing of ours left in the field
+});
 ["miles","appt","depart"].forEach(id => $(id).addEventListener("input", renderEta));
 // NOW also remembers the exact instant it stood for (see departDate()): in the repeated
 // fall-back hour the field's "01:30" alone can't say which 1:30 it was.
@@ -1418,30 +1438,29 @@ $("nowBtn").onclick = ()=>{
   departPinned = new Date(Math.floor(Date.now()/60000)*60000);
   $("depart").value = toWall(departPinned, E.originTz); renderEta();
 };
-$("milesClear").onclick = clearMilesField;
-$("tuneToggle").onclick = ()=>{
-  const on = $("tuneGrid").classList.contains("hide");
-  show($("tuneGrid"), on); show($("swapBox"), on);
-  // The two switch rows step aside while tuning is open, so the fields sit directly under
-  // the toggle that revealed them instead of being split off below. The LIVE CTA no longer
-  // does: it lives in the load card now, not in the panel these fields expand into, so
-  // hiding it here would strand the driver with no way to refresh while tuning is open.
-  // Hiding overrideRow doesn't touch E.liveOverride or overrideBtn's aria-checked — it's
-  // still there, just off-screen, and reappears exactly as it was.
+/* <rig-collapsible> owns the open/close and springs the height; this is what still has to
+   happen alongside. The Override row steps aside while tuning is open, so the fields sit
+   directly under the control that revealed them instead of being split off below it.
+   Hiding it doesn't touch E.liveOverride or the switch — it's off-screen, not reset. */
+$("tuneWrap").addEventListener("openchange", e => {
+  const on = e.detail.open;
   show($("overrideRow"), !on);
-  $("tuneToggle").textContent = on ? "− HIDE TUNING" : "+ TUNE TO YOUR TRUCK";
-};
+  $("tuneToggle").textContent = on ? "Hide tuning" : "Tune to your truck";
+});
 
 // Same .switch pill as the day/night toggle, driven by its own aria-checked (see the
 // generic .switch[aria-checked="true"] CSS rule) rather than the page theme. Left visible
 // regardless of whether tuning is open — it's unrelated to tuning and always relevant
 // whenever the driver might tap UPDATE LIVE ETA.
 const renderOverrideBtn = () => {
-  $("overrideBtn").setAttribute("aria-checked", String(E.liveOverride));
-  $("overrideState").textContent = E.liveOverride ? "ON" : "OFF";
-  $("overrideState").classList.toggle("on", E.liveOverride);
+  if($("overrideBtn").checked !== E.liveOverride) $("overrideBtn").checked = E.liveOverride;
+  $("overrideNote").textContent = E.liveOverride
+    ? "GET ETA overwrites miles with the real road distance, even one you typed."
+    : "GET ETA only fills miles when the field is blank, or still holds its own number.";
 };
-$("overrideBtn").onclick = () => { E.liveOverride = !E.liveOverride; renderOverrideBtn(); saveEta(); };
+$("overrideBtn").addEventListener("change", e => {
+  E.liveOverride = e.target.checked; saveEta(); renderOverrideBtn();
+});
 renderOverrideBtn();
 
 /* RUNNING: keeps the departure clock on "now" and the arrival re-solved against it, once a
@@ -1487,21 +1506,19 @@ const syncRunTimer = () => {
     runTimer = setInterval(runTick, 1000);
 };
 const renderRunningBtn = () => {
-  $("runningBtn").setAttribute("aria-checked", String(E.running));
-  $("runningState").textContent = E.running ? "ON" : "OFF";
-  $("runningState").classList.toggle("on", E.running);
+  if($("runningBtn").checked !== E.running) $("runningBtn").checked = E.running;
   // A departure that re-writes itself every second can't also be hand-set. Turning RUNNING
   // off hands both controls back with the clock left wherever it stopped.
   $("depart").disabled = E.running;
   $("nowBtn").disabled = E.running;
 };
-$("runningBtn").onclick = () => {
-  E.running = !E.running;
+$("runningBtn").addEventListener("change", e => {
+  E.running = e.target.checked;
   renderRunningBtn();
   saveEta();
   syncRunTimer();
   if(E.running) runTick();    // land on "now" immediately rather than up to a second late
-};
+});
 // Runs at load, not only on toggle, so a default-on start really does disable #depart and
 // NOW rather than leaving them live but overwritten a second later.
 renderRunningBtn();
@@ -1518,16 +1535,9 @@ renderRunningBtn();
    the pre-selected one half the time, and selecting an already-selected option fires no
    change event — the tap would do nothing. */
 const fillZonePick = (id, zones) => {
-  const sel = $(id);
-  sel.innerHTML = "";
-  const ph = document.createElement("option");
-  ph.value = ""; ph.textContent = "Pick a zone…";
-  sel.appendChild(ph);
-  zones.forEach(z => {
-    const o = document.createElement("option");
-    o.value = z; o.textContent = tzTag(z)+" — "+z;
-    sel.appendChild(o);
-  });
+  $(id).options = [{ value:"", label:"Pick a zone…" },
+    ...zones.map(z => ({ value:z, label:tzTag(z)+" — "+z }))];
+  $(id).value = "";
 };
 const askZone = (raw, errId, pickId) => {
   const need = splitStateNeedingZone(raw);
@@ -1556,14 +1566,17 @@ const doDest = ()=>{
 // the mobile keyboard's return key accordingly) or by tapping a suggestion, which already
 // covers the field via attachPlaceSuggest's onPick below.
 $("destIn").addEventListener("keydown", e=>{ if(e.key==="Enter") doDest(); });
-// Same pattern as miles/appt/depart: renderEta() on every keystroke so #destClear's
-// visibility (tied to $("destIn").value in renderEta) tracks typing live, not just on commit.
+// Same pattern as miles/appt/depart: renderEta() on every keystroke, so everything tied
+// to the field's content tracks typing live rather than only on commit.
+$("destIn").addEventListener("input", () => {
+  // Emptying the field is clearing the destination, quote and all.
+  if($("destIn").value === "" && (E.destName || E.destTz)) clearDestField();
+});
 $("destIn").addEventListener("input", renderEta);
 $("destPick").onchange = e=>{ if(!e.target.value) return;   // the "Pick a zone…" placeholder
   E.destTz=e.target.value; E.destName="";
   show($("destErr"),false); show($("destPick"),false); routeChanged(); };
 attachPlaceSuggest($("destIn"), $("destSuggest"), doDest);
-$("destClear").onclick = clearDestField;
 
 $("origToggle").onclick = ()=>{
   const on = $("origEdit").classList.contains("hide");
@@ -1664,11 +1677,16 @@ function renderGauge(){
   g.setAttribute("aria-valuetext", text + (r.backup ? " on backup reserve" : ""));
   // A note only when there's something to say: at or under the floor, like FuelPost.
   const el = $("grange");
-  el.className = "grange" + (miles <= 0 ? " warn" : "");
-  el.innerHTML = miles <= 0 ? "<b>Nothing left to plan on — fuel before you roll.</b>"
-    : r.backup ? "Planning on <b>"+miles.toLocaleString()+" mi</b> of backup reserve. Make the first stop count."
-    : "";
-  show(el, miles <= 0 || r.backup);
+  if(miles <= 0){
+    el.setAttribute("variant", "bad");
+    el.setAttribute("heading", "Nothing left to plan on — fuel before you roll.");
+    el.textContent = "The first stop lands at mile 0, at the yard.";
+  } else if(r.backup){
+    el.setAttribute("variant", "warn");
+    el.setAttribute("heading", "Planning on "+miles.toLocaleString()+" mi of backup reserve.");
+    el.textContent = "Make the first stop count. Nothing ever spends the last eighth.";
+  }
+  show($("grangeWrap"), miles <= 0 || r.backup);
 }
 
 /* Re-solve the arrival from the quote already fetched — same drive time and distance, new
@@ -1701,12 +1719,10 @@ function renderEta(){
   // from here (rather than a one-off listener per button) so every path that can change
   // either field — typing, a suggestion pick, autofill, either clear button, or the big
   // CLEAR — stays in sync automatically, since all of them already call renderEta().
-  show($("milesClear"), $("miles").value !== "");
-  show($("destClear"), $("destIn").value !== "");
   $("origChip").textContent = E.originName + " · " + tzTag(E.originTz);
   show($("destMeta"), !!E.destName);
   if(E.destName) $("destChip").textContent = E.destName + " · " + tzTag(E.destTz);
-  $("apptLbl").textContent = "Appointment · " + tzTag(showTz) + " (optional)";
+  $("apptField").setAttribute("label", "Appointment · " + tzTag(showTz) + " (optional)");
   // One panel now carries both arrivals, so the label names the place and nothing else —
   // which number is which is said by the two headings inside the readout.
   $("etaLabel").textContent = "Arrival · " + (E.destName
@@ -1739,13 +1755,14 @@ function renderEta(){
   // that can disagree with what the run note says.
   const liveNow = !!(liveFresh(LIVE.at, Date.now()) && LIVE.res);
   show($("mpTopWrap"), M > 0);
-  if(M > 0) $("mpTop").textContent = "MILE " + M;
+  if(M > 0) $("mpTopWrap").setAttribute("label", "MILE " + M);
   // The fuel milepost names the first stop this run actually takes, off the solved
   // schedule — not an interval, which could disagree with the list below it.
   {
     const firstFuel = liveNow && LIVE.res.schedule.find(x => x.kind === "fuel");
     show($("mpFuelWrap"), !!firstFuel);
-    if(firstFuel) $("mpFuel").textContent = "MILE " + Math.round(firstFuel.mile) + " · FUEL";
+    if(firstFuel) $("mpFuelWrap").setAttribute("label",
+      "MILE " + Math.round(firstFuel.mile) + " · FUEL");
   }
 
   // The stop rules describe the tuning panel itself, not any one run, so they render on
@@ -1757,8 +1774,8 @@ function renderEta(){
     dotDuration(E.p.dotMin)+" min @ "+E.p.dotAt+" h into shift";
   renderGauge();
 
-  ["etaYours","etaShift","liveLine","liveNote","quickNote","strip","stripKey","stopList",
-   "legend","cushion","etaExit"].forEach(id=>show($(id),false));
+  ["etaYours","etaShift","liveLine","liveNote","quickNote","strip","stripKey","stopsWrap",
+   "legend","cushionWrap","etaExit"].forEach(id=>show($(id),false));
   show($("etaDay"), true);
   renderLiveBtn();
   if(!(M > 0 && start)){
@@ -1895,22 +1912,26 @@ function renderEta(){
     // Grouped by kind (v5.1): one row per kind — DOT, fuel, swap — with the count and the
     // time it all adds up to, and each stop's time and mile listed under it in order. The
     // strip above still draws them interleaved, which is where the order reads best.
-    const NAMES = { swap:"SWAP", dot:"DOT BREAK", fuel:"FUEL" };
+    const NAMES = STOP_NAMES;
     // Groups in the order their first stop happens, so the list reads the way the strip
     // above runs (v5.3 — a fixed DOT/fuel/swap order put a 23:00 break above a 19:00 swap).
     const kinds = [...new Set(LIVE.res.schedule.map(x => x.kind))];
+    /* <rig-item> rows inside a <rig-item-group>: the group is a real list to a screen
+       reader, and each row carries its own tap target for the details drawer below. */
     $("stopList").innerHTML = kinds.map(k => {
       const xs = LIVE.res.schedule.filter(x => x.kind === k);
       const total = xs.reduce((a,x) => a + x.min, 0);
-      return '<div class="srow" data-kind="'+k+'"><i class="pip '+k+'"></i>'
-        + '<div class="stype">'+NAMES[k]+(xs.length > 1 ? ' <b>×'+xs.length+'</b>' : '')+'</div>'
-        + '<div class="swhen">' + xs.map(x => '<div class="sat">'
-            + (x.mile < 1 ? "BEFORE YOU ROLL" : clockOf(new Date(x.atMs), showTz)+" "+tzTag(showTz, new Date(x.atMs)))
-            + '<em>' + (x.mile < 1 ? "AT THE YARD" : "MILE "+Math.round(x.mile)) + '</em></div>').join("")
-        + '</div>'
-        + '<div class="slen">'+total+' min'+(xs.length > 1 ? '<em>total</em>' : '')+'</div></div>';
+      const when = xs.map(x => stopWhen(x, showTz) + " · " + stopWhere(x)).join(" — ");
+      return '<rig-item data-kind="'+k+'" size="sm">'
+        + '<span slot="media"><i class="pip '+k+'"></i></span>'
+        + '<span slot="title">'+NAMES[k]+(xs.length > 1 ? " ×"+xs.length : "")+'</span>'
+        + '<span slot="description">'+when+'</span>'
+        + '<span slot="meta">'+total+' min'+(xs.length > 1 ? ' total' : '')+'</span>'
+        + '<button slot="actions" class="rig-btn rig-btn--ghost rig-btn--sm rig-btn--icon" '
+        +   'aria-label="Details for '+NAMES[k]+'"><rig-icon name="chevron-right"></rig-icon></button>'
+        + '</rig-item>';
     }).join("");
-    show($("stopList"), LIVE.res.schedule.length > 0);
+    show($("stopsWrap"), LIVE.res.schedule.length > 0);
     // Total rather than an average speed: rolling and stopped visibly add up to it, which
     // is the number a driver is actually planning against.
     $("legend").innerHTML = "<span>ROLLING "+hm(driveH)+"</span><span>STOPPED "+hm(stopH)+
@@ -1921,14 +1942,20 @@ function renderEta(){
       dots.length+" DOT break"+(dots.length===1?"":"s");
   }
 
+  renderMap();
+
   const apptVal = $("appt").value;
   if(apptVal){
     const apptDate = fromWall(apptVal, showTz);
     if(apptDate){
       const cush = (apptDate-eta)/3600e3;
-      show($("cushion"), true);
-      $("cushion").className = "cushion " + (cush>=0 ? "ok" : "bad");
-      $("cushion").textContent = cush>=0 ? hm(cush)+" of cushion" : "Late by "+hm(cush);
+      show($("cushionWrap"), true);
+      $("cushion").setAttribute("variant", cush >= 0 ? "ok" : "bad");
+      $("cushion").setAttribute("heading",
+        cush >= 0 ? hm(cush)+" of cushion" : "Late by "+hm(cush));
+      $("cushion").textContent = cush >= 0
+        ? "Measured against the appointment, off the best arrival on the table."
+        : "Against the appointment. Worth a call before the receiver makes one.";
     }
   }
 }
@@ -1946,11 +1973,7 @@ const R = { shutMs:null, tz:deviceTz(), tzName:"Your device" };
 const saveReset = () => { try{ localStorage.setItem("milespost.reset",
   JSON.stringify({shutMs:R.shutMs, tz:R.tz, tzName:R.tzName})); }catch{} };
 
-ZONE_LIST.forEach(z=>{
-  const o=document.createElement("option"); o.value=z; o.textContent=tzTag(z)+" — "+z;
-  $("rsPick").appendChild(o);
-});
-for(let i=0;i<RESET_HOURS;i++) $("bars").appendChild(document.createElement("i"));
+$("rsPick").options = zoneOptions(z => tzTag(z)+" — "+z);
 show($("frameWarn"), inFrame);
 
 /* The field is a wall clock in R.tz — the local time where you shut down. Changing the
@@ -2092,6 +2115,8 @@ $("icsBtn").onclick = ()=>{
   ].join("\r\n");
 
   show($("manual"), true);   // the number stays on screen even if the handoff is blocked
+  if(inFrame) toast("Previews block downloads", {
+    description:"The time is on screen below — set the alarm by hand, or open the app in Safari." });
 
   const a = document.createElement("a");
   try{
@@ -2116,7 +2141,7 @@ function renderReset(){
     $("rsLabel").textContent = "Legal at";
     $("rsClock").textContent = "--:--";
     $("rsDay").textContent = "Set the time you shut down.";
-    ["rsCount","bars","rsScale","manual","rsExit"].forEach(id=>show($(id), false));
+    ["rsCount","barsWrap","rsScale","manual","rsExit"].forEach(id=>show($(id), false));
     show($("rsInputCard"), true);          // input returns only in the empty state
     $("icsBtn").disabled = true;
     $("rsBroke").disabled = true; brokeGuard.disarm();
@@ -2151,7 +2176,7 @@ function renderReset(){
   $("rsReadout").classList.toggle("done", done);
   $("stamp").textContent = clockOf(legal,R.tz)+" · "+dayOf(legal,R.tz)+" · "+tzTag(R.tz, legal);
 
-  ["rsCount","bars","rsScale"].forEach(id=>show($(id), true));
+  ["rsCount","barsWrap","rsScale"].forEach(id=>show($(id), true));
   if(pending){
     $("rsCount").innerHTML = "Clock starts in <b>"+hms(R.shutMs-now)+"</b> · "+
       clockOf(shut,R.tz)+" "+tzTag(R.tz, shut)+" "+dayOf(shut,R.tz);
@@ -2165,26 +2190,125 @@ function renderReset(){
       hm(elapsedH)+" of "+RESET_HOURS+"h done";
   }
 
-  const bars = $("bars").children;
-  const full = pending ? 0 : Math.floor(elapsedH);
-  for(let i=0;i<RESET_HOURS;i++)
-    bars[i].className = i < full ? "on" : (i === full && !done && !pending ? "now" : "");
-  $("bars").classList.toggle("done", done);
+  // <rig-progress steps="34">: one segment an hour, springing as each one lands.
+  $("bars").setAttribute("tone", done ? "ok" : "accent");
+  $("bars").value = pending ? 0 : Math.min(RESET_HOURS, Math.floor(elapsedH));
 }
 
+/* The run drawn as a line. HERE's own road geometry when the plan returns it, the
+   straight line between the two ends when it doesn't — the card says which, because a
+   ruler line across three states is a different claim from a road.
+
+   Only fuel is marked. A swap and a DOT break land on the CLOCK, so where they happen
+   depends on where the truck has got to; the schedule already says the mile, and putting
+   a pin on a map would dress that up as a place the driver can aim at. Fuel is a place.
+
+   Redrawn only when something about the line actually changes — rig-route-map animates
+   the line in each time its stops are replaced, and the RUNNING tick comes round once a
+   second. */
+let lastMapKey = "";
+function renderMap(){
+  const raw = LIVE.raw, res = LIVE.res;
+  const live = !!(res && liveFresh(LIVE.at, Date.now()) && raw && raw.ends);
+  show($("mapWrap"), live);
+  if(!live){ lastMapKey = ""; return; }
+  const road = Array.isArray(raw.line) && raw.line.length > 1;
+  const line = road ? raw.line
+    : [[raw.ends.from.lat, raw.ends.from.lon], [raw.ends.to.lat, raw.ends.to.lon]];
+  const fuel = res.schedule.filter(x => x.kind === "fuel");
+  const tz = E.destTz || E.originTz;
+  const key = [road, line.length, Math.round(res.miles), fuel.map(x => Math.round(x.mile)).join(","),
+               E.destName, Math.round(res.driveH*60)].join("|");
+  if(key === lastMapKey) return;
+  lastMapKey = key;
+
+  const total = res.miles || 1;
+  const map = $("routeMap");
+  map.setAttribute("label", (E.originName === "Your device" ? "Here" : E.originName)
+    + " to " + (E.destName || "destination"));
+
+  /* The card draws a leg from the `path` on the stop that leg ENDS at — it has no notion
+     of one line under the whole run — so the route is cut at each stop and handed over
+     leg by leg. Pass only the stops and it smooths a straight leg between each pair,
+     which would make the caption below a lie. The start has no leg before it. */
+  const cuts = [0, ...fuel.map(x => Math.max(0, Math.min(1, x.mile / total))), 1];
+  const at = f => pointAlong(line, f) || { lat:raw.ends.from.lat, lon:raw.ends.from.lon };
+  const legFor = i => road ? sliceAlong(line, cuts[i-1], cuts[i]) : undefined;
+
+  map.stops = [
+    { name:(E.originPlace || (E.originName === "Your device" ? "Where you are" : E.originName)),
+      lat:raw.ends.from.lat, lon:raw.ends.from.lon, kind:"start",
+      eta:clockOf(new Date(LIVE.start), tz) + " " + tzTag(tz, new Date(LIVE.start)),
+      note:"Rolling out" },
+    ...fuel.map((x, i) => {
+      const p = at(cuts[i+1]);
+      return { name:"Fuel · mile " + Math.round(x.mile), lat:p.lat, lon:p.lon, kind:"fuel",
+               eta:clockOf(new Date(x.atMs), tz) + " " + tzTag(tz, new Date(x.atMs)),
+               note:x.min + " min off the clock", dwell:x.min, path:legFor(i+1) };
+    }),
+    { name:E.destName || "Destination", lat:raw.ends.to.lat, lon:raw.ends.to.lon, kind:"end",
+      eta:clockOf(res.liveEta, tz) + " " + tzTag(tz, res.liveEta), note:"Receiver",
+      path:legFor(cuts.length-1) }
+  ];
+  // The road distance and drive time are HERE's, so hand them over rather than letting the
+  // card estimate from the geometry.
+  map.summary = { distanceMi:Math.round(res.miles), durationMinutes:Math.round(res.driveH*60) };
+  show($("mapEstimate"), !road);
+  $("mapNote").textContent = (road
+    ? "HERE's road geometry. "
+    : "No geometry came back, so this is the straight line between the two ends. ")
+    + "Fuel only — swaps and DOT breaks land on the clock, not at a place, and they're in "
+    + "the list above.";
+}
+
+/* A stop's own details. The app has always solved these positions to draw the strip and
+   then thrown the reasoning away — why a fuel stop is where it is, which rule put a break
+   there. One <rig-drawer>, filled from the same solved schedule the rows read. */
+$("stopList").addEventListener("click", e => {
+  const item = e.target.closest("rig-item");
+  if(!item || !LIVE.res) return;
+  const k = item.dataset.kind;
+  const tz = E.destTz || E.originTz;
+  const xs = LIVE.res.schedule.filter(x => x.kind === k);
+  if(!xs.length) return;
+  const total = xs.reduce((a, x) => a + x.min, 0);
+  const aboard = Math.round(rangeForTick(tick, E.p).miles);
+  const why = k === "fuel"
+    ? aboard <= 0
+      ? "Nothing aboard the plan may spend, so the first stop is before you roll."
+      : aboard >= Number(E.p.fuelMax)
+      ? "A full tank plans " + Number(E.p.fuelMax).toLocaleString() + " mi, so stops land "
+        + "that far apart."
+      : "The gauge says " + aboard.toLocaleString() + " mi plannable aboard, so the first "
+        + "lands there; every one after it is a full tank's "
+        + Number(E.p.fuelMax).toLocaleString() + " mi."
+    : k === "swap"
+    ? "A fixed-clock swap at " + E.swap.times.join(" / ") + " " + tzTag(E.swap.tz)
+      + ", wherever the truck is by then."
+    : "One federal break per driving shift, " + E.p.dotAt + " h into it. 30 minutes is the floor.";
+  $("stopDrawer").setAttribute("heading", STOP_NAMES[k] + (xs.length > 1 ? " ×"+xs.length : ""));
+  $("stopDetail").innerHTML = "<dl>"
+    + xs.map((x, i) => "<dt>Stop " + (i+1) + "</dt><dd>" + stopWhen(x, tz)
+        + "<br><span class=\"note\" style=\"margin:0\">" + stopWhere(x) + " · " + x.min + " min</span></dd>").join("")
+    + "<dt>Total</dt><dd>" + total + " min off the clock</dd>"
+    + "<dt>Why</dt><dd style=\"font-size:13px\">" + why + "</dd></dl>";
+  $("stopDrawer").show(item);
+});
+
 /* ======================= nav + boot ======================= */
+/* <rig-tabs> owns which panel is up; this is only what has to happen alongside. */
 const setView = v => {
-  $("tabEta").setAttribute("aria-selected", String(v==="eta"));
-  $("tabReset").setAttribute("aria-selected", String(v==="reset"));
-  show($("viewEta"), v==="eta");
-  show($("viewReset"), v==="reset");
   activeView = v;
   syncRunTimer();          // nothing for the ETA tick to do while 34 RESET is in front
   try{ localStorage.setItem("milespost.view", v); }catch{}
   if(v==="eta") refreshStaleQuote();
 };
-$("tabEta").onclick = ()=> setView("eta");
-$("tabReset").onclick = ()=> setView("reset");
+/* A rig-switch or rig-select inside a panel dispatches its own bubbling `change`, which
+   reaches this host too — so only the tab strip's own event counts. */
+$("tabs").addEventListener("change", e => {
+  if(e.target !== e.currentTarget || !e.detail) return;
+  setView(e.detail.value);
+});
 
 $("depart").value = toWall(new Date(), E.originTz);
 if(R.shutMs) $("shut").value = toWall(new Date(R.shutMs), R.tz);
@@ -2194,7 +2318,9 @@ renderEta();
 renderReset();
 let startView = "eta";
 try{ startView = localStorage.getItem("milespost.view") || "eta"; }catch{}
-setView(startView === "reset" ? "reset" : "eta");
+startView = startView === "reset" ? "reset" : "eta";
+$("tabs").value = startView;
+setView(startView);
 setInterval(renderReset, 1000);      // the countdown has to tick
 
 /* iOS suspends timers while the PWA is backgrounded, and firing overdue ones on resume
