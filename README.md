@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.8**
+**Current version: v5.9**
 
 ## Files
 
@@ -101,6 +101,21 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v5.9
+
+- **Rig UI's own date-and-time picker** replaces the phone's wheel on all three day-and-time
+  fields — **Rolling out** and **Appointment** on the ETA tab, **Shut down** on the 34 Reset
+  tab. Tap the field: a calendar opens, with a **Time** box underneath (type it — "2p",
+  "1430" — or pick hour, minute and AM/PM) and **Done**. It matches the rest of the app in
+  both themes, and keeps one-minute precision, since a 34 is counted to the minute.
+- Nothing about the math changed: the fields hold the same day-and-time value as before, so
+  the ETA, the 34, RUNNING, NOW and the daylight-saving handling all read them as they did.
+- Rig UI updated to the version that added the picker (`f9f13fa`): `rig.css` plus six picker
+  files, about 100 KB more kept offline. Everything else from Rig was already identical.
+- Works around a bug in Rig's picker: changing only the **time** didn't tell the app, so the
+  arrival (or the 34) stayed on the old time until something else changed. MilesPost now
+  listens for time changes directly.
 
 ### v5.8
 

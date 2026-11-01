@@ -317,7 +317,15 @@
      place to type reads at a glance, day and night. Rig paints both with the card's own
      --rig-surface; this sheet loads after rig.css, so the plain class rule wins. */
   .rig-input__box,.rig-pick-field{background:var(--field-bg)}
-  .row > rig-input{flex:1;min-width:0}
+  .row > rig-input,.row > .dtField{flex:1;min-width:0}
+  /* Day-and-time fields are Rig's own picker (v5.9) — a calendar with hour/minute/AM-PM
+     columns — not the phone's wheel. Same ids and the same "yyyy-mm-ddThh:mm" value as
+     the datetime-local inputs they replace, so nothing that reads them changed. One-minute
+     steps: a 34 is counted to the minute. */
+  .dtField rig-date-picker{display:block;width:100%}
+  /* RUNNING disables Rolling out: Rig already fades the picker's box to .5; the label
+     stands down with it. (Fading the whole field as well would stack to ~.28.) */
+  .dtField:has(rig-date-picker[disabled]) .rig-field__label{opacity:.55}
   /* RUNNING disables the departure input directly rather than the <rig-input> around it —
      the field is the thing the clock has taken over — so the wrapper has to be told to
      stand down with it, label and all. */
@@ -549,9 +557,11 @@
 
         <div class="group">
           <div class="row">
-            <rig-input id="departField" label="Rolling out">
-              <input id="depart" name="depart" type="datetime-local">
-            </rig-input>
+            <div class="rig-field dtField" id="departField">
+              <label class="rig-field__label" for="depart"><span>Rolling out</span></label>
+              <rig-date-picker id="depart" name="depart" time time-step="1"
+                               placeholder="Pick a day and time"></rig-date-picker>
+            </div>
             <button class="rig-btn rig-btn--accent" id="nowBtn">NOW</button>
           </div>
           <div class="meta">
@@ -588,9 +598,11 @@
         </div>
 
         <div class="group">
-          <rig-input id="apptField" label="Appointment (optional)">
-            <input id="appt" name="appt" type="datetime-local">
-          </rig-input>
+          <div class="rig-field dtField" id="apptField">
+            <label class="rig-field__label" for="appt"><span id="apptLbl">Appointment (optional)</span></label>
+            <rig-date-picker id="appt" name="appt" time time-step="1"
+                             placeholder="Pick a day and time"></rig-date-picker>
+          </div>
         </div>
 
         <div class="actions">
@@ -710,9 +722,11 @@
       <div class="card" id="rsInputCard">
         <div class="group">
           <div class="row">
-            <rig-input id="shutField" label="Shut down">
-              <input id="shut" name="shut" type="datetime-local">
-            </rig-input>
+            <div class="rig-field dtField" id="shutField">
+              <label class="rig-field__label" for="shut"><span>Shut down</span></label>
+              <rig-date-picker id="shut" name="shut" time time-step="1"
+                               placeholder="Pick a day and time"></rig-date-picker>
+            </div>
             <button class="rig-btn rig-btn--accent" id="rsSetShut">SET</button>
             <button class="rig-btn" id="rsNow">NOW</button>
           </div>
@@ -774,7 +788,7 @@
   </rig-tabs>
 
   <div class="footWrap">
-    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.8</button>
+    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.9</button>
   </div>
 </div>
 
@@ -1444,6 +1458,19 @@ $("miles").addEventListener("input", () => {
   if($("miles").value === "") LIVE.autoMiles = null;   // nothing of ours left in the field
 });
 ["miles","appt","depart"].forEach(id => $(id).addEventListener("input", renderEta));
+/* Rig's date picker (rig-ui f9f13fa) doesn't announce a change to the TIME alone: its
+   time-field handler stores the new time before #setValue takes its "before" snapshot, so
+   before === after and no input/change goes out. Picking a day announces; changing the
+   time didn't — the arrival and the 34 would sit on the old time. Listen on the inner
+   time field as well and pass the change on. If Rig fixes it upstream, the cost is one
+   extra render. */
+["depart","appt","shut"].forEach(id => {
+  const el = $(id), tp = el.timePicker;
+  if(tp) tp.addEventListener("change", () => {
+    el.dispatchEvent(new Event("input", {bubbles:true}));
+    el.dispatchEvent(new Event("change", {bubbles:true}));
+  });
+});
 // NOW also remembers the exact instant it stood for (see departDate()): in the repeated
 // fall-back hour the field's "01:30" alone can't say which 1:30 it was.
 var departPinned = null;      // var, not let: departDate() may run before this line does
@@ -1735,7 +1762,7 @@ function renderEta(){
   $("origChip").textContent = E.originName + " · " + tzTag(E.originTz);
   show($("destMeta"), !!E.destName);
   if(E.destName) $("destChip").textContent = E.destName + " · " + tzTag(E.destTz);
-  $("apptField").setAttribute("label", "Appointment · " + tzTag(showTz) + " (optional)");
+  $("apptLbl").textContent = "Appointment · " + tzTag(showTz) + " (optional)";
   // One panel now carries both arrivals, so the label names the place and nothing else —
   // which number is which is said by the two headings inside the readout.
   $("etaLabel").textContent = "Arrival · " + (E.destName

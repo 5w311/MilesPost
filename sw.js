@@ -1,7 +1,7 @@
 // Build marker. Bump it on every single deploy, or installed phones will decide they're
 // already current and quietly ignore the new build. Keep it "milespost-v" + the app
-// version: the update offer names a waiting build by this ("UPDATE AVAILABLE (v5.8)").
-const CACHE = "milespost-v5.8";
+// version: the update offer names a waiting build by this ("UPDATE AVAILABLE (v5.9)").
+const CACHE = "milespost-v5.9";
 const ASSETS = [
   "./",
   "./index.html",
@@ -21,7 +21,7 @@ const ASSETS = [
   "./fonts/overpass-mono-latin-400-normal.woff2",
   "./fonts/overpass-mono-latin-600-normal.woff2",
   "./fonts/overpass-mono-latin-700-normal.woff2",
-  // rig-ui, from rig-ui/milespost.js — regenerate with `npm run rig:manifest`
+// rig-ui, from rig-ui/milespost.js — regenerate with `npm run rig:manifest`
   "./rig-ui/rig.css",
   "./rig-ui/milespost.js",
   "./rig-ui/src/data/grid-nav.js",
@@ -60,11 +60,17 @@ const ASSETS = [
   "./rig-ui/src/overlays/modal.js",
   "./rig-ui/src/overlays/overlay-math.js",
   "./rig-ui/src/overlays/tooltip.js",
+  "./rig-ui/src/pickers/calendar.js",
   "./rig-ui/src/pickers/combobox.js",
+  "./rig-ui/src/pickers/date-grid.js",
+  "./rig-ui/src/pickers/date-picker.js",
   "./rig-ui/src/pickers/listbox.js",
   "./rig-ui/src/pickers/pick-logic.js",
   "./rig-ui/src/pickers/select.js",
   "./rig-ui/src/pickers/shared.js",
+  "./rig-ui/src/pickers/time-columns.js",
+  "./rig-ui/src/pickers/time-logic.js",
+  "./rig-ui/src/pickers/time-picker.js",
   "./rig-ui/src/position.js",
   "./rig-ui/src/sound.js",
   "./rig-ui/src/toast.js",

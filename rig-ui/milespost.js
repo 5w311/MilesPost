@@ -13,6 +13,7 @@ import './src/forms/input.js';      // <rig-input> — every text, number and da
 import './src/forms/switch.js';     // <rig-switch> — Running, Override, day/night
 import './src/pickers/select.js';   // <rig-select> — time zones
 import './src/pickers/combobox.js'; // <rig-combobox> — destination and origin towns
+import './src/pickers/date-picker.js'; // <rig-date-picker time> — Rolling out, Appointment, Shut down
 import './src/overlays/dialog.js';  // <rig-dialog> — the help sign
 import './src/overlays/drawer.js';  // <rig-drawer> — a stop's details
 import './src/overlays/tooltip.js'; // data-tip
