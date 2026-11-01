@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.10**
+**Current version: v5.11**
 
 ## Files
 
@@ -101,6 +101,19 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v5.11
+
+- **Fixed for real: changing the month closed the date picker on an iPhone.** On an iPhone,
+  tapping a button never moves focus to the button — Safari moves it to the nearest
+  focusable thing around it, which for the month arrows and the month title was the whole
+  tab panel. That's outside the picker, so the picker took it as you leaving and closed.
+  (v5.10's extra room was real but wasn't the cause.) The picker's own popup now catches
+  that focus, so the arrows, the month title and the month list all work.
+- **The time the dials show is the time you get.** With no time set yet, the hour and minute
+  dials opened on the current time but didn't actually choose it, so Done kept nothing unless
+  you moved a dial. Now, like the iPhone's own wheels, the time they open on is set right
+  away — tap Done, or adjust first.
 
 ### v5.10
 

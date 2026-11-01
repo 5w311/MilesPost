@@ -958,6 +958,57 @@ try {
     await ctx.close();
   }
 
+  // ---- v5.11: the picker under Safari's focus rules. On an iPhone (and Mac Safari) a tapped
+  // <button> never takes focus — the nearest focusable ancestor does, without scrolling. Chrome
+  // focuses the button itself, so this suite can't see the iPhone's behavior unless it's
+  // emulated: around the month arrows that ancestor was the tab panel (tabindex=0), outside
+  // the picker, which closed it.
+  {
+    const ctx = await browser.newContext({ timezoneId: "America/Chicago", viewport: { width: 393, height: 659 } });
+    await ctx.addInitScript(() => document.addEventListener("mousedown", e => {
+      const btn = e.target.closest && e.target.closest("button:not([tabindex])");
+      if (!btn) return;
+      e.preventDefault();                                    // the button itself doesn't take focus
+      const around = btn.parentElement && btn.parentElement.closest("[tabindex]");
+      if (around) around.focus({ preventScroll: true }); else document.activeElement?.blur();
+    }, true));
+    const pg = await ctx.newPage();
+    const errs = []; pg.on("pageerror", e => errs.push(e.message));
+    await pg.clock.setFixedTime(new Date("2026-11-01T19:20:00Z"));         // Sun 1:20 PM CST
+    await runningOff(pg);
+    await pg.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+    await clickTab(pg, "reset");
+    await pg.locator("#shutField").scrollIntoViewIfNeeded();
+    const isOpen = () => pg.$eval("#shut", el => el.open);
+    const titles = () => pg.$$eval("#shut .rig-cal__title", ts => ts.map(t => t.getAttribute("aria-label") || "").join(" | "));
+    await pg.click("#shut .rig-datepick__trigger"); await pg.waitForTimeout(400);
+    if (!(await isOpen())) fail("Safari focus rules: the picker should open on a tap");
+    await pg.click("#shut .rig-cal__nav--next"); await pg.waitForTimeout(500);
+    if (!(await isOpen())) fail("Safari focus rules: tapping the next-month arrow must not close the picker");
+    else if (!/December 2026/.test(await titles())) fail(`next month should show December 2026, got ${JSON.stringify(await titles())}`);
+    await pg.click("#shut .rig-cal__title"); await pg.waitForTimeout(500);
+    if (!(await isOpen())) fail("Safari focus rules: tapping the month title must not close the picker");
+    // An empty time: the dials open on a suggestion (now). Done should keep what they show.
+    if (await isOpen()) {
+      await pg.keyboard.press("Escape").catch(() => {});
+      await pg.click("#shut .rig-datepick__trigger").catch(() => {});
+      await pg.waitForTimeout(300);
+    }
+    if (!(await isOpen())) { await pg.click("#shut .rig-datepick__trigger"); await pg.waitForTimeout(300); }
+    if (await isOpen()) {
+      await pg.click('#shut .rig-cal__day[data-date="2026-11-03"]').catch(() => {});
+      await pg.waitForTimeout(200);
+      await pg.click("#shut .rig-timepick__input"); await pg.waitForTimeout(400);
+      await pg.locator("#shut .rig-timepick__actions button", { hasText: "Done" }).click(); await pg.waitForTimeout(300);
+      const v = await wallOf(pg, "#shut");
+      if (v !== "2026-11-03T13:20")
+        fail(`opening the dials on an empty time and tapping Done should keep the time they show (13:20), got ${JSON.stringify(v)}`);
+      if (!(await isOpen())) fail("Done on the dials should leave the calendar open for its own Done");
+    }
+    if (errs.length) fail("Safari-focus page errors: " + JSON.stringify(errs));
+    await ctx.close();
+  }
+
   // ---- Daylight saving ends Sun 2026-11-01 (02:00 EDT -> 01:00 EST). The browser clock
   // is frozen at real moments of that weekend, in New York.
   const dstPage = async (iso, opts = {}) => {
