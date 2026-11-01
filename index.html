@@ -394,8 +394,6 @@
   #helpBody ul{font-weight:600;font-size:12.5px;line-height:1.6;color:var(--rig-ink-2);
     margin:0 0 4px;padding-left:18px}
   #helpBody li{margin-bottom:6px}
-  .helpHint{font-family:var(--mono);font-weight:600;font-size:9px;letter-spacing:.08em;
-    text-transform:uppercase;color:var(--rig-ink-3);text-align:center;margin-top:14px}
 
   @media (max-width:400px){
     .grid{grid-template-columns:1fr}
@@ -729,7 +727,6 @@
 <!-- Shared help sign, reused by every "?" button. -->
 <rig-dialog id="helpDlg" heading="">
   <div id="helpBody"></div>
-  <div class="helpHint">tap outside to close</div>
 </rig-dialog>
 
 <!-- A stop's own details, off the solved schedule. -->
@@ -2110,9 +2107,16 @@ $("stopList").addEventListener("click", e => {
   const xs = LIVE.res.schedule.filter(x => x.kind === k);
   if(!xs.length) return;
   const total = xs.reduce((a, x) => a + x.min, 0);
+  const aboard = Math.round(rangeForTick(tick, E.p).miles);
   const why = k === "fuel"
-    ? "The tank model put this one here: " + Math.round(rangeForTick(tick, E.p).miles).toLocaleString()
-      + " mi plannable aboard, then a full tank's " + E.p.fuelMax + " mi after that."
+    ? aboard <= 0
+      ? "Nothing aboard the plan may spend, so the first stop is before you roll."
+      : aboard >= Number(E.p.fuelMax)
+      ? "A full tank plans " + Number(E.p.fuelMax).toLocaleString() + " mi, so stops land "
+        + "that far apart."
+      : "The gauge says " + aboard.toLocaleString() + " mi plannable aboard, so the first "
+        + "lands there; every one after it is a full tank's "
+        + Number(E.p.fuelMax).toLocaleString() + " mi."
     : k === "swap"
     ? "A fixed-clock swap at " + E.swap.times.join(" / ") + " " + tzTag(E.swap.tz)
       + ", wherever the truck is by then."
