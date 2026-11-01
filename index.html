@@ -90,12 +90,16 @@
   :root, :root[data-theme="night"]{
     color-scheme: dark;
     --rig-bg:#13161a;
-    --rig-surface:#E0E2DE;             /* white regulatory panels, night-dimmed */
-    --rig-surface-2:#d3d6d0;
-    --rig-surface-3:#c3c7c0;
+    /* White regulatory panels, night-dimmed — to an off-white (v5.7, the driver's pick): the
+       cool #E0E2DE glared against the dark road at night. A touch dimmer and warmer, still
+       reads as a white sign; ink on it stays well past AAA. The two steps under it keep the
+       same hue. */
+    --rig-surface:#DAD8D2;
+    --rig-surface-2:#CDCBC4;
+    --rig-surface-3:#BEBBB3;
     --rig-ink:#15181b;                 /* panel ink */
     --rig-ink-2:#4a545c;
-    --rig-ink-3:#6b757d;
+    --rig-ink-3:#5a6369;               /* darker for the off-white: 4.3:1, was 3.6 on the old white */
     --rig-line:rgba(21,24,27,.16);
     --rig-line-2:rgba(21,24,27,.3);
     --rig-accent:var(--green-lit);     /* the accent ROLE, lifted to read on dark */
@@ -764,7 +768,7 @@
   </rig-tabs>
 
   <div class="footWrap">
-    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.6</button>
+    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.7</button>
   </div>
 </div>
 
