@@ -833,6 +833,33 @@ try {
     await sbPage.close();
   }
 
+  // ---- v5.8: the inside of a text box (and a dropdown) sits a step darker than the card
+  // around it, day and night — Rig paints both with the card's own colour by default.
+  for (const theme of ["day", "night"]) {
+    // Opened straight into the theme (the saved choice), not switched after load: Rig fades
+    // field colours over .15s, and a read mid-fade sees the other theme's colour.
+    const fp = await browser.newPage();
+    await fp.addInitScript(t => { try { localStorage.setItem("milespost.theme", t); } catch {} }, theme);
+    await fp.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+    if ((await fp.evaluate(() => document.documentElement.getAttribute("data-theme"))) !== theme)
+      fail(`field-shade check: page didn't open in ${theme}`);
+    const lum = await fp.evaluate(() => {
+      const L = c => { const [r, g, b] = c.match(/\d+/g).map(Number).map(v => v / 255)
+        .map(v => v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4);
+        return .2126 * r + .7152 * g + .0722 * b; };
+      const card = document.getElementById("milesField").closest(".card");
+      const sel = document.querySelector("#swapTz .rig-pick-field");
+      return { card: L(getComputedStyle(card).backgroundColor),
+               box: L(getComputedStyle(document.querySelector("#milesField .rig-input__box")).backgroundColor),
+               pick: sel ? L(getComputedStyle(sel).backgroundColor) : null };
+    });
+    if (!(lum.box < lum.card - 0.02))
+      fail(`${theme}: a text box should be a step darker than its card, got box ${lum.box.toFixed(3)} vs card ${lum.card.toFixed(3)}`);
+    if (lum.pick !== null && Math.abs(lum.pick - lum.box) > 0.001)
+      fail(`${theme}: dropdowns should match the text boxes, got ${lum.pick.toFixed(3)} vs ${lum.box.toFixed(3)}`);
+    await fp.close();
+  }
+
   // ---- Daylight saving ends Sun 2026-11-01 (02:00 EDT -> 01:00 EST). The browser clock
   // is frozen at real moments of that weekend, in New York.
   const dstPage = async (iso, opts = {}) => {

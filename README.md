@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.7**
+**Current version: v5.8**
 
 ## Files
 
@@ -101,6 +101,12 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v5.8
+
+- **Text boxes are a shade darker inside than the card around them**, in day and night
+  mode, so the places to type stand out at a glance. The dropdowns (time zone, swap zone)
+  match. Day: `#E9EBE7` on the `#F5F6F4` card; night: `#CDCBC4` on the `#DAD8D2` card.
 
 ### v5.7
 
