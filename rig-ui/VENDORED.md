@@ -1,12 +1,14 @@
 # Rig UI, vendored
 
-From [5w311/rig-ui](https://github.com/5w311/rig-ui) at commit `c0d4124`, MIT (see `LICENSE`).
+From [5w311/rig-ui](https://github.com/5w311/rig-ui) at commit `f9f13fa`, MIT (see `LICENSE`).
+(Re-vendored in MilesPost v5.9 for `<rig-date-picker time>`: `rig.css` and the six picker
+modules it needs; every module already here was byte-identical upstream.)
 
-Not the whole library. `milespost.js` imports the fifteen components this app renders,
-and only the transitive closure of those imports is copied here — 37 modules out of 153,
-plus `rig.css`. The whole library is 2.2 MB; this is 696 KB. That matters because every
-file the page imports has to go in the service worker's precache, and this app has to
-come up with no bars.
+Not the whole library. `milespost.js` imports the components this app renders, and only
+the transitive closure of those imports is copied here — 51 of the library's 154 modules,
+plus `milespost.js` and `rig.css`. That's about 900 KB, against 2.2 MB for the whole
+thing. That matters because every file the page imports has to go in the service worker's
+precache, and this app has to come up with no bars.
 
 `rig.css` is the upstream file unchanged. MilesPost repoints the `--rig-*` tokens at the
 highway palette in `index.html` rather than editing it, so re-vendoring is a straight copy.

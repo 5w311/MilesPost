@@ -242,7 +242,21 @@ rig-icon .rig-icon__svg { display: block; width: 100%; height: 100%; overflow: v
   border-radius: inherit;
 }
 .rig-otp__well > * { grid-area: 1 / 1; }
-.rig-otp__char { display: block; line-height: 1; }
+.rig-otp__char { display: grid; place-items: center; line-height: 1; }
+.rig-otp__char > * { grid-area: 1 / 1; }
+.rig-otp__digit { transition: opacity 0.15s, transform 0.15s; }
+.rig-otp__dot { display: none; width: 0.5em; height: 0.5em; border-radius: 50%; background: currentColor; }
+/* PIN mode: a digit shows for a moment after it's typed, then becomes a dot. */
+.rig-otp[masked]:not([revealed]) .rig-otp__char:not(.is-fresh) .rig-otp__digit { opacity: 0; transform: scale(0.6); }
+.rig-otp[masked]:not([revealed]) .rig-otp__char:not(.is-fresh) .rig-otp__dot { display: block; animation: rig-pin-dot 0.2s cubic-bezier(0.3, 1.4, 0.5, 1); }
+@keyframes rig-pin-dot { from { transform: scale(0.3); opacity: 0; } }
+/* Sits inside the row, above the invisible input, so it lines up with the slots. */
+.rig-otp__reveal { position: relative; z-index: 3; flex: none; margin-inline-start: 0.25rem; color: var(--rig-ink-2); }
+.rig-otp__reveal[aria-pressed='true'] { color: var(--rig-accent); }
+@media (prefers-reduced-motion: reduce) {
+  .rig-otp__digit { transition: none; }
+  .rig-otp[masked] .rig-otp__dot { animation: none; }
+}
 .rig-otp__ph { color: var(--rig-ink-3); opacity: 0.55; transition: opacity 0.15s; }
 .rig-otp:not([data-placeholder]) .rig-otp__ph {
   align-self: end;
@@ -2145,6 +2159,11 @@ rig-slider {
   font-variant-numeric: tabular-nums;
 }
 .rig-slider.has-ticks .rig-slider__scale { margin-top: 0; }
+/* Values take their direction from their own text, so "65 mph" stays in
+   order inside a right-to-left page while Arabic values still read RTL. */
+.rig-slider__scale > *,
+.rig-slider__output,
+.rig-slider__bubble { unicode-bidi: plaintext; }
 rig-slider > .rig-field__error { margin-top: 0.375rem; }
 rig-slider[invalid] .rig-slider__track { box-shadow: inset 0 0 0 1px var(--rig-bad); }
 rig-slider.is-disabled { opacity: 0.5; }
@@ -2204,10 +2223,10 @@ rig-multi-select { display: inline-block; vertical-align: middle; width: min(26r
   transition: box-shadow 0.15s, background-color 0.15s;
 }
 .rig-pick-field:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rig-ink) 32%, transparent), var(--rig-shadow-sm); }
-:where(rig-select, rig-combobox, rig-multi-select, rig-date-picker, rig-color-picker)[open] .rig-pick-field {
+:where(rig-select, rig-combobox, rig-multi-select, rig-date-picker, rig-time-picker, rig-color-picker)[open] .rig-pick-field {
   box-shadow: inset 0 0 0 1px var(--rig-accent), 0 0 0 3px var(--rig-accent-soft);
 }
-:where(rig-select, rig-combobox, rig-multi-select, rig-date-picker)[invalid] .rig-pick-field {
+:where(rig-select, rig-combobox, rig-multi-select, rig-date-picker, rig-time-picker)[invalid] .rig-pick-field {
   box-shadow: inset 0 0 0 1.5px var(--rig-bad), 0 0 0 3px var(--rig-bad-soft);
 }
 .rig-pick-field:disabled,
@@ -2687,6 +2706,156 @@ rig-date-picker:not([has-value]) .rig-datepick__trigger { padding-inline-end: 0.
   border-top: 1px solid var(--rig-line);
 }
 .rig-datepick__hint { min-width: 0; color: var(--rig-ink-2); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.rig-datepick__foot:has(.rig-datepick__hint:empty):has(.rig-btn[hidden]) { display: none; }
+.rig-datepick__missing { color: var(--rig-ink-3); }
+.rig-datepick__time {
+  /* The calendar sets the popup's width; the time row fits inside it. */
+  contain: inline-size;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rig-line);
+}
+.rig-datepick__time-label { flex: none; color: var(--rig-ink-2); font-size: 0.8125rem; font-weight: 600; }
+.rig-datepick__time rig-time-picker { flex: 1; width: auto; min-width: 0; }
+/* The open date picker's ring is for its own field, not the time field inside it. */
+rig-date-picker[open] rig-time-picker:not([open], [invalid]) .rig-pick-field { box-shadow: inset 0 0 0 1px var(--rig-line-2), var(--rig-shadow-sm); }
+.rig-datepick__time .rig-pick-field { min-height: 2.25rem; }
+.rig-datepick__time .rig-timepick__input { height: 2.125rem; }
+
+/* ---------- time picker ---------- */
+
+rig-time-picker { display: inline-block; vertical-align: middle; width: 11.5rem; max-width: 100%; color: var(--rig-ink); }
+rig-time-picker[mode='range'] { width: 18rem; }
+.rig-timepick__field { gap: 0.375rem; padding-inline: 0.75rem 0.25rem; cursor: text; }
+.rig-timepick__field:focus-within { outline: 2px solid var(--rig-signal); outline-offset: 2px; }
+.rig-timepick__icon { flex: none; color: var(--rig-ink-3); }
+.rig-timepick__input {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 2.375rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  unicode-bidi: plaintext;
+}
+.rig-timepick__input::placeholder { color: var(--rig-ink-3); opacity: 1; }
+rig-time-picker[mode='range'] .rig-timepick__input {
+  box-sizing: content-box;
+  flex: 0 1 auto;
+  width: 5.5ch;
+  height: 1.875rem;
+  padding-inline: 0.3125rem;
+  border-radius: var(--rig-radius-sm);
+  transition: background-color 0.15s;
+}
+rig-time-picker[mode='range'][data-twelve] .rig-timepick__input { width: 8.75ch; }
+.rig-timepick__input.is-active { background: var(--rig-accent-soft); }
+.rig-timepick__dash { flex: none; color: var(--rig-ink-3); }
+.rig-timepick__clear { margin-inline-start: auto; }
+.rig-timepick__pop { min-width: 0; padding: 0.5rem; }
+.rig-timepick__ends {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  padding: 0.1875rem;
+  border-radius: var(--rig-radius);
+  background: var(--rig-surface-2);
+}
+.rig-timepick__end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: 0.3125rem 0.625rem;
+  border: 0;
+  border-radius: calc(var(--rig-radius) - 2px);
+  background: transparent;
+  color: var(--rig-ink-2);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s, box-shadow 0.15s, color 0.15s;
+}
+.rig-timepick__end[aria-pressed='true'] { background: var(--rig-surface); color: var(--rig-ink); box-shadow: var(--rig-shadow-sm), 0 0 0 1px var(--rig-line); }
+.rig-timepick__end-label { color: var(--rig-ink-3); font-size: 0.75rem; font-weight: 600; }
+.rig-timepick__end-value { font-size: 0.9375rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; unicode-bidi: plaintext; }
+.rig-timepick__foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rig-line);
+}
+.rig-timepick__hint { flex: 1; min-width: 0; color: var(--rig-ink-2); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.rig-timepick__actions { flex: none; display: flex; gap: 0.25rem; margin-inline-start: auto; }
+
+/* The hour / minute / AM-PM columns (shared with the date picker's time field). */
+.rig-timecols {
+  --rig-tc-row: 2.25rem;
+  --rig-tc-h: min(15.75rem, max(9rem, calc(var(--rig-available-height, 22rem) - 7.5rem)));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+@media (pointer: coarse) { .rig-timecols { --rig-tc-row: 2.5rem; } }
+.rig-timecols__col {
+  box-sizing: border-box;
+  position: relative;
+  flex: none;
+  width: 3.5rem;
+  height: var(--rig-tc-h);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  border-radius: var(--rig-radius);
+  outline: none;
+  touch-action: pan-y;
+  mask-image: linear-gradient(to bottom, transparent, var(--rig-ink) 2rem, var(--rig-ink) calc(100% - 2rem), transparent);
+}
+.rig-timecols__col::-webkit-scrollbar { display: none; }
+.rig-timecols__col::before,
+.rig-timecols__col::after { content: ''; display: block; height: calc((var(--rig-tc-h) - var(--rig-tc-row)) / 2); }
+.rig-timecols__col--period { display: flex; flex-direction: column; gap: 0.25rem; height: auto; margin-inline-start: 0.25rem; overflow: visible; mask-image: none; }
+.rig-timecols__col--period::before,
+.rig-timecols__col--period::after { content: none; }
+.rig-timecols__opt {
+  display: grid;
+  place-items: center;
+  height: var(--rig-tc-row);
+  border-radius: var(--rig-radius-sm);
+  color: var(--rig-ink-2);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.12s, color 0.12s;
+}
+@media (hover: hover) {
+  .rig-timecols__opt:hover:not([aria-disabled='true'], [aria-selected='true']) { background: var(--rig-surface-2); color: var(--rig-ink); }
+}
+.rig-timecols__opt.is-seed { color: var(--rig-ink); box-shadow: inset 0 0 0 1px var(--rig-line-2); }
+.rig-timecols__opt[aria-selected='true'] { background: var(--rig-accent); color: var(--rig-accent-ink); font-weight: 650; }
+.rig-timecols__opt[aria-disabled='true'] { opacity: 0.32; cursor: not-allowed; }
+.rig-timecols__col:focus-visible .rig-timecols__opt.is-active { outline: 2px solid var(--rig-signal); outline-offset: -2px; }
+.rig-timecols__sep { flex: none; color: var(--rig-ink-3); font-size: 1.125rem; font-weight: 650; }
 
 /* ---------- color palette ---------- */
 
@@ -3230,7 +3399,7 @@ rig-magnetic-dropzone[invalid]:not([has-files]) .rig-drop__zone { border-color: 
 
 /* ---------- pickers: focus ---------- */
 
-:where(.rig-pick-field, .rig-combo__btn, .rig-multi__chip-x, .rig-cal__nav, .rig-cal__day, .rig-cal__title, .rig-cal__unit, .rig-colorpick__area,
+:where(.rig-pick-field, .rig-combo__btn, .rig-timepick__end, .rig-multi__chip-x, .rig-cal__nav, .rig-cal__day, .rig-cal__title, .rig-cal__unit, .rig-colorpick__area,
   .rig-colorpick__track, .rig-colorpick__formats button, .rig-colorpick__text, .rig-colorpick__recent-swatch,
   .rig-logo__tab, .rig-logo__panel, .rig-logo__seg-btn, .rig-logo__glyph, .rig-logo__initials, .rig-logo__crop,
   .rig-logo__zoom, .rig-drop__zone, .rig-drop__remove):focus-visible {
@@ -3245,10 +3414,11 @@ rig-magnetic-dropzone[invalid]:not([has-files]) .rig-drop__zone { border-color: 
 
 @media (prefers-reduced-motion: reduce) {
   .rig-pick-field, .rig-picklist, .rig-picklist__check, .rig-picklist__box, .rig-picklist__box svg, .rig-cal__day,
-  .rig-cal__unit, .rig-cal__title, .rig-palette__swatch, .rig-colorpick__thumb, .rig-colorpick__recent-swatch,
+  .rig-timepick__input, .rig-timepick__end, .rig-timecols__opt, .rig-cal__unit, .rig-cal__title, .rig-palette__swatch, .rig-colorpick__thumb, .rig-colorpick__recent-swatch,
   .rig-logo__glyph, .rig-logo__drop, .rig-drop__zone, .rig-drop__icon, .rig-drop__fill, .rig-drop__paste { transition: none; }
 }
 :root[data-rig-motion='off'] :is(.rig-pick-field, .rig-picklist, .rig-picklist__check, .rig-picklist__box,
+  .rig-timepick__input, .rig-timepick__end, .rig-timecols__opt,
   .rig-picklist__box svg, .rig-cal__day, .rig-cal__unit, .rig-cal__title, .rig-palette__swatch, .rig-colorpick__thumb,
   .rig-colorpick__recent-swatch, .rig-logo__glyph, .rig-logo__drop, .rig-drop__zone, .rig-drop__icon, .rig-drop__fill,
   .rig-drop__paste) { transition: none; }

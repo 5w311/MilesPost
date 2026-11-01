@@ -47,6 +47,17 @@ const clickTab = async (pg, v) => {
   await pg.click(TAB(v));
   await pg.waitForTimeout(200);
 };
+/* v5.9: Rolling out, Appointment and Shut down are <rig-date-picker time>, not
+   datetime-local inputs — Playwright can't fill() them. Same value format either way
+   ("yyyy-mm-ddThh:mm"), so these set it the way a pick lands (value, then input +
+   change) and read it back. The tap-through itself is tested once, on its own. */
+const setWall = (pg, sel, v) => pg.$eval(sel, (el, v) => {
+  el.value = v;
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+}, v);
+const wallOf = (pg, sel) => pg.$eval(sel, el => el.value);
+const isOff = (pg, sel) => pg.$eval(sel, el => el.disabled === true);
 const switchTrack = id => `#${id} .rig-switch__track`;
 const switchOn = (pg, id) => pg.$eval("#" + id, el => el.checked === true);
 const clearBtn = id => `#${id} .rig-input__clear`;
@@ -122,7 +133,7 @@ try {
 
   // Drive the ETA tool and expect a real arrival clock, not the placeholder.
   await page.fill("#miles", "1300");
-  await page.fill("#depart", "2026-06-15T08:00");
+  await setWall(page, "#depart", "2026-06-15T08:00");
   await page.dispatchEvent("#miles", "input");
   await page.dispatchEvent("#depart", "input");
   await page.waitForTimeout(150);
@@ -240,7 +251,7 @@ try {
 
   // Setting the field value fires input/change — as the native picker does on open/scroll.
   // The input must stay up: a reset starts only on an explicit commit.
-  await page.fill("#shut", wall);
+  await setWall(page, "#shut", wall);
   await page.dispatchEvent("#shut", "change");
   await page.waitForTimeout(100);
   if (!(await page.isVisible("#rsInputCard")))
@@ -314,7 +325,7 @@ try {
   await rsPage.waitForTimeout(100);
 
   // (a) Shut down two hours ago — the 34 is still running. Must commit exactly as before.
-  await rsPage.fill("#shut", asWall(Date.now() - 2 * 3600e3));
+  await setWall(rsPage, "#shut", asWall(Date.now() - 2 * 3600e3));
   await rsPage.click("#rsSetShut");
   await rsPage.waitForTimeout(150);
   if (await rsPage.isVisible("#rsErr"))
@@ -327,7 +338,7 @@ try {
   // (b) Shut down two days ago — that 34 finished ~14h ago, well past the auto-clear
   // window. Refused with a reason, and nothing committed.
   const staleWall = asWall(Date.now() - 48 * 3600e3);
-  await rsPage.fill("#shut", staleWall);
+  await setWall(rsPage, "#shut", staleWall);
   await rsPage.click("#rsSetShut");
   await rsPage.waitForTimeout(1400);            // well past a 1s auto-clear tick
   if (!(await rsPage.isVisible("#rsErr")))
@@ -342,13 +353,13 @@ try {
   if (!(await rsPage.isVisible("#rsInputCard")))
     fail("the input must stay up when the entry is refused");
   // The whole point: what they typed is still there to edit, not blanked.
-  if ((await rsPage.inputValue("#shut")) !== staleWall)
-    fail(`a refused entry must stay in the field, got ${JSON.stringify(await rsPage.inputValue("#shut"))}`);
+  if ((await wallOf(rsPage, "#shut")) !== staleWall)
+    fail(`a refused entry must stay in the field, got ${JSON.stringify(await wallOf(rsPage, "#shut"))}`);
   if (await rsPage.evaluate(() => !!JSON.parse(localStorage.getItem("milespost.reset") || "{}").shutMs))
     fail("a refused shutdown must not be committed to storage");
 
   // (c) Correcting it to something valid clears the refusal and commits.
-  await rsPage.fill("#shut", asWall(Date.now() - 3600e3));
+  await setWall(rsPage, "#shut", asWall(Date.now() - 3600e3));
   await rsPage.click("#rsSetShut");
   await rsPage.waitForTimeout(150);
   if (await rsPage.isVisible("#rsErr"))
@@ -470,7 +481,7 @@ try {
   // months out — differencing the two ARRIVALS would fold that separation into the answer
   // and report a gap in the thousands of hours. 400 mi ÷ 50 is 8h against a 14h drive plus
   // stops, so the honest gap stays inside a single-digit hour count either way.
-  await livePage.fill("#depart", "2027-01-20T08:00");
+  await setWall(livePage, "#depart", "2027-01-20T08:00");
   await livePage.dispatchEvent("#depart", "input");
   await livePage.waitForTimeout(150);
   const skewNote = (await livePage.textContent("#liveLine")) || "";
@@ -763,7 +774,7 @@ try {
     const d = new Date(Date.now() + 864e5), z = n => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T16:30`;
   });
-  await dayPage.fill("#depart", later);
+  await setWall(dayPage, "#depart", later);
   await dayPage.fill("#destIn", "Nashville TN");
   await dayPage.press("#destIn", "Enter");
   await dayPage.click("#getMiBtn");
@@ -794,7 +805,7 @@ try {
     fail(`the stops should be the 17:00 swap then the 22:00 DOT, in that order, got ${JSON.stringify(rows)}`);
   // Moving Rolling Out moves Live with it — no new fetch needed.
   const dayRoutes = await dayPage.evaluate(() => window.__hereCalls.route);
-  await dayPage.fill("#depart", later.replace("T16:30", "T15:30"));
+  await setWall(dayPage, "#depart", later.replace("T16:30", "T15:30"));
   await dayPage.dispatchEvent("#depart", "input");
   await dayPage.waitForTimeout(200);
   const liveMoved = hhmm(await dayPage.textContent("#liveClock"));
@@ -858,6 +869,43 @@ try {
     if (lum.pick !== null && Math.abs(lum.pick - lum.box) > 0.001)
       fail(`${theme}: dropdowns should match the text boxes, got ${lum.pick.toFixed(3)} vs ${lum.box.toFixed(3)}`);
     await fp.close();
+  }
+
+  // ---- v5.9: Rolling out and Shut down are Rig's date-and-time picker. Driven by taps
+  // the way a driver would: open it, tap a day, give the time, Done.
+  {
+    const ctx = await browser.newContext({ timezoneId: "America/Chicago" });
+    const pg = await ctx.newPage();
+    const errs = []; pg.on("pageerror", e => errs.push(e.message));
+    await pg.clock.setFixedTime(new Date("2026-11-01T19:20:00Z"));      // Sun Nov 1, 1:20 PM CST
+    await runningOff(pg);
+    await pg.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
+    const pick = async (id, iso, hhmm) => {
+      await pg.click(`#${id} .rig-datepick__trigger`);
+      await pg.click(`#${id} .rig-cal__day[data-date="${iso}"]`);
+      const t = pg.locator(`#${id} .rig-timepick__input`).first();
+      await t.fill(hhmm); await t.press("Enter");
+      // The date picker's own Done (the time field's popover has one too).
+      await pg.locator(`#${id} .rig-datepick__time > button`, { hasText: "Done" }).click();
+      await pg.waitForTimeout(200);
+    };
+    if ((await pg.locator("#depart").evaluate(el => el.localName)) !== "rig-date-picker")
+      fail("Rolling out should be Rig's date picker, not the phone's datetime-local");
+    await pg.fill("#miles", "400"); await pg.dispatchEvent("#miles", "input");
+    await pick("depart", "2026-11-03", "14:30");
+    if ((await wallOf(pg, "#depart")) !== "2026-11-03T14:30")
+      fail(`tapping Nov 3 and 14:30 should set Rolling out to 2026-11-03T14:30, got ${JSON.stringify(await wallOf(pg, "#depart"))}`);
+    const arr = ((await pg.textContent("#etaClock")) || "").replace(/\s+/g, " ").trim();
+    if (arr !== "22:30 CST") fail(`400 mi from Tue 14:30 should arrive 22:30 CST, got ${JSON.stringify(arr)}`);
+    await clickTab(pg, "reset");
+    await pick("shut", "2026-11-02", "06:00");
+    await pg.click("#rsSetShut"); await pg.waitForTimeout(200);
+    const legal = ((await pg.textContent("#rsClock")) || "").replace(/\s+/g, " ").trim();
+    const legalDay = ((await pg.textContent("#rsDay")) || "").trim();
+    if (legal !== "16:00 CST" || legalDay !== "Tue, Nov 3")
+      fail(`a 34 picked as Mon Nov 2 06:00 should be legal Tue, Nov 3 16:00 CST, got ${JSON.stringify(legal)} ${JSON.stringify(legalDay)}`);
+    if (errs.length) fail("date-picker page errors: " + JSON.stringify(errs));
+    await ctx.close();
   }
 
   // ---- Daylight saving ends Sun 2026-11-01 (02:00 EDT -> 01:00 EST). The browser clock
@@ -1071,7 +1119,7 @@ try {
   // rather than only once the switch is touched.
   if (!(await switchOn(runPage, "runningBtn")))
     fail("RUNNING should be ON by default");
-  if (!(await runPage.isDisabled("#depart")))
+  if (!(await isOff(runPage, "#depart")))
     fail("#depart must be disabled on load while RUNNING drives it, not just after a toggle");
   if (!(await runPage.isDisabled("#nowBtn")))
     fail("NOW must be disabled on load while RUNNING drives the departure");
@@ -1080,7 +1128,7 @@ try {
   // reason. Checked as computed opacity so the rule can't be dropped unnoticed.
   const dimmed = await runPage.evaluate(() => ({
     now: Number(getComputedStyle(document.getElementById("nowBtn")).opacity),
-    depart: Number(getComputedStyle(document.getElementById("depart")).opacity)
+    depart: Number(getComputedStyle(document.querySelector("#depart .rig-datepick__trigger")).opacity)   // v5.9: the picker's visible box
   }));
   if (!(dimmed.now < 1)) fail(`a disabled NOW must be visibly stood down, opacity is ${dimmed.now}`);
   if (!(dimmed.depart < 1)) fail(`a disabled departure field must look disabled, opacity is ${dimmed.depart}`);
@@ -1088,7 +1136,7 @@ try {
   // The assertion this whole feature is built around: ticking costs nothing. Let several
   // ticks land and confirm not one of them reached the network — HERE or anything else.
   const callsBefore = await runPage.evaluate(() => ({ ...window.__hereCalls }));
-  const departBefore = await runPage.inputValue("#depart");
+  const departBefore = await wallOf(runPage, "#depart");
   await runPage.evaluate(() => { window.__skewMs = 3 * 60 * 1000; });   // three minutes on
   await runPage.waitForTimeout(2500);
   const callsAfter = await runPage.evaluate(() => ({ ...window.__hereCalls }));
@@ -1098,7 +1146,7 @@ try {
   // "whatever the network happened to do" — one suggestion, one geocode, one route.
   if (callsBefore.total !== 3)
     fail(`the fetch tally should be deterministic here, got ${JSON.stringify(callsBefore)}`);
-  const departRunning = await runPage.inputValue("#depart");
+  const departRunning = await wallOf(runPage, "#depart");
   if (departRunning === departBefore)
     fail(`RUNNING should move the departure clock on its own, still ${JSON.stringify(departBefore)}`);
   // Still a live arrival on screen — re-solved locally, not re-fetched.
@@ -1109,25 +1157,25 @@ try {
   // switch lives in the load card, on screen alongside them.
   if (!(await runPage.isVisible("#runningRow")))
     fail("the RUNNING switch should be on screen with the ETA view");
-  const departPanel = await runPage.inputValue("#depart");
+  const departPanel = await wallOf(runPage, "#depart");
   await runPage.evaluate(() => { window.__skewMs = 6 * 60 * 1000; });
   await runPage.waitForTimeout(1600);
-  if ((await runPage.inputValue("#depart")) === departPanel)
+  if ((await wallOf(runPage, "#depart")) === departPanel)
     fail("the RUNNING clock must keep the departure current");
-  if (!(await runPage.isDisabled("#depart")))
+  if (!(await isOff(runPage, "#depart")))
     fail("#depart must stay disabled while RUNNING drives it");
 
   // It does stand down on the 34 RESET view, though — nothing there for it to re-render.
   await clickTab(runPage, "reset");
   await runPage.waitForTimeout(100);
-  const departOnReset = await runPage.inputValue("#depart");
+  const departOnReset = await wallOf(runPage, "#depart");
   await runPage.evaluate(() => { window.__skewMs = 9 * 60 * 1000; });
   await runPage.waitForTimeout(1600);
-  if ((await runPage.inputValue("#depart")) !== departOnReset)
+  if ((await wallOf(runPage, "#depart")) !== departOnReset)
     fail("the RUNNING clock must pause on the 34 RESET view");
   await clickTab(runPage, "eta");
   await runPage.waitForTimeout(1600);
-  if ((await runPage.inputValue("#depart")) === departOnReset)
+  if ((await wallOf(runPage, "#depart")) === departOnReset)
     fail("the RUNNING clock must resume on returning to the ETA view");
   await runPage.waitForTimeout(100);
 
@@ -1136,36 +1184,36 @@ try {
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  const departHidden = await runPage.inputValue("#depart");
+  const departHidden = await wallOf(runPage, "#depart");
   // Each jump is whole minutes clear of the last: #depart is minute-precision, so a
   // smaller bump could leave the field unchanged and pass a paused check by luck.
   await runPage.evaluate(() => { window.__skewMs = 12 * 60 * 1000; });
   await runPage.waitForTimeout(1600);
-  if ((await runPage.inputValue("#depart")) !== departHidden)
+  if ((await wallOf(runPage, "#depart")) !== departHidden)
     fail("the RUNNING clock must pause while the app is backgrounded");
   await runPage.evaluate(() => {
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await runPage.waitForTimeout(1600);
-  if ((await runPage.inputValue("#depart")) === departHidden)
+  if ((await wallOf(runPage, "#depart")) === departHidden)
     fail("the RUNNING clock must resume when the app comes back to the foreground");
 
   // Switching off freezes the clock where it stopped and hands both controls back.
   await runPage.click(switchTrack("runningBtn"));
   await runPage.waitForTimeout(100);
-  const departOff = await runPage.inputValue("#depart");
-  if (await runPage.isDisabled("#depart")) fail("#depart must be editable again once RUNNING is off");
+  const departOff = await wallOf(runPage, "#depart");
+  if (await isOff(runPage, "#depart")) fail("#depart must be editable again once RUNNING is off");
   if (await runPage.isDisabled("#nowBtn")) fail("NOW must be usable again once RUNNING is off");
   const lit = await runPage.evaluate(() => ({
     now: Number(getComputedStyle(document.getElementById("nowBtn")).opacity),
-    depart: Number(getComputedStyle(document.getElementById("depart")).opacity)
+    depart: Number(getComputedStyle(document.querySelector("#depart .rig-datepick__trigger")).opacity)   // v5.9: the picker's visible box
   }));
   if (lit.now !== 1 || lit.depart !== 1)
     fail(`both controls should look live again once RUNNING is off, got ${JSON.stringify(lit)}`);
   await runPage.evaluate(() => { window.__skewMs = 20 * 60 * 1000; });
   await runPage.waitForTimeout(1600);
-  if ((await runPage.inputValue("#depart")) !== departOff)
+  if ((await wallOf(runPage, "#depart")) !== departOff)
     fail("the departure must stay frozen at its last value once RUNNING is off");
   // Off is a decision, not a session quirk: it has to survive a relaunch, or the default
   // would keep overriding a driver who deliberately switched it off.
@@ -1173,7 +1221,7 @@ try {
   await runPage.waitForTimeout(200);
   if (await switchOn(runPage, "runningBtn"))
     fail("RUNNING switched off must stay off across a reload");
-  if (await runPage.isDisabled("#depart"))
+  if (await isOff(runPage, "#depart"))
     fail("#depart should be the driver's again after reloading with RUNNING off");
   await runPage.click(switchTrack("runningBtn"));                 // back on
   await runPage.reload({ waitUntil: "networkidle" });
