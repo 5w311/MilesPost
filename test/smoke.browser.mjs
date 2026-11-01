@@ -1986,9 +1986,15 @@ try {
     fs.readFile(path.join(ROOT, p), (err, data) => {
       if (err) { res.writeHead(404); res.end("not found"); return; }
       let body = data;
-      // Restamp the two files that carry a version so "deploying" is a one-line change.
+      /* Restamp the two files that carry a version so "deploying" is a one-line change.
+         The trailing (-suffix)? matters: a branch build names itself for the branch
+         ("milespost-v5.5-rig") so a phone that has seen both it and main can't end up
+         with one cache entry holding the other's files. Without it the suffix survives
+         the rewrite, every restamped build reads "v0.0.1-rig", and the version the page
+         offers stops matching the one the test asked for. */
       if (p === "/index.html" || p === "/sw.js")
-        body = data.toString().replace(/(MilesPost v|milespost-v)[0-9][0-9.]*/g, "$1" + swVersion);
+        body = data.toString()
+          .replace(/(MilesPost v|milespost-v)[0-9][0-9.]*(-[A-Za-z0-9.]+)?/g, "$1" + swVersion);
       res.writeHead(200, headers(TYPES[path.extname(p)] || "application/octet-stream"));
       res.end(body);
     });

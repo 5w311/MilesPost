@@ -170,16 +170,10 @@
 
   /* ============================ tabs ============================ */
   /* Two equal halves across the full width, the proportion v5.4 had. Rig sizes segmented
-     tabs to their text and lets the strip scroll; these two never need to.
-
-     overflow:visible is load-bearing, not tidiness. The sliding indicator is absolutely
-     positioned inside the list, and the list keeps overflow-x:auto for strips that do
-     scroll. Flexed tabs land on fractional widths, the indicator is placed from
-     offsetWidth (which rounds to whole pixels), and the half-pixel difference lands in
-     the list's scroll area — which re-fires the ResizeObserver that placed it. The strip
-     then shimmers between two layouts every frame, forever. Taking the scroll area away
-     breaks the loop. */
-  #tabs .rig-tabs__list{display:flex;width:100%;overflow:visible}
+     tabs to their text; with only two, splitting the row reads better. The list keeps its
+     own overflow-x:auto — left alone on purpose, so a longer label still scrolls rather
+     than spilling. */
+  #tabs .rig-tabs__list{display:flex;width:100%}
   #tabs .rig-tabs__tab{flex:1 1 0;min-width:0;justify-content:center;text-align:center}
 
   /* ============================ panels ============================ */
@@ -728,7 +722,7 @@
   </rig-tabs>
 
   <div class="footWrap">
-    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.5</button>
+    <button type="button" class="link" id="verFoot" aria-label="Check for app updates">MilesPost v5.5-rig</button>
   </div>
 </div>
 

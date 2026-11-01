@@ -123,9 +123,14 @@ changed: `lib/logic.js` is byte-for-byte what v5.4 shipped and its 297 tests pas
   none of which are styling. Moving them to `<rig-combobox>` is a follow-up that wants a
   live key to validate.
 - **New: tap a stop row** for its times, its miles and which rule put it there.
-- Fixed along the way: the browser smoke test was serving `rig.css` as
-  `application/octet-stream`, which Chromium refuses — so the suite had been checking an
-  unstyled page.
+- **The branch names its own cache** (`milespost-v5.5-rig`). Caches are keyed per origin,
+  so pointing Pages here and later back at main would otherwise leave one phone holding
+  this build's files under the name main's build expects for its own.
+- Fixed along the way, in the browser smoke test (both also apply to `main`): it had no
+  `.css` in its MIME table, so `rig.css` was served as `application/octet-stream` and
+  Chromium refused it — the suite had been checking an unstyled page. And its build
+  restamp stopped at the version digits, so it couldn't fake a deploy of a build whose
+  name carries a suffix.
 
 ### v5.4
 
