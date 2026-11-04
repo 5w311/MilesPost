@@ -2186,6 +2186,7 @@ try {
      new build can't be seeded with the previous build's index.html out of HTTP cache. */
   let swVersion = "0.0.1";
   let swLegacy = false;     // serve a pre-v4.8 worker: takes over on install, no tap marker
+  let swRedirectIndex = false;  // answer /index.html with a redirect to /, as Cloudflare does
   const LEGACY_SW = v => `
     const CACHE = "milespost-v${v}";
     self.addEventListener("install", e => e.waitUntil(caches.open(CACHE)
@@ -2199,6 +2200,7 @@ try {
     });`;
   const swServer = http.createServer((req, res) => {
     let p = decodeURIComponent(req.url.split("?")[0]);
+    if (p === "/index.html" && swRedirectIndex) { res.writeHead(307, { location: "/" }); res.end(); return; }
     if (p === "/") p = "/index.html";
     const headers = v => ({ "content-type": v, "cache-control": "max-age=600" });
     if (p === "/sw.js" && swLegacy) {
@@ -2354,6 +2356,37 @@ try {
     if (JSON.stringify(legCaches) !== JSON.stringify(["milespost-v0.0.2", "milespost-v0.0.3"]))
       fail(`after the hand-off, the next build must WAIT for the tap, caches: ${JSON.stringify(legCaches)}`);
     await legCtx.close();
+
+    /* v5.12 — a host that redirects /index.html to / (Cloudflare does). /index.html is the
+       home-screen icon's start_url, and a page load handed a response that came through a
+       redirect fails outright: Safari shows "Response served by service worker has
+       redirections", Chromium net::ERR_FAILED. Before v5.12 the worker cached /index.html
+       exactly as fetched — redirect and all — so on that host the icon opened onto an error,
+       with or without signal. Every build has to store it clean. */
+    swVersion = "0.0.4"; swRedirectIndex = true;
+    const cfCtx = await browser.newContext();
+    const cfPage = await cfCtx.newPage();
+    await cfPage.goto(`http://127.0.0.1:${swPort}/`, { waitUntil: "networkidle" });
+    await cfPage.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 15000 })
+      .catch(() => fail("redirecting host: the service worker never took control"));
+    await cfPage.close();
+    const iconLaunch = async () => {
+      const pg = await cfCtx.newPage();
+      try {
+        await pg.goto(`http://127.0.0.1:${swPort}/index.html`, { waitUntil: "load", timeout: 10000 });
+        return await foot(pg);
+      } catch (e) { return "load failed: " + e.message.split("\n")[0]; }
+      finally { await pg.close(); }
+    };
+    const cfOnline = await iconLaunch();
+    await cfCtx.setOffline(true);
+    const cfOffline = await iconLaunch();
+    if (cfOnline !== "MilesPost v0.0.4")
+      fail(`a host that redirects /index.html: the home-screen address must open the app, got ${JSON.stringify(cfOnline)}`);
+    if (cfOffline !== "MilesPost v0.0.4")
+      fail(`a host that redirects /index.html: the home-screen address must open the app with no signal, got ${JSON.stringify(cfOffline)}`);
+    await cfCtx.close();
+    swRedirectIndex = false;
   } finally {
     swServer.close();
   }

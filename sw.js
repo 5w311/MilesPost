@@ -1,7 +1,7 @@
 // Build marker. Bump it on every single deploy, or installed phones will decide they're
 // already current and quietly ignore the new build. Keep it "milespost-v" + the app
-// version: the update offer names a waiting build by this ("UPDATE AVAILABLE (v5.11)").
-const CACHE = "milespost-v5.11";
+// version: the update offer names a waiting build by this ("UPDATE AVAILABLE (v5.12)").
+const CACHE = "milespost-v5.12";
 const ASSETS = [
   "./",
   "./index.html",
@@ -92,15 +92,33 @@ const ASSETS = [
    which the page handles by offering it rather than reloading. */
 const TAP_FLAG = "milespost-tap";
 
+/* A copy that no longer remembers it came through a redirect. Cloudflare answers
+   /index.html with a redirect to / — and /index.html is the home-screen icon's start_url.
+   A response that followed a redirect can't open a page: Safari refuses it ("Response
+   served by service worker has redirections") and Chrome fails the load, online or not.
+   Before v5.12 the cache stored /index.html exactly as fetched, redirect and all, so on
+   that host the icon opened onto an error. Same bytes, same headers, minus the flag. */
+const settled = async res => res.redirected
+  ? new Response(await res.blob(), { status: res.status, statusText: res.statusText, headers: res.headers })
+  : res;
+
 self.addEventListener("install", e => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
     // "no-cache": revalidate every file with the server instead of trusting the phone's
-    // HTTP cache. GitHub Pages serves max-age=600, so a deploy landing within ten minutes
-    // of the last one could otherwise seed this build's cache with the previous build's
-    // index.html — a "new" version that is secretly the old one. Unchanged files come
-    // back as a 304 and cost next to nothing.
-    await c.addAll(ASSETS.map(u => new Request(u, { cache: "no-cache" })));
+    // HTTP cache. A host that sends a max-age (GitHub Pages sent 600) could otherwise
+    // seed this build's cache with the previous build's index.html when a deploy lands
+    // soon after the last one — a "new" version that is secretly the old one. Unchanged
+    // files come back as a 304 and cost next to nothing.
+    // All or nothing, like cache.addAll: every file is fetched before any is stored, and
+    // one that fails fails the install, leaving the running build in charge.
+    const got = await Promise.all(ASSETS.map(async u => {
+      const req = new Request(u, { cache: "no-cache" });
+      const res = await fetch(req);
+      if (!res.ok) throw new TypeError(`${u}: HTTP ${res.status}`);
+      return [req, await settled(res)];
+    }));
+    await Promise.all(got.map(([req, res]) => c.put(req, res)));
     if (!(await caches.has(TAP_FLAG))) await self.skipWaiting();
   })());
 });
@@ -131,10 +149,12 @@ self.addEventListener("fetch", e => {
   e.respondWith(
     caches.open(CACHE).then(c =>
       c.match(e.request).then(hit =>
-        hit || fetch(e.request).then(res => {
-          c.put(e.request, res.clone()).catch(() => {});
+        hit ? settled(hit) : fetch(e.request).then(res => {
+          // Only clean, whole answers are kept: never an error page, and never a redirect
+          // (see `settled`) — a page load would be handed it from then on.
+          if (res.ok && !res.redirected) c.put(e.request, res.clone()).catch(() => {});
           return res;
-        }).catch(() => c.match("./index.html"))
+        }).catch(() => c.match("./index.html").then(r => r && settled(r)))
       )
     )
   );

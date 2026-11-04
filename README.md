@@ -22,7 +22,7 @@ live half is the one part that genuinely needs signal: it asks HERE for a traffi
 route, and with no fresh quote that slot alone goes quiet rather than showing an arrival the
 road can't back up. Predicted holds its place either way.
 
-**Current version: v5.11**
+**Current version: v5.12**
 
 ## Files
 
@@ -34,8 +34,7 @@ road can't back up. Predicted holds its place either way.
 | `manifest.webmanifest` | Makes it installable to the home screen. |
 | `icon-192.png` `icon-512.png` `icon-1024.png` `apple-touch-icon.png` | Home-screen and install icons — the green MILE 34 marker. Full-bleed and opaque, as iOS requires. |
 | `marker.png` | The MILE 34 marker with a transparent background, for the app's masthead. 70×132 — three times the 44px it's shown at. |
-| `.nojekyll` | Tells GitHub Pages to serve the files as-is. Don't delete it. |
-| `CNAME` | Points GitHub Pages at the custom domain, `milespost.figari.dev`. Don't delete it — the app's address depends on it. |
+| `.nojekyll` | Tells GitHub Pages to serve the files as-is (the `5w311.github.io/MilesPost/` copy). `milespost.figari.dev` itself is served by Cloudflare. |
 | `fonts/` | Vendored Overpass + Overpass Mono (woff2, SIL OFL — licenses included). No fonts CDN: the shell stays fully offline. |
 | `rig-ui/` | Vendored [Rig UI](https://github.com/5w311/rig-ui) — `rig.css` plus the 38 modules `rig-ui/milespost.js` imports, and nothing else. See `rig-ui/VENDORED.md`. |
 | `tools/rig-manifest.mjs` | Prints that module closure in the shape `sw.js` wants, and flags anything missing. `npm run rig:manifest`. |
@@ -101,6 +100,15 @@ path is relative — and the HERE key is locked to trusted domains that include
   keeps rolling through driver swaps. The 11/14 and the 70-hour cycle are still on you.
 
 ## Version history
+
+### v5.12
+
+- **Fixed: "Safari can't open the page — Response served by service worker has
+  redirections."** The site now runs on Cloudflare, which sends `/index.html` on to `/`. The
+  home-screen icon opens `/index.html`, and the offline copy saved it along with that detour.
+  Safari won't open a page whose saved copy came through a redirect, so the app showed the
+  error instead, with or without signal. Copies are now saved clean, and nothing that came
+  through a redirect is ever kept.
 
 ### v5.11
 
@@ -1129,7 +1137,9 @@ Three things have to happen or the update won't reach phones that already instal
 How a deploy reaches a phone (v4.8): the page runs `registration.update()` on launch and on
 every `visibilitychange` to visible, and when the footer is tapped. A changed `sw.js`
 installs in the background, re-fetching every file in `ASSETS` with `cache: "no-cache"` so
-GitHub Pages' `max-age=600` can't hand it the previous build's files, then **waits**. The
+a host's `max-age` (GitHub Pages sent 600) can't hand it the previous build's files, and
+stores each one without any redirect it came through (v5.12 — Cloudflare redirects
+`/index.html`, the home-screen icon's address, to `/`), then **waits**. The
 page asks the waiting worker its version (a `"version"` message, answered with `CACHE`
 minus the `milespost-` prefix — so keep `CACHE` as `milespost-v<version>`) and shows
 "UPDATE AVAILABLE (v…) — TAP TO RELOAD". The tap posts `"skipWaiting"`; the
