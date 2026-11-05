@@ -8,10 +8,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:browser": "node test/smoke.browser.mjs",
-    "rig:manifest": "node tools/rig-manifest.mjs"
+    "rig:manifest": "node tools/rig-manifest.mjs",
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "playwright": "^1.61.1",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "wrangler": "^4.158.0"
   }
 }

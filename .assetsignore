@@ -1,0 +1,6 @@
+# The site is the repo root (wrangler.jsonc: assets.directory "."). Never publish these
+# as pages, whatever wrangler's own defaults skip: node_modules holds wrangler's runtime,
+# a binary bigger than Cloudflare's 25 MiB file limit, so uploading it would fail a deploy.
+node_modules
+.git
+.wrangler

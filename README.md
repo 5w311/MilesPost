@@ -34,6 +34,8 @@ road can't back up. Predicted holds its place either way.
 | `manifest.webmanifest` | Makes it installable to the home screen. |
 | `icon-192.png` `icon-512.png` `icon-1024.png` `apple-touch-icon.png` | Home-screen and install icons — the green MILE 34 marker. Full-bleed and opaque, as iOS requires. |
 | `marker.png` | The MILE 34 marker with a transparent background, for the app's masthead. 70×132 — three times the 44px it's shown at. |
+| `wrangler.jsonc` | Cloudflare's config for `milespost.figari.dev`: the repo root is the site, and the `previews` block lets every branch other than `main` build a preview URL. Without it, production still deployed (Cloudflare generated a config on the fly) but every preview build failed. |
+| `.assetsignore` | Keeps `node_modules`, `.git` and `.wrangler` off the site. Don't delete it: `node_modules` holds a file over Cloudflare's 25 MiB limit, and uploading it fails the deploy. |
 | `.nojekyll` | Tells GitHub Pages to serve the files as-is (the `5w311.github.io/MilesPost/` copy). `milespost.figari.dev` itself is served by Cloudflare. |
 | `fonts/` | Vendored Overpass + Overpass Mono (woff2, SIL OFL — licenses included). No fonts CDN: the shell stays fully offline. |
 | `rig-ui/` | Vendored [Rig UI](https://github.com/5w311/rig-ui) — `rig.css` plus the 38 modules `rig-ui/milespost.js` imports, and nothing else. See `rig-ui/VENDORED.md`. |

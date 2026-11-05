@@ -1,0 +1,21 @@
+// Cloudflare Workers config for milespost.figari.dev — a static site, no Worker script.
+//
+// Production matches what Workers Builds used to generate on every deploy when this file
+// didn't exist (same name, date, observability, and the repo root as the site). The one
+// addition is `previews`: Worker Previews — the builds Cloudflare runs for every branch
+// that isn't main — require that block and have no automatic setup to fall back on, so
+// without this file every branch build failed and no preview URL ever appeared.
+// The custom domain is attached in the Cloudflare dashboard, not here; deploys leave it be.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "milespost",
+  "compatibility_date": "2026-11-03",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "."
+  },
+  "preview_urls": true,
+  "previews": {}
+}
